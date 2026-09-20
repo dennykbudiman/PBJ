@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# React Router uses client-side routing (e.g. /work-orders, /drivers) — every
+# path that isn't a real static file must fall through to index.html so the
+# router can handle it, or a direct link / page refresh on any page but "/"
+# would 404 on Netlify.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[build.environment]
+  NODE_VERSION = "20"
