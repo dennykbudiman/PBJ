@@ -33,9 +33,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, name, phone, roleId } = await req.json()
-    if (!email || !roleId) {
-      return json({ error: 'email and roleId are required' }, 400)
+    const { email, name, username, phone, roleId } = await req.json()
+    if (!email || !roleId || !username) {
+      return json({ error: 'email, username, and roleId are required' }, 400)
     }
 
     const authHeader = req.headers.get('Authorization')
@@ -82,11 +82,17 @@ Deno.serve(async (req) => {
     // profile row for this id — update it with what the form actually chose.
     const { error: profileErr } = await adminClient
       .from('profiles')
-      .update({ name: name || email, phone: phone || null, role_id: roleId, status: 'invited' })
+      .update({ name: name || email, username: username.toLowerCase(), phone: phone || null, role_id: roleId, status: 'invited' })
       .eq('id', newUserId)
 
     if (profileErr) {
-      return json({ error: `User invited, but profile update failed: ${profileErr.message}` }, 500)
+      // Username collisions land here (profiles.username is unique) — the
+      // auth.users row and invite email already went out at this point, so
+      // surface the real reason rather than a generic 500.
+      const reason = profileErr.message?.includes('profiles_username_key')
+        ? 'That username is already taken.'
+        : profileErr.message
+      return json({ error: `User invited, but profile update failed: ${reason}` }, 500)
     }
 
     return json({ ok: true, userId: newUserId })

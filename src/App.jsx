@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import SetPassword from './pages/SetPassword'
 import Dashboard from './pages/Dashboard'
 import Vehicles from './pages/Vehicles'
 import Maintenance from './pages/Maintenance'
@@ -14,7 +15,7 @@ import Settings from './pages/Settings'
 import { colors } from './lib/theme'
 
 function ProtectedRoute({ children }) {
-  const { session, loading } = useAuth()
+  const { session, loading, needsPasswordSetup } = useAuth()
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: colors.bg, color: colors.muted, fontSize: 14 }}>
@@ -23,7 +24,20 @@ function ProtectedRoute({ children }) {
     )
   }
   if (!session) return <Navigate to="/login" replace />
+  // Arrived via an invite or password-reset link — Supabase already signed
+  // them in to verify the link, but they must set a password before they
+  // can use the rest of the app (or sign in again later).
+  if (needsPasswordSetup) return <Navigate to="/set-password" replace />
   return children
+}
+
+function SetPasswordRoute() {
+  const { session, loading } = useAuth()
+  if (loading) return null
+  // Supabase signs the visitor in as part of verifying the invite/reset
+  // link, so a session is expected to already exist here.
+  if (!session) return <Navigate to="/login" replace />
+  return <SetPassword />
 }
 
 export default function App() {
@@ -32,6 +46,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/set-password" element={<SetPasswordRoute />} />
           <Route
             path="/"
             element={
