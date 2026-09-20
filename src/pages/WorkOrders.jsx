@@ -107,7 +107,12 @@ export default function WorkOrders() {
 
   useEffect(() => {
     supabase.from('vehicles').select('id, name, model').order('name').then(({ data }) => setVehicles(data ?? []))
-    supabase.from('profiles').select('id, name').order('name').then(({ data }) => setTechnicians(data ?? []))
+    supabase
+      .from('profiles')
+      .select('id, name, roles!inner(name)')
+      .eq('roles.name', 'Technician')
+      .order('name')
+      .then(({ data }) => setTechnicians(data ?? []))
     supabase.from('parts').select('id, name, part_number, qty_on_hand, reorder_point, unit_cost').order('name').then(({ data }) => setParts(data ?? []))
   }, [])
 
