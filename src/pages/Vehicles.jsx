@@ -28,16 +28,22 @@ const FILTERS = [
   { key: 'idle', label: 'Idle' },
 ]
 
+// Standard "Year Make Model" description string, e.g. "2022 Toyota HiAce".
+function ymm(v) {
+  return [v.vehicle_year, v.make, v.model].filter(Boolean).join(' ') || '—'
+}
+
 const EMPTY_FORM = {
-  name: '', model: '', type: '', plate: '', vin: '', status: 'active',
-  mileage_km: '', fuel_type: '', location: '', vehicle_year: '',
-  last_service_date: '', last_service_desc: '', driver_id: '',
+  name: '', vehicle_year: '', make: '', model: '', type: '', plate: '', vin: '', status: 'active',
+  mileage_km: '', fuel_type: '',
+  last_service_date: '', last_service_desc: '', driver_id: '', owner_id: '',
 }
 
 export default function Vehicles() {
   const { hasPermission } = useAuth()
   const [vehicles, setVehicles] = useState([])
   const [drivers, setDrivers] = useState([])
+  const [owners, setOwners] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -54,16 +60,19 @@ export default function Vehicles() {
 
   async function load() {
     setLoading(true)
-    const [{ data: v }, { data: d }] = await Promise.all([
+    const [{ data: v }, { data: d }, { data: o }] = await Promise.all([
       supabase.from('vehicles').select('*').order('name', { ascending: true }),
       supabase.from('drivers').select('id, name').order('name', { ascending: true }),
+      supabase.from('owners').select('id, name').order('name', { ascending: true }),
     ])
     setVehicles(v ?? [])
     setDrivers(d ?? [])
+    setOwners(o ?? [])
     setLoading(false)
   }
 
   const driverName = (id) => drivers.find((d) => d.id === id)?.name || 'Unassigned'
+  const ownerName = (id) => owners.find((o) => o.id === id)?.name || 'Unassigned'
 
   const counts = useMemo(
     () => ({
@@ -93,8 +102,6 @@ export default function Vehicles() {
       status: v.status,
       driver_id: v.driver_id || '',
       mileage_km: v.mileage_km ?? '',
-      location: v.location || '',
-      vehicle_year: v.vehicle_year ?? '',
       last_service_date: v.last_service_date || '',
       last_service_desc: v.last_service_desc || '',
     })
@@ -115,8 +122,6 @@ export default function Vehicles() {
         status: draft.status,
         driver_id: draft.driver_id || null,
         mileage_km: draft.mileage_km === '' ? null : Number(draft.mileage_km),
-        location: draft.location || null,
-        vehicle_year: draft.vehicle_year === '' ? null : Number(draft.vehicle_year),
         last_service_date: draft.last_service_date || null,
         last_service_desc: draft.last_service_desc || null,
       })
@@ -139,6 +144,8 @@ export default function Vehicles() {
     setSaving(true)
     await supabase.from('vehicles').insert({
       name: addForm.name,
+      vehicle_year: addForm.vehicle_year === '' ? null : Number(addForm.vehicle_year),
+      make: addForm.make || null,
       model: addForm.model || null,
       type: addForm.type || null,
       plate: addForm.plate || null,
@@ -146,11 +153,10 @@ export default function Vehicles() {
       status: addForm.status,
       mileage_km: addForm.mileage_km === '' ? null : Number(addForm.mileage_km),
       fuel_type: addForm.fuel_type || null,
-      location: addForm.location || null,
-      vehicle_year: addForm.vehicle_year === '' ? null : Number(addForm.vehicle_year),
       last_service_date: addForm.last_service_date || null,
       last_service_desc: addForm.last_service_desc || null,
       driver_id: addForm.driver_id || null,
+      owner_id: addForm.owner_id || null,
     })
     setSaving(false)
     setShowAdd(false)
@@ -211,16 +217,17 @@ export default function Vehicles() {
                   <th style={thStyle}>Plate</th>
                   <th style={thStyle}>Status</th>
                   <th style={thStyle}>Driver</th>
+                  <th style={thStyle}>Owner</th>
                   <th style={thStyle}>Mileage</th>
                   <th style={{ ...thStyle, padding: '12px 20px' }}>Last service</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={7} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>Loading vehicles…</td></tr>
+                  <tr><td colSpan={8} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>Loading vehicles…</td></tr>
                 )}
                 {!loading && visible.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No vehicles match this view.</td></tr>
+                  <tr><td colSpan={8} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No vehicles match this view.</td></tr>
                 )}
                 {!loading && visible.map((v) => {
                   const meta = STATUS_META[v.status] || { label: v.status }
@@ -235,13 +242,14 @@ export default function Vehicles() {
                           style={{ display: 'block', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
                         >
                           <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: colors.accent }}>{v.name}</span>
-                          <span style={{ display: 'block', fontSize: 12, color: colors.mutedLight, marginTop: 1 }}>{v.model}</span>
+                          <span style={{ display: 'block', fontSize: 12, color: colors.mutedLight, marginTop: 1 }}>{ymm(v)}</span>
                         </button>
                       </td>
                       <td style={{ ...tdStyle, color: colors.text2 }}>{v.type || '—'}</td>
                       <td style={{ ...tdStyle, color: colors.text2, fontFamily: fontMono }}>{v.plate || '—'}</td>
                       <td style={{ padding: '16px 12px' }}><Badge bg={pal.bg} color={pal.color}>{meta.label}</Badge></td>
                       <td style={{ ...tdStyle, color: colors.text2 }}>{driverName(v.driver_id)}</td>
+                      <td style={{ ...tdStyle, color: colors.text2 }}>{ownerName(v.owner_id)}</td>
                       <td style={{ ...tdStyle, color: colors.text2, fontFamily: fontMono }}>{v.mileage_km != null ? `${Number(v.mileage_km).toLocaleString('id-ID')} km` : '—'}</td>
                       <td style={{ padding: '16px 20px', fontSize: 13, color: colors.text2 }}>
                         {v.last_service_desc || '—'}
@@ -272,8 +280,11 @@ export default function Vehicles() {
           />
           <aside aria-label="Vehicle details" style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: 400, background: colors.white, boxShadow: '-8px 0 24px rgba(20,20,20,0.10)', display: 'flex', flexDirection: 'column', zIndex: 50 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: `1px solid ${colors.border}` }}>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{selected.name}</h2>
-              <button type="button" onClick={closeDetail} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{selected.name}</h2>
+                <div style={{ fontSize: 12, color: colors.mutedLight, marginTop: 2 }}>{ymm(selected)}</div>
+              </div>
+              <button type="button" onClick={closeDetail} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4B505A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
               </button>
             </div>
@@ -303,44 +314,26 @@ export default function Vehicles() {
                 </Field>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Odometer (km)">
-                  <input
-                    type="number"
-                    value={draft.mileage_km}
-                    onChange={(e) => setDraft({ ...draft, mileage_km: e.target.value })}
-                    style={inputStyle}
-                  />
-                </Field>
-                <Field label="Location">
-                  <input
-                    type="text"
-                    value={draft.location}
-                    onChange={(e) => setDraft({ ...draft, location: e.target.value })}
-                    style={inputStyle}
-                  />
-                </Field>
-              </div>
-
-              <Field label="Year">
+              <Field label="Odometer (km)">
                 <input
                   type="number"
-                  value={draft.vehicle_year}
-                  onChange={(e) => setDraft({ ...draft, vehicle_year: e.target.value })}
-                  placeholder="2022"
-                  min="1980"
-                  max={new Date().getFullYear() + 1}
+                  value={draft.mileage_km}
+                  onChange={(e) => setDraft({ ...draft, mileage_km: e.target.value })}
                   style={inputStyle}
                 />
               </Field>
 
               <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 12px' }}>
-                <DL label="Model" value={selected.model} />
+                <DL label="Year" value={selected.vehicle_year} />
                 <DL label="Plate" value={selected.plate} mono />
                 <DL label="VIN" value={selected.vin} mono />
                 <DL label="Type" value={selected.type} />
                 <DL label="Fuel" value={selected.fuel_type} />
+                <DL label="Owner" value={ownerName(selected.owner_id)} />
               </dl>
+              <div style={{ fontSize: 11.5, color: colors.mutedLight, marginTop: -10 }}>
+                Year is set when the vehicle is added and can't be changed here. Owner is managed from the Fleet Groups page.
+              </div>
 
               <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ fontSize: 11, color: colors.mutedLight, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Last service</div>
@@ -403,12 +396,26 @@ export default function Vehicles() {
           >
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Add vehicle</h2>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Name">
-                <input required type="text" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="Van 21" style={inputStyle} />
+            <Field label="Name">
+              <input required type="text" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="Van 21" style={inputStyle} />
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="Year">
+                <input
+                  type="number"
+                  value={addForm.vehicle_year}
+                  onChange={(e) => setAddForm({ ...addForm, vehicle_year: e.target.value })}
+                  placeholder="2022"
+                  min="1980"
+                  max={new Date().getFullYear() + 1}
+                  style={inputStyle}
+                />
+              </Field>
+              <Field label="Make">
+                <input type="text" value={addForm.make} onChange={(e) => setAddForm({ ...addForm, make: e.target.value })} placeholder="Toyota" style={inputStyle} />
               </Field>
               <Field label="Model">
-                <input type="text" value={addForm.model} onChange={(e) => setAddForm({ ...addForm, model: e.target.value })} placeholder="Toyota HiAce" style={inputStyle} />
+                <input type="text" value={addForm.model} onChange={(e) => setAddForm({ ...addForm, model: e.target.value })} placeholder="HiAce" style={inputStyle} />
               </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -440,29 +447,23 @@ export default function Vehicles() {
               </Field>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Location">
-                <input type="text" value={addForm.location} onChange={(e) => setAddForm({ ...addForm, location: e.target.value })} placeholder="Lot A" style={inputStyle} />
+              <Field label="Driver">
+                <select value={addForm.driver_id} onChange={(e) => setAddForm({ ...addForm, driver_id: e.target.value })} style={selectStyle}>
+                  <option value="">Unassigned</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
               </Field>
-              <Field label="Year">
-                <input
-                  type="number"
-                  value={addForm.vehicle_year}
-                  onChange={(e) => setAddForm({ ...addForm, vehicle_year: e.target.value })}
-                  placeholder="2022"
-                  min="1980"
-                  max={new Date().getFullYear() + 1}
-                  style={inputStyle}
-                />
+              <Field label="Owner">
+                <select value={addForm.owner_id} onChange={(e) => setAddForm({ ...addForm, owner_id: e.target.value })} style={selectStyle}>
+                  <option value="">Unassigned</option>
+                  {owners.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
               </Field>
             </div>
-            <Field label="Driver">
-              <select value={addForm.driver_id} onChange={(e) => setAddForm({ ...addForm, driver_id: e.target.value })} style={selectStyle}>
-                <option value="">Unassigned</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </Field>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
               <SecondaryButton type="button" onClick={() => setShowAdd(false)}>Cancel</SecondaryButton>

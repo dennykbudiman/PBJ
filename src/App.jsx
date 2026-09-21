@@ -10,6 +10,8 @@ import Maintenance from './pages/Maintenance'
 import WorkOrders from './pages/WorkOrders'
 import Parts from './pages/Parts'
 import Drivers from './pages/Drivers'
+import FleetGroups from './pages/FleetGroups'
+import Technicians from './pages/Technicians'
 import Alerts from './pages/Alerts'
 import Settings from './pages/Settings'
 import { colors } from './lib/theme'
@@ -61,6 +63,8 @@ export default function App() {
             <Route path="work-orders" element={<WorkOrders />} />
             <Route path="parts" element={<Parts />} />
             <Route path="drivers" element={<Drivers />} />
+            <Route path="fleet-groups" element={<FleetGroups />} />
+            <Route path="technicians" element={<Technicians />} />
             <Route path="alerts" element={<Alerts />} />
             <Route path="settings" element={<Settings />} />
           </Route>
