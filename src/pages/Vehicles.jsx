@@ -30,7 +30,7 @@ const FILTERS = [
 
 const EMPTY_FORM = {
   name: '', model: '', type: '', plate: '', vin: '', status: 'active',
-  mileage_km: '', fuel_type: '', location: '', purchase_date: '',
+  mileage_km: '', fuel_type: '', location: '', vehicle_year: '',
   last_service_date: '', last_service_desc: '', driver_id: '',
 }
 
@@ -94,6 +94,7 @@ export default function Vehicles() {
       driver_id: v.driver_id || '',
       mileage_km: v.mileage_km ?? '',
       location: v.location || '',
+      vehicle_year: v.vehicle_year ?? '',
       last_service_date: v.last_service_date || '',
       last_service_desc: v.last_service_desc || '',
     })
@@ -115,6 +116,7 @@ export default function Vehicles() {
         driver_id: draft.driver_id || null,
         mileage_km: draft.mileage_km === '' ? null : Number(draft.mileage_km),
         location: draft.location || null,
+        vehicle_year: draft.vehicle_year === '' ? null : Number(draft.vehicle_year),
         last_service_date: draft.last_service_date || null,
         last_service_desc: draft.last_service_desc || null,
       })
@@ -145,7 +147,7 @@ export default function Vehicles() {
       mileage_km: addForm.mileage_km === '' ? null : Number(addForm.mileage_km),
       fuel_type: addForm.fuel_type || null,
       location: addForm.location || null,
-      purchase_date: addForm.purchase_date || null,
+      vehicle_year: addForm.vehicle_year === '' ? null : Number(addForm.vehicle_year),
       last_service_date: addForm.last_service_date || null,
       last_service_desc: addForm.last_service_desc || null,
       driver_id: addForm.driver_id || null,
@@ -320,13 +322,24 @@ export default function Vehicles() {
                 </Field>
               </div>
 
+              <Field label="Year">
+                <input
+                  type="number"
+                  value={draft.vehicle_year}
+                  onChange={(e) => setDraft({ ...draft, vehicle_year: e.target.value })}
+                  placeholder="2022"
+                  min="1980"
+                  max={new Date().getFullYear() + 1}
+                  style={inputStyle}
+                />
+              </Field>
+
               <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 12px' }}>
                 <DL label="Model" value={selected.model} />
                 <DL label="Plate" value={selected.plate} mono />
                 <DL label="VIN" value={selected.vin} mono />
                 <DL label="Type" value={selected.type} />
                 <DL label="Fuel" value={selected.fuel_type} />
-                <DL label="Purchased" value={formatDate(selected.purchase_date)} />
               </dl>
 
               <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -430,8 +443,16 @@ export default function Vehicles() {
               <Field label="Location">
                 <input type="text" value={addForm.location} onChange={(e) => setAddForm({ ...addForm, location: e.target.value })} placeholder="Lot A" style={inputStyle} />
               </Field>
-              <Field label="Purchase date">
-                <input type="date" value={addForm.purchase_date} onChange={(e) => setAddForm({ ...addForm, purchase_date: e.target.value })} style={inputStyle} />
+              <Field label="Year">
+                <input
+                  type="number"
+                  value={addForm.vehicle_year}
+                  onChange={(e) => setAddForm({ ...addForm, vehicle_year: e.target.value })}
+                  placeholder="2022"
+                  min="1980"
+                  max={new Date().getFullYear() + 1}
+                  style={inputStyle}
+                />
               </Field>
             </div>
             <Field label="Driver">

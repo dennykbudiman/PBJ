@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import { colors } from '../lib/theme'
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { signInWithUsername } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -15,7 +15,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await signIn(email, password)
+    const { error } = await signInWithUsername(username, password)
     setLoading(false)
     if (error) {
       setError(error.message)
@@ -52,16 +52,17 @@ export default function Login() {
 
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 20px 0' }}>Sign in</h1>
 
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }} htmlFor="login-email">
-          Email
+        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }} htmlFor="login-username">
+          Username
         </label>
         <input
-          id="login-email"
-          type="email"
+          id="login-username"
+          type="text"
+          autoComplete="username"
           required
           autoFocus
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
           style={inputStyle}
         />
 

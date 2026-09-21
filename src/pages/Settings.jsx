@@ -38,7 +38,7 @@ export default function Settings() {
   const [integrations, setIntegrations] = useState([])
 
   const [showInvite, setShowInvite] = useState(false)
-  const [invite, setInvite] = useState({ name: '', email: '', role_id: '', phone: '' })
+  const [invite, setInvite] = useState({ name: '', username: '', email: '', role_id: '', phone: '' })
   const [inviteError, setInviteError] = useState(null)
 
   const [showAddRole, setShowAddRole] = useState(false)
@@ -55,7 +55,7 @@ export default function Settings() {
       supabase.from('app_settings').select('*').eq('id', true).single(),
       supabase.from('roles').select('id, name').order('created_at', { ascending: true }),
       supabase.from('role_permissions').select('role_id, permission_key'),
-      supabase.from('profiles').select('id, name, phone, status, role_id, roles(name)').order('created_at', { ascending: true }),
+      supabase.from('profiles').select('id, name, username, phone, status, role_id, roles(name)').order('created_at', { ascending: true }),
       supabase.from('integrations').select('*').order('name', { ascending: true }),
     ])
     setSettings(s ?? null)
@@ -86,6 +86,29 @@ export default function Settings() {
   }
 
   // ---------- Users ----------
+  // Owners/Admins (anyone with manage_users) can add or change a user's
+  // phone number directly from the table — no need to re-invite them.
+  const [phoneDrafts, setPhoneDrafts] = useState({}) // { [profileId]: string }
+  const [savingPhoneId, setSavingPhoneId] = useState(null)
+
+  function phoneDraftFor(u) {
+    return phoneDrafts[u.id] ?? (u.phone || '')
+  }
+
+  async function savePhone(u) {
+    const value = phoneDraftFor(u).trim()
+    if (value === (u.phone || '')) return // nothing changed
+    setSavingPhoneId(u.id)
+    await supabase.from('profiles').update({ phone: value || null }).eq('id', u.id)
+    setProfiles((prev) => prev.map((p) => (p.id === u.id ? { ...p, phone: value || null } : p)))
+    setPhoneDrafts((prev) => {
+      const next = { ...prev }
+      delete next[u.id]
+      return next
+    })
+    setSavingPhoneId(null)
+  }
+
   // Creating a real login (a row in auth.users) needs the service_role key,
   // which must never touch client code. This calls the `invite-user`
   // Supabase Edge Function (see supabase/functions/invite-user/index.ts),
@@ -98,13 +121,18 @@ export default function Settings() {
     setInviteError(null)
     const name = invite.name.trim()
     const email = invite.email.trim()
-    if (!name || !email || !invite.role_id) {
-      setInviteError('Name, email, and role are all required.')
+    const username = invite.username.trim().toLowerCase()
+    if (!name || !email || !username || !invite.role_id) {
+      setInviteError('Name, username, email, and role are all required.')
+      return
+    }
+    if (!/^[a-z0-9._-]+$/.test(username)) {
+      setInviteError('Username can only contain lowercase letters, numbers, dots, dashes, and underscores.')
       return
     }
     try {
       const { data, error } = await supabase.functions.invoke('invite-user', {
-        body: { email, name, phone: invite.phone || null, roleId: invite.role_id },
+        body: { email, name, username, phone: invite.phone || null, roleId: invite.role_id },
       })
       // supabase-js surfaces a non-2xx function response as `error`, but the
       // JSON body with our own `{ error: "..." }` message is on error.context
@@ -114,7 +142,7 @@ export default function Settings() {
         throw new Error(serverMessage || error.message)
       }
       setShowInvite(false)
-      setInvite({ name: '', email: '', role_id: roles[0]?.id || '', phone: '' })
+      setInvite({ name: '', username: '', email: '', role_id: roles[0]?.id || '', phone: '' })
       load()
     } catch (err) {
       setInviteError(
@@ -267,6 +295,15 @@ export default function Settings() {
                     <LabeledField label="Name">
                       <input type="text" value={invite.name} onChange={(e) => setInvite((v) => ({ ...v, name: e.target.value }))} style={fieldInput} />
                     </LabeledField>
+                    <LabeledField label="Username">
+                      <input
+                        type="text"
+                        placeholder="what they'll sign in with"
+                        value={invite.username}
+                        onChange={(e) => setInvite((v) => ({ ...v, username: e.target.value }))}
+                        style={{ ...fieldInput, fontFamily: 'IBM Plex Mono, monospace' }}
+                      />
+                    </LabeledField>
                     <LabeledField label="Email">
                       <input type="email" value={invite.email} onChange={(e) => setInvite((v) => ({ ...v, email: e.target.value }))} style={fieldInput} />
                     </LabeledField>
@@ -293,18 +330,40 @@ export default function Settings() {
                     <thead>
                       <tr style={{ textAlign: 'left', background: '#FBFAF8' }}>
                         <th style={thStyle}>Name</th>
+                        <th style={thStyle}>Username</th>
                         <th style={thStyle}>Role</th>
                         <th style={thStyle}>Phone</th>
                         <th style={{ ...thStyle, padding: '12px 20px' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {profiles.length === 0 && <tr><td colSpan={4} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No users yet.</td></tr>}
+                      {profiles.length === 0 && <tr><td colSpan={5} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No users yet.</td></tr>}
                       {profiles.map((u) => (
                         <tr key={u.id} style={{ borderTop: `1px solid rgba(28,30,34,0.07)` }}>
                           <td style={{ padding: '13px 20px', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>{u.name}</td>
+                          <td style={{ ...tdStyle2, color: colors.text2, fontFamily: 'IBM Plex Mono, monospace' }}>{u.username || '—'}</td>
                           <td style={{ ...tdStyle2, color: colors.text2 }}>{u.roles?.name || '—'}</td>
-                          <td style={{ ...tdStyle2, color: colors.text2, fontFamily: 'IBM Plex Mono, monospace' }}>{u.phone || '—'}</td>
+                          <td style={{ ...tdStyle2 }}>
+                            {canManageUsers ? (
+                              <input
+                                type="text"
+                                value={phoneDraftFor(u)}
+                                onChange={(e) => setPhoneDrafts((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                                onBlur={() => savePhone(u)}
+                                placeholder="+62 8XX-XXXX-XXXX"
+                                disabled={savingPhoneId === u.id}
+                                style={{
+                                  width: '100%', minWidth: 150, border: '1px solid transparent', borderRadius: 6,
+                                  padding: '5px 7px', font: 'inherit', fontSize: 13, fontFamily: 'IBM Plex Mono, monospace',
+                                  color: colors.text2, background: 'transparent', outline: 'none',
+                                }}
+                                onFocus={(e) => { e.target.style.border = `1px solid ${colors.borderStrong}`; e.target.style.background = colors.white }}
+                                onBlurCapture={(e) => { e.target.style.border = '1px solid transparent'; e.target.style.background = 'transparent' }}
+                              />
+                            ) : (
+                              <span style={{ color: colors.text2, fontFamily: 'IBM Plex Mono, monospace', fontSize: 13 }}>{u.phone || '—'}</span>
+                            )}
+                          </td>
                           <td style={{ padding: '13px 20px' }}>
                             <Badge bg={u.status === 'active' ? colors.accentBg : colors.warnBg} color={u.status === 'active' ? colors.good : colors.warn}>
                               {u.status === 'active' ? 'Active' : 'Invited'}

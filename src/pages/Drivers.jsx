@@ -46,7 +46,7 @@ function expiryMeta(dateStr) {
 }
 
 const EMPTY_FORM = {
-  name: '', license_class: 'SIM A Umum', license_expiry: '', phone: '',
+  name: '', license_class: 'SIM A Umum', license_number: '', license_expiry: '', phone: '',
   hired_date: '', status: 'active', vehicleId: '',
 }
 
@@ -109,6 +109,7 @@ export default function Drivers() {
     setDraft({
       status: d.status,
       license_class: d.license_class || 'SIM A Umum',
+      license_number: d.license_number || '',
       license_expiry: d.license_expiry || '',
       phone: d.phone || '',
       vehicleId: currentVehicle?.id || '',
@@ -150,6 +151,7 @@ export default function Drivers() {
       .update({
         status: draft.status,
         license_class: draft.license_class,
+        license_number: draft.license_number || null,
         license_expiry: draft.license_expiry || null,
         phone: draft.phone || null,
       })
@@ -185,6 +187,7 @@ export default function Drivers() {
       .insert({
         name: addForm.name,
         license_class: addForm.license_class,
+        license_number: addForm.license_number || null,
         license_expiry: addForm.license_expiry || null,
         phone: addForm.phone || null,
         hired_date: addForm.hired_date || null,
@@ -252,16 +255,17 @@ export default function Drivers() {
                   <th style={{ ...thStyle, padding: '12px 20px' }}>Driver</th>
                   <th style={thStyle}>Assigned vehicle</th>
                   <th style={thStyle}>License</th>
+                  <th style={thStyle}>License #</th>
                   <th style={thStyle}>Status</th>
                   <th style={{ ...thStyle, padding: '12px 20px' }}>Phone</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={5} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>Loading drivers…</td></tr>
+                  <tr><td colSpan={6} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>Loading drivers…</td></tr>
                 )}
                 {!loading && visible.length === 0 && (
-                  <tr><td colSpan={5} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No drivers match this view.</td></tr>
+                  <tr><td colSpan={6} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No drivers match this view.</td></tr>
                 )}
                 {!loading && visible.map((d) => {
                   const meta = STATUS_META[d.status] || { label: d.status, bg: colors.neutralBg, color: colors.neutral }
@@ -290,6 +294,7 @@ export default function Drivers() {
                         <span style={{ color: colors.text2 }}>{d.license_class || '—'}</span>
                         <div style={{ fontSize: 12, color: em.color, marginTop: 1 }}>{em.label}</div>
                       </td>
+                      <td style={{ ...tdStyle, color: colors.text2, fontFamily: fontMono }}>{d.license_number || '—'}</td>
                       <td style={{ padding: '14px 12px' }}><Badge bg={meta.bg} color={meta.color}>{meta.label}</Badge></td>
                       <td style={{ padding: '14px 20px', fontSize: 13, color: colors.text2, fontFamily: fontMono, whiteSpace: 'nowrap' }}>{d.phone || '—'}</td>
                     </tr>
@@ -366,6 +371,17 @@ export default function Drivers() {
                     ))}
                   </select>
                 </Field>
+                <Field label="License number">
+                  <input
+                    type="text"
+                    value={draft.license_number}
+                    onChange={(e) => setDraft({ ...draft, license_number: e.target.value })}
+                    style={{ ...inputStyle, fontFamily: fontMono }}
+                  />
+                </Field>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Field label="License expiry">
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <select aria-label="Expiry month" value={draftExpMonth} onChange={(e) => setExpiryMonth(e.target.value)} style={selectStyle}>
@@ -447,6 +463,12 @@ export default function Drivers() {
                   ))}
                 </select>
               </Field>
+              <Field label="License number">
+                <input type="text" value={addForm.license_number} onChange={(e) => setAddForm({ ...addForm, license_number: e.target.value })} style={{ ...inputStyle, fontFamily: fontMono }} />
+              </Field>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Status">
                 <select value={addForm.status} onChange={(e) => setAddForm({ ...addForm, status: e.target.value })} style={selectStyle}>
                   <option value="active">Active</option>

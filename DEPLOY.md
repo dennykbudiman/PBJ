@@ -6,9 +6,11 @@ README; skip to Step 3 if so.
 ## 1. Supabase project + database
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. SQL Editor → run `001_schema.sql`, then `002_rls.sql`, then `003_seed.sql`
-   (from Stage 1), in that order.
-3. Authentication → Providers → confirm **Email** is enabled.
+2. SQL Editor → run `001_schema.sql`, `002_rls.sql`, `003_seed.sql`, then
+   `004_username_login.sql`, in that order (the last one adds username-only
+   login, so people sign in with a username instead of their email).
+3. Authentication → Providers → confirm **Email** is enabled (this is still
+   used behind the scenes — the app just never shows it to anyone).
 4. Authentication → URL Configuration → set **Site URL** to your future
    Netlify URL once you know it (Step 4) — this is what invite-email links
    point to. You can come back and fix this after the first deploy.
@@ -17,22 +19,43 @@ README; skip to Step 3 if so.
 
 Authentication → Users → **Add user** (enter your own email + a password).
 The `on_auth_user_created` trigger creates a matching `profiles` row
-automatically (defaulted to the "Viewer" role). Promote yourself in the SQL
-Editor:
+automatically (defaulted to the "Viewer" role, and a username auto-derived
+from your email by `004_username_login.sql`'s backfill). In the SQL Editor,
+promote yourself to Owner and set the username you actually want to sign in
+with:
 
 ```sql
-update public.profiles set role_id = (select id from public.roles where name = 'Owner')
+update public.profiles
+set role_id = (select id from public.roles where name = 'Owner'),
+    username = 'your-preferred-username'
 where id = (select id from auth.users where email = 'you@example.com');
 ```
+
+Every user invited through the app's own Settings page afterward picks
+their username in that form — this manual step is only needed for this
+first account, since it didn't go through that flow.
 
 ## 3. Deploy the invite-user Edge Function
 
 This needs the [Supabase CLI](https://supabase.com/docs/guides/cli) installed
 on your own machine (not this sandbox — it had no registry access to install
-it).
+it). The CLI is no longer installable via `npm install -g`; use one of:
 
 ```bash
-npm install -g supabase
+# macOS (Homebrew)
+brew install supabase/tap/supabase
+
+# Windows (Scoop)
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
+
+# Linux
+curl -fsSL https://cli.supabase.com/install.sh | sh
+```
+
+Then:
+
+```bash
 supabase login
 supabase link --project-ref <your-project-ref>   # find this in the dashboard URL
 supabase functions deploy invite-user
