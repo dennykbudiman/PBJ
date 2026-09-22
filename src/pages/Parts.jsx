@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { colors, fontMono, formatRupiah, formatDate, severityPalette } from '../lib/theme'
 import PageHeader, { PrimaryButton, SecondaryButton } from '../components/PageHeader'
 import Badge from '../components/Badge'
-import ConfirmModal from '../components/ConfirmModal'
 
 // Stock status badge colors follow the shared severity convention:
 // out -> danger, low -> warning, in (the `default` branch) -> neutral.
@@ -45,6 +45,7 @@ function sortRows(rows, key, dir) {
 }
 
 export default function Parts() {
+  const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const canDeleteParts = hasPermission('delete_parts')
 
@@ -57,8 +58,8 @@ export default function Parts() {
   const [poSort, setPoSort] = useState({ key: null, dir: 'asc' })
   const [banner, setBanner] = useState(null)
 
-  const [draft, setDraft] = useState(null) // part edit drawer
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [addDraft, setAddDraft] = useState(null) // "Add Part" modal
 
   const [receiveOpen, setReceiveOpen] = useState(false)
   const [receivePo, setReceivePo] = useState(null) // full po row
@@ -105,39 +106,35 @@ export default function Parts() {
   }
 
   function openEditPart(p) {
-    setDraft({ ...p })
+    navigate(`/parts/${p.id}`)
   }
   function openAddPart() {
-    setDraft({ ...EMPTY_DRAFT })
+    setAddDraft({ ...EMPTY_DRAFT })
+    setAddOpen(true)
   }
-  function updateDraft(field, isNumber) {
+  function updateAddDraft(field, isNumber) {
     return (e) => {
       const raw = e.target.value
-      setDraft((d) => ({ ...d, [field]: isNumber ? Number(raw) || 0 : raw }))
+      setAddDraft((d) => ({ ...d, [field]: isNumber ? Number(raw) || 0 : raw }))
     }
   }
 
-  async function savePart() {
-    if (!draft) return
+  async function saveNewPart(e) {
+    e.preventDefault()
+    if (!addDraft) return
     const payload = {
-      name: draft.name, part_number: draft.part_number || null, category: draft.category || null,
-      qty_on_hand: draft.qty_on_hand, reorder_point: draft.reorder_point, unit_cost: draft.unit_cost,
-      supplier: draft.supplier || null, bin_location: draft.bin_location || null,
+      name: addDraft.name, part_number: addDraft.part_number || null, category: addDraft.category || null,
+      qty_on_hand: addDraft.qty_on_hand, reorder_point: addDraft.reorder_point, unit_cost: addDraft.unit_cost,
+      supplier: addDraft.supplier || null, bin_location: addDraft.bin_location || null,
     }
-    if (draft.id) {
-      await supabase.from('parts').update(payload).eq('id', draft.id)
+    const { data, error } = await supabase.from('parts').insert(payload).select().single()
+    setAddOpen(false)
+    setAddDraft(null)
+    if (!error && data) {
+      navigate(`/parts/${data.id}`)
     } else {
-      await supabase.from('parts').insert(payload)
+      load()
     }
-    setDraft(null)
-    load()
-  }
-
-  async function confirmDeletePart() {
-    if (!deleteTarget) return
-    await supabase.from('parts').delete().eq('id', deleteTarget.id)
-    setDeleteTarget(null)
-    load()
   }
 
   // ---------- Reorder -> draft PO ----------
@@ -488,56 +485,30 @@ export default function Parts() {
         </div>
       </main>
 
-      {/* Edit / add part drawer */}
-      {draft && (
-        <>
-          <button type="button" onClick={() => setDraft(null)} aria-label="Close part details" style={{ position: 'fixed', inset: 0, background: 'rgba(20,20,20,0.32)', border: 'none', padding: 0, cursor: 'default' }} />
-          <aside aria-label="Edit part" style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: 420, background: colors.white, boxShadow: '-8px 0 24px rgba(20,20,20,0.10)', display: 'flex', flexDirection: 'column', zIndex: 40 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: `1px solid ${colors.border}` }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{draft.name || 'New Part'}</h2>
-                <div style={{ fontSize: 12, color: colors.mutedLight, fontFamily: fontMono, marginTop: 2 }}>{draft.part_number || '—'}</div>
-              </div>
-              <button type="button" onClick={() => setDraft(null)} aria-label="Close" style={closeBtnStyle}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
+      {/* Add part modal — a centered quick-create form, matching Add Vehicle/Driver/Owner.
+          Viewing or editing an existing part opens its own full page instead. */}
+      {addOpen && addDraft && (
+        <Modal title="Add Part" onClose={() => setAddOpen(false)} width={440}>
+          <form onSubmit={saveNewPart} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Field label="Part name"><input required type="text" value={addDraft.name} onChange={updateAddDraft('name')} style={inputStyle} /></Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Part number"><input type="text" value={addDraft.part_number || ''} onChange={updateAddDraft('part_number')} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
+              <Field label="Category"><input type="text" value={addDraft.category || ''} onChange={updateAddDraft('category')} style={inputStyle} /></Field>
             </div>
-            <div style={{ flex: '1 1 auto', overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <Field label="Part name"><input type="text" value={draft.name} onChange={updateDraft('name')} style={inputStyle} /></Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Part number"><input type="text" value={draft.part_number || ''} onChange={updateDraft('part_number')} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
-                <Field label="Category"><input type="text" value={draft.category || ''} onChange={updateDraft('category')} style={inputStyle} /></Field>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="On hand"><input type="number" min="0" step="1" value={draft.qty_on_hand} onChange={updateDraft('qty_on_hand', true)} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
-                <Field label="Reorder point"><input type="number" min="0" step="1" value={draft.reorder_point} onChange={updateDraft('reorder_point', true)} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
-              </div>
-              <Field label="Unit cost (Rp)"><input type="number" min="0" step="1000" value={draft.unit_cost} onChange={updateDraft('unit_cost', true)} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
-              <Field label="Supplier"><input type="text" value={draft.supplier || ''} onChange={updateDraft('supplier')} style={inputStyle} /></Field>
-              <Field label="Bin location"><input type="text" value={draft.bin_location || ''} onChange={updateDraft('bin_location')} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="On hand"><input type="number" min="0" step="1" value={addDraft.qty_on_hand} onChange={updateAddDraft('qty_on_hand', true)} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
+              <Field label="Reorder point"><input type="number" min="0" step="1" value={addDraft.reorder_point} onChange={updateAddDraft('reorder_point', true)} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
             </div>
-            <div style={{ padding: '18px 24px', borderTop: `1px solid ${colors.border}`, display: 'flex', gap: 8 }}>
-              {draft.id && canDeleteParts && (
-                <button type="button" onClick={() => setDeleteTarget(draft)} style={{ background: colors.white, color: colors.danger, border: `1px solid rgba(192,57,43,0.35)`, borderRadius: 8, padding: '11px 14px', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                  Delete
-                </button>
-              )}
-              <div style={{ flex: '1 1 auto' }} />
-              <SecondaryButton onClick={() => setDraft(null)} style={{ flex: '1 1 0', justifyContent: 'center' }}>Cancel</SecondaryButton>
-              <PrimaryButton onClick={savePart} style={{ flex: '1 1 0', justifyContent: 'center' }}>Save Changes</PrimaryButton>
+            <Field label="Unit cost (Rp)"><input type="number" min="0" step="1000" value={addDraft.unit_cost} onChange={updateAddDraft('unit_cost', true)} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
+            <Field label="Supplier"><input type="text" value={addDraft.supplier || ''} onChange={updateAddDraft('supplier')} style={inputStyle} /></Field>
+            <Field label="Bin location"><input type="text" value={addDraft.bin_location || ''} onChange={updateAddDraft('bin_location')} style={{ ...inputStyle, fontFamily: fontMono }} /></Field>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+              <SecondaryButton type="button" onClick={() => setAddOpen(false)}>Cancel</SecondaryButton>
+              <PrimaryButton type="submit">Add Part</PrimaryButton>
             </div>
-          </aside>
-        </>
+          </form>
+        </Modal>
       )}
-
-      <ConfirmModal
-        open={!!deleteTarget}
-        title="Delete this part?"
-        body={`"${deleteTarget?.name}" will be removed from the catalog. This can't be undone, and it will fail if the part is referenced by an existing purchase order.`}
-        confirmLabel="Delete"
-        onCancel={() => setDeleteTarget(null)}
-        onConfirm={confirmDeletePart}
-      />
 
       {/* Receive parts modal */}
       {receiveOpen && (

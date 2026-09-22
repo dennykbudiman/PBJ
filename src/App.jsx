@@ -6,10 +6,17 @@ import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import Dashboard from './pages/Dashboard'
 import Vehicles from './pages/Vehicles'
+import VehicleDetail from './pages/VehicleDetail'
 import Maintenance from './pages/Maintenance'
 import WorkOrders from './pages/WorkOrders'
 import Parts from './pages/Parts'
+import PartDetail from './pages/PartDetail'
 import Drivers from './pages/Drivers'
+import DriverDetail from './pages/DriverDetail'
+import FleetGroups from './pages/FleetGroups'
+import OwnerDetail from './pages/OwnerDetail'
+import Technicians from './pages/Technicians'
+import TechnicianDetail from './pages/TechnicianDetail'
 import Alerts from './pages/Alerts'
 import Settings from './pages/Settings'
 import { colors } from './lib/theme'
@@ -57,10 +64,19 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="vehicles" element={<Vehicles />} />
+            <Route path="vehicles/:id" element={<VehicleDetail />} />
             <Route path="maintenance" element={<Maintenance />} />
             <Route path="work-orders" element={<WorkOrders />} />
+            <Route path="work-orders/new" element={<WorkOrders />} />
+            <Route path="work-orders/:id" element={<WorkOrders />} />
             <Route path="parts" element={<Parts />} />
+            <Route path="parts/:id" element={<PartDetail />} />
             <Route path="drivers" element={<Drivers />} />
+            <Route path="drivers/:id" element={<DriverDetail />} />
+            <Route path="fleet-groups" element={<FleetGroups />} />
+            <Route path="fleet-groups/:id" element={<OwnerDetail />} />
+            <Route path="technicians" element={<Technicians />} />
+            <Route path="technicians/:id" element={<TechnicianDetail />} />
             <Route path="alerts" element={<Alerts />} />
             <Route path="settings" element={<Settings />} />
           </Route>

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { colors, fontMono, formatRupiah, formatDate } from '../lib/theme'
 import PageHeader, { PrimaryButton, SecondaryButton } from '../components/PageHeader'
 import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
+import DetailHeader from '../components/DetailHeader'
+import { TabBar, TabButton } from '../components/Tabs'
 
 // Status / priority / line-item-type palettes, ported 1:1 from the
 // WorkOrders.dc.html prototype's statusMeta / priorityMeta / typeMeta maps.
@@ -73,11 +75,26 @@ async function logHistory(workOrderId, action, detail, performedBy) {
   })
 }
 
+// Bumping a vehicle's odometer from a work-order reading never moves it
+// backwards — a technician mistyping a lower number shouldn't erase a
+// higher reading that's already on file.
+async function bumpVehicleOdometer(vehicleId, odometerKm, currentVehicles) {
+  if (!vehicleId || odometerKm === '' || odometerKm === null || odometerKm === undefined) return
+  const reading = Number(odometerKm)
+  if (!Number.isFinite(reading)) return
+  const vehicle = currentVehicles.find((v) => v.id === vehicleId)
+  if (vehicle && vehicle.mileage_km != null && Number(vehicle.mileage_km) >= reading) return
+  await supabase.from('vehicles').update({ mileage_km: reading }).eq('id', vehicleId)
+}
+
 export default function WorkOrders() {
   const { user, hasPermission } = useAuth()
   const canDelete = hasPermission('delete_work_orders')
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { id: routeId } = useParams()
+  const isNewRoute = location.pathname.endsWith('/new')
 
-  const [view, setView] = useState('list') // 'list' | 'detail' | 'new'
   const [filter, setFilter] = useState('all')
   const [rows, setRows] = useState([])
   const [loadingRows, setLoadingRows] = useState(true)
@@ -88,7 +105,6 @@ export default function WorkOrders() {
   const [technicians, setTechnicians] = useState([])
   const [parts, setParts] = useState([])
 
-  const [selectedId, setSelectedId] = useState(null)
   const [draft, setDraft] = useState(null) // editable copy of the selected work order
   const [original, setOriginal] = useState(null) // snapshot for diffing on save
   const [historyRows, setHistoryRows] = useState([])
@@ -96,7 +112,7 @@ export default function WorkOrders() {
   const [partSearchOpenId, setPartSearchOpenId] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  const [newForm, setNewForm] = useState({ vehicleId: '', service: '', priority: 'medium', bay: '', eta: '' })
+  const [newForm, setNewForm] = useState({ vehicleId: '', service: '', priority: 'medium', bay: '', eta: '', odometerKm: '' })
   const [creating, setCreating] = useState(false)
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
@@ -106,7 +122,7 @@ export default function WorkOrders() {
   }, [])
 
   useEffect(() => {
-    supabase.from('vehicles').select('id, name, model').order('name').then(({ data }) => setVehicles(data ?? []))
+    supabase.from('vehicles').select('id, name, model, mileage_km').order('name').then(({ data }) => setVehicles(data ?? []))
     supabase
       .from('profiles')
       .select('id, name, roles!inner(name)')
@@ -115,6 +131,21 @@ export default function WorkOrders() {
       .then(({ data }) => setTechnicians(data ?? []))
     supabase.from('parts').select('id, name, part_number, qty_on_hand, reorder_point, unit_cost').order('name').then(({ data }) => setParts(data ?? []))
   }, [])
+
+  // Route drives which record is open — a real URL for each work order
+  // instead of local view state, so back/forward and deep links both work.
+  useEffect(() => {
+    if (isNewRoute) {
+      setNewForm({ vehicleId: vehicles[0]?.id || '', service: '', priority: 'medium', bay: '', eta: '', odometerKm: '' })
+    } else if (routeId) {
+      openDetail(routeId)
+    } else {
+      setDraft(null)
+      setOriginal(null)
+      setHistoryRows([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId, isNewRoute])
 
   async function loadRows() {
     setLoadingRows(true)
@@ -172,8 +203,6 @@ export default function WorkOrders() {
 
   // ---- detail view ----
   async function openDetail(id) {
-    setSelectedId(id)
-    setView('detail')
     setDetailTab('items')
     setPartSearchOpenId(null)
     const { data: wo } = await supabase
@@ -187,7 +216,7 @@ export default function WorkOrders() {
     setDraft(d)
     setOriginal({
       service: wo.service, status: wo.status, priority: wo.priority,
-      technician_id: wo.technician_id, bay: wo.bay, eta: wo.eta,
+      technician_id: wo.technician_id, bay: wo.bay, eta: wo.eta, odometer_km: wo.odometer_km,
       lineItems: lineItems.map((li) => ({ ...li })),
     })
     const { data: hist } = await supabase
@@ -200,11 +229,7 @@ export default function WorkOrders() {
   }
 
   function closeDetail() {
-    setView('list')
-    setSelectedId(null)
-    setDraft(null)
-    setOriginal(null)
-    setHistoryRows([])
+    navigate('/work-orders')
   }
 
   function updateDraft(field, value) {
@@ -245,16 +270,17 @@ export default function WorkOrders() {
   const isInvoiced = !!draft?.invoice_sent_at
 
   async function saveChanges() {
-    if (!draft) return
+    if (!draft || isCheckedOut) return
     setSaving(true)
     try {
       const fieldChanges = []
-      const labelFor = { service: 'Description', status: 'Status', priority: 'Priority', technician_id: 'Technician', bay: 'Bay', eta: 'ETA' }
+      const labelFor = { service: 'Description', status: 'Status', priority: 'Priority', technician_id: 'Technician', bay: 'Bay', eta: 'ETA', odometer_km: 'Odometer' }
       const displayFor = (field, val) => {
         if (field === 'status') return STATUS_META[val]?.label || val || '—'
         if (field === 'priority') return PRIORITY_META[val]?.label || val || '—'
         if (field === 'technician_id') return technicians.find((t) => t.id === val)?.name || 'Unassigned'
         if (field === 'eta') return val ? formatDate(val) : '—'
+        if (field === 'odometer_km') return val != null && val !== '' ? `${Number(val).toLocaleString('id-ID')} km` : '—'
         return val || '—'
       }
       Object.keys(labelFor).forEach((field) => {
@@ -271,12 +297,19 @@ export default function WorkOrders() {
         technician_id: draft.technician_id || null,
         bay: draft.bay || null,
         eta: draft.eta || null,
+        odometer_km: draft.odometer_km === '' || draft.odometer_km == null ? null : Number(draft.odometer_km),
       }
       if (draft.status === 'inprogress' && !draft.started_at) {
         patch.started_at = new Date().toISOString()
       }
       const { error: woErr } = await supabase.from('work_orders').update(patch).eq('id', draft.id)
       if (woErr) throw woErr
+
+      // An odometer reading logged on the work order is the source of truth
+      // for the vehicle's current mileage — keep it in sync automatically.
+      if (patch.odometer_km !== (original?.odometer_km ?? null)) {
+        await bumpVehicleOdometer(draft.vehicle_id, patch.odometer_km, vehicles)
+      }
 
       // Diff line items: insert new, update changed, delete removed.
       const origById = {}
@@ -321,7 +354,7 @@ export default function WorkOrders() {
     if (!draft || isCheckedOut || !hasLineItems) return
     const { error } = await supabase.from('work_orders').update({ checked_out: true }).eq('id', draft.id)
     if (error) { alert(error.message); return }
-    await logHistory(draft.id, 'Checked out', 'Marked ready for invoicing', user?.id)
+    await logHistory(draft.id, 'Checked out', 'Marked ready for invoicing — locked from further edits', user?.id)
     setDraft((d) => ({ ...d, checked_out: true }))
     openDetail(draft.id)
   }
@@ -347,8 +380,7 @@ export default function WorkOrders() {
 
   // ---- new work order ----
   function openNew() {
-    setNewForm({ vehicleId: vehicles[0]?.id || '', service: '', priority: 'medium', bay: '', eta: '' })
-    setView('new')
+    navigate('/work-orders/new')
   }
 
   async function createWorkOrder() {
@@ -359,6 +391,7 @@ export default function WorkOrders() {
     setCreating(true)
     try {
       const woNumber = await nextWoNumber()
+      const odometerKm = newForm.odometerKm === '' ? null : Number(newForm.odometerKm)
       const { data, error } = await supabase
         .from('work_orders')
         .insert({
@@ -369,15 +402,16 @@ export default function WorkOrders() {
           status: 'open',
           bay: newForm.bay || null,
           eta: newForm.eta || null,
+          odometer_km: odometerKm,
         })
         .select()
         .single()
       if (error) throw error
       const vehicleName = vehicles.find((v) => v.id === newForm.vehicleId)?.name || ''
       await logHistory(data.id, 'Work order created', `${newForm.service.trim()} for ${vehicleName}`, user?.id)
+      await bumpVehicleOdometer(newForm.vehicleId, odometerKm, vehicles)
       await loadRows()
-      setView('list')
-      openDetail(data.id)
+      navigate(`/work-orders/${data.id}`)
     } catch (e) {
       alert('Could not create work order: ' + (e.message || e))
     } finally {
@@ -389,11 +423,11 @@ export default function WorkOrders() {
   // RENDER
   // ======================================================================
 
-  if (view === 'new') {
+  if (isNewRoute) {
     return (
       <>
         <PageHeader title="New Work Order">
-          <SecondaryButton onClick={() => setView('list')}>Cancel</SecondaryButton>
+          <SecondaryButton onClick={() => navigate('/work-orders')}>Cancel</SecondaryButton>
         </PageHeader>
         <main style={{ flex: '1 1 auto', padding: '24px 32px 48px 32px', display: 'flex', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -419,11 +453,24 @@ export default function WorkOrders() {
             <Field label="ETA">
               <input type="datetime-local" value={newForm.eta} onChange={(e) => setNewForm((f) => ({ ...f, eta: e.target.value }))} style={inputStyle} />
             </Field>
+            <Field label="Odometer at check-in (km)">
+              <input
+                type="number"
+                value={newForm.odometerKm}
+                onChange={(e) => setNewForm((f) => ({ ...f, odometerKm: e.target.value }))}
+                placeholder={(() => {
+                  const v = vehicles.find((v) => v.id === newForm.vehicleId)
+                  return v?.mileage_km != null ? `Current: ${Number(v.mileage_km).toLocaleString('id-ID')} km` : 'Optional'
+                })()}
+                style={{ ...inputStyle, fontFamily: fontMono }}
+              />
+              <div style={{ fontSize: 11.5, color: colors.mutedLight, marginTop: 5 }}>If set, this becomes the vehicle's current odometer.</div>
+            </Field>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
               <PrimaryButton onClick={createWorkOrder} disabled={creating} style={creating ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
                 {creating ? 'Creating…' : 'Create Work Order'}
               </PrimaryButton>
-              <SecondaryButton onClick={() => setView('list')}>Cancel</SecondaryButton>
+              <SecondaryButton onClick={() => navigate('/work-orders')}>Cancel</SecondaryButton>
             </div>
           </div>
         </main>
@@ -431,7 +478,7 @@ export default function WorkOrders() {
     )
   }
 
-  if (view === 'detail' && draft) {
+  if (routeId && draft) {
     return (
       <>
         <ConfirmModal
@@ -442,33 +489,35 @@ export default function WorkOrders() {
           onCancel={() => setConfirmDeleteOpen(false)}
           onConfirm={handleDelete}
         />
-        <header style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 32px', borderBottom: `1px solid ${colors.border}`, background: colors.white }}>
-          <button type="button" onClick={closeDetail} aria-label="Back to work orders" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, fontWeight: 700, color: colors.accent, flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-            Work Orders
-          </button>
-          <div style={{ width: 1, height: 26, background: colors.border, flexShrink: 0 }} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em' }}>{draft.vehicles?.name || '—'}</h1>
-              <Badge bg={STATUS_META[draft.status].bg} color={STATUS_META[draft.status].color}>{STATUS_META[draft.status].label}</Badge>
-            </div>
-            <div style={{ fontSize: 12, color: colors.mutedLight, fontFamily: fontMono, marginTop: 2 }}>{draft.wo_number} · {draft.service}</div>
-          </div>
-          <div style={{ flex: '1 1 auto' }} />
+        <DetailHeader
+          backTo="/work-orders"
+          backLabel="Work Orders"
+          title={draft.vehicles?.name || '—'}
+          subtitle={`${draft.wo_number} · ${draft.service}`}
+          badge={<Badge bg={STATUS_META[draft.status].bg} color={STATUS_META[draft.status].color}>{STATUS_META[draft.status].label}</Badge>}
+        >
           {canDelete && (
             <SecondaryButton onClick={() => setConfirmDeleteOpen(true)} style={{ color: colors.danger, borderColor: 'rgba(192,57,43,0.35)' }}>Delete</SecondaryButton>
           )}
-          <SecondaryButton onClick={closeDetail}>Cancel</SecondaryButton>
-          <PrimaryButton onClick={saveChanges} disabled={saving} style={saving ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </PrimaryButton>
-        </header>
+          <SecondaryButton onClick={closeDetail}>{isCheckedOut ? 'Close' : 'Cancel'}</SecondaryButton>
+          {!isCheckedOut && (
+            <PrimaryButton onClick={saveChanges} disabled={saving} style={saving ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </PrimaryButton>
+          )}
+        </DetailHeader>
 
         <main style={{ flex: '1 1 auto', padding: '24px 32px 48px 32px', display: 'flex', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 920, display: 'flex', flexDirection: 'column', gap: 22 }}>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {isCheckedOut && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: colors.neutralBg, border: `1px solid ${colors.border}`, borderRadius: 10, padding: '12px 16px' }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={colors.neutral} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+                <div style={{ fontSize: 13, color: colors.text2 }}>This work order is checked out and locked — details and line items can no longer be edited. You can still send or resend the invoice below.</div>
+              </div>
+            )}
+
+            <fieldset disabled={isCheckedOut} style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <Field label="Description">
                 <input type="text" value={draft.service || ''} onChange={(e) => updateDraft('service', e.target.value)} style={inputStyle} />
               </Field>
@@ -495,15 +544,25 @@ export default function WorkOrders() {
                   <input type="text" value={draft.bay || ''} onChange={(e) => updateDraft('bay', e.target.value)} style={inputStyle} />
                 </Field>
               </div>
-              <Field label="ETA">
-                <input
-                  type="datetime-local"
-                  value={draft.eta ? draft.eta.slice(0, 16) : ''}
-                  onChange={(e) => updateDraft('eta', e.target.value ? new Date(e.target.value).toISOString() : null)}
-                  style={{ ...inputStyle, maxWidth: 260 }}
-                />
-              </Field>
-            </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Field label="ETA">
+                  <input
+                    type="datetime-local"
+                    value={draft.eta ? draft.eta.slice(0, 16) : ''}
+                    onChange={(e) => updateDraft('eta', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Odometer (km)">
+                  <input
+                    type="number"
+                    value={draft.odometer_km ?? ''}
+                    onChange={(e) => updateDraft('odometer_km', e.target.value)}
+                    style={{ ...inputStyle, fontFamily: fontMono }}
+                  />
+                </Field>
+              </div>
+            </fieldset>
 
             <div role="tablist" aria-label="Work order sections" style={{ display: 'flex', gap: 20, borderBottom: `1px solid ${colors.border}` }}>
               <TabButton active={detailTab === 'items'} onClick={() => setDetailTab('items')}>Line Items</TabButton>
@@ -532,7 +591,7 @@ export default function WorkOrders() {
                         <tbody>
                           {draft.lineItems.map((item) => {
                             const isPart = item.type === 'part'
-                            const showSuggestions = isPart && partSearchOpenId === item.id
+                            const showSuggestions = isPart && partSearchOpenId === item.id && !isCheckedOut
                             const q = (item.description || '').trim().toLowerCase()
                             const suggestions = showSuggestions
                               ? parts.filter((p) => q === '' || p.name.toLowerCase().includes(q)).slice(0, 6)
@@ -546,6 +605,7 @@ export default function WorkOrders() {
                                   <input
                                     type="text"
                                     autoComplete="off"
+                                    disabled={isCheckedOut}
                                     placeholder={isPart ? 'Type to search parts…' : 'Labor description'}
                                     value={item.description || ''}
                                     onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
@@ -575,21 +635,23 @@ export default function WorkOrders() {
                                   )}
                                 </td>
                                 <td style={{ padding: '8px 8px' }}>
-                                  <input type="number" step="0.5" min="0" value={item.qty} onChange={(e) => updateLineItem(item.id, 'qty', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 64 }} />
+                                  <input type="number" step="0.5" min="0" disabled={isCheckedOut} value={item.qty} onChange={(e) => updateLineItem(item.id, 'qty', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 64 }} />
                                 </td>
                                 <td style={{ padding: '8px 8px' }}>
-                                  <select value={item.unit || ''} onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)} style={{ ...liInputStyle, width: 74 }}>
+                                  <select disabled={isCheckedOut} value={item.unit || ''} onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)} style={{ ...liInputStyle, width: 74 }}>
                                     {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
                                   </select>
                                 </td>
                                 <td style={{ padding: '8px 8px' }}>
-                                  <input type="number" step="1000" min="0" value={item.rate} onChange={(e) => updateLineItem(item.id, 'rate', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 100, fontFamily: fontMono }} />
+                                  <input type="number" step="1000" min="0" disabled={isCheckedOut} value={item.rate} onChange={(e) => updateLineItem(item.id, 'rate', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 100, fontFamily: fontMono }} />
                                 </td>
                                 <td style={{ padding: '8px 10px', fontSize: 12, fontWeight: 600, fontFamily: fontMono, whiteSpace: 'nowrap' }}>{formatRupiah((Number(item.qty) || 0) * (Number(item.rate) || 0))}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right' }}>
-                                  <button type="button" onClick={() => removeLineItem(item.id)} aria-label="Remove line item" style={removeBtnStyle}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={colors.danger} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-                                  </button>
+                                  {!isCheckedOut && (
+                                    <button type="button" onClick={() => removeLineItem(item.id)} aria-label="Remove line item" style={removeBtnStyle}>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={colors.danger} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             )
@@ -601,10 +663,12 @@ export default function WorkOrders() {
                     <div style={{ fontSize: 13, color: colors.mutedLight, padding: '6px 0 14px 0' }}>No labor or parts added yet.</div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <DashedButton onClick={() => addLineItem('labor')}>+ Add Labor</DashedButton>
-                    <DashedButton onClick={() => addLineItem('part')}>+ Add Part</DashedButton>
-                  </div>
+                  {!isCheckedOut && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <DashedButton onClick={() => addLineItem('labor')}>+ Add Labor</DashedButton>
+                      <DashedButton onClick={() => addLineItem('part')}>+ Add Part</DashedButton>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -759,7 +823,7 @@ export default function WorkOrders() {
                   return (
                     <tr key={w.id} style={{ borderTop: `1px solid rgba(28,30,34,0.07)` }}>
                       <td style={{ padding: '14px 20px' }}>
-                        <button type="button" onClick={() => openDetail(w.id)} aria-label={`Open work order ${w.wo_number}`} style={{ display: 'block', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        <button type="button" onClick={() => navigate(`/work-orders/${w.id}`)} aria-label={`Open work order ${w.wo_number}`} style={{ display: 'block', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
                           <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: colors.accent }}>{w.vehicles?.name || '—'}</span>
                           <span style={{ display: 'block', fontSize: 12, color: colors.mutedLight, fontFamily: fontMono, marginTop: 1 }}>{w.wo_number}</span>
                         </button>
@@ -795,25 +859,6 @@ function Field({ label, children }) {
       <label style={fieldLabelStyle}>{label}</label>
       {children}
     </div>
-  )
-}
-
-function TabButton({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      style={{
-        padding: '10px 2px', background: 'none', border: 'none',
-        borderBottom: `2px solid ${active ? colors.accent : 'transparent'}`,
-        color: active ? colors.accent : colors.mutedLight,
-        fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-      }}
-    >
-      {children}
-    </button>
   )
 }
 

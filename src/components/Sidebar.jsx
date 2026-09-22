@@ -63,6 +63,27 @@ const NAV_ITEMS = [
     ),
   },
   {
+    to: '/fleet-groups', label: 'Fleet Groups',
+    icon: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </>
+    ),
+  },
+  {
+    to: '/technicians', label: 'Technicians',
+    icon: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 20a8 8 0 0 1 16 0" />
+        <path d="M9.5 8l1.7 1.7L14.5 6.5" />
+      </>
+    ),
+  },
+  {
     to: '/alerts', label: 'Alerts',
     icon: (
       <>
