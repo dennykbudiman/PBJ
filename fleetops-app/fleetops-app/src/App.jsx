@@ -6,11 +6,19 @@ import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import Dashboard from './pages/Dashboard'
 import Vehicles from './pages/Vehicles'
-import Maintenance from './pages/Maintenance'
+import VehicleDetail from './pages/VehicleDetail'
+import Calendar from './pages/Calendar'
 import WorkOrders from './pages/WorkOrders'
+import Invoices from './pages/Invoices'
+import InvoiceDetail from './pages/InvoiceDetail'
 import Parts from './pages/Parts'
+import PartDetail from './pages/PartDetail'
 import Drivers from './pages/Drivers'
-import Alerts from './pages/Alerts'
+import DriverDetail from './pages/DriverDetail'
+import FleetGroups from './pages/FleetGroups'
+import OwnerDetail from './pages/OwnerDetail'
+import Technicians from './pages/Technicians'
+import TechnicianDetail from './pages/TechnicianDetail'
 import Settings from './pages/Settings'
 import { colors } from './lib/theme'
 
@@ -57,11 +65,21 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="vehicles" element={<Vehicles />} />
-            <Route path="maintenance" element={<Maintenance />} />
+            <Route path="vehicles/:id" element={<VehicleDetail />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="work-orders" element={<WorkOrders />} />
+            <Route path="work-orders/new" element={<WorkOrders />} />
+            <Route path="work-orders/:id" element={<WorkOrders />} />
+            <Route path="invoices" element={<Invoices />} />
+            <Route path="invoices/:id" element={<InvoiceDetail />} />
             <Route path="parts" element={<Parts />} />
+            <Route path="parts/:id" element={<PartDetail />} />
             <Route path="drivers" element={<Drivers />} />
-            <Route path="alerts" element={<Alerts />} />
+            <Route path="drivers/:id" element={<DriverDetail />} />
+            <Route path="fleet-groups" element={<FleetGroups />} />
+            <Route path="fleet-groups/:id" element={<OwnerDetail />} />
+            <Route path="technicians" element={<Technicians />} />
+            <Route path="technicians/:id" element={<TechnicianDetail />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

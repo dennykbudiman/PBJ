@@ -28,8 +28,14 @@ const NAV_ITEMS = [
     ),
   },
   {
-    to: '/maintenance', label: 'Maintenance',
-    icon: <path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-2.6 2.6-2-2z" />,
+    to: '/calendar', label: 'Calendar',
+    icon: (
+      <>
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M3 10h18" />
+        <path d="M8 3v4M16 3v4" />
+      </>
+    ),
   },
   {
     to: '/work-orders', label: 'Work Orders',
@@ -38,6 +44,15 @@ const NAV_ITEMS = [
         <rect x="5" y="4" width="14" height="17" rx="2" />
         <path d="M9 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9z" />
         <path d="M8.5 13l2 2 4.5-4.5" />
+      </>
+    ),
+  },
+  {
+    to: '/invoices', label: 'Invoices',
+    icon: (
+      <>
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M8 8h8M8 12h8M8 16h5" />
       </>
     ),
   },
@@ -63,11 +78,23 @@ const NAV_ITEMS = [
     ),
   },
   {
-    to: '/alerts', label: 'Alerts',
+    to: '/fleet-groups', label: 'Fleet Groups',
     icon: (
       <>
-        <path d="M6 8a6 6 0 0 1 12 0c0 4.5 1.5 6 2 6.5H4c.5-.5 2-2 2-6.5z" />
-        <path d="M9.5 18a2.5 2.5 0 0 0 5 0" />
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </>
+    ),
+  },
+  {
+    to: '/technicians', label: 'Technicians',
+    icon: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 20a8 8 0 0 1 16 0" />
+        <path d="M9.5 8l1.7 1.7L14.5 6.5" />
       </>
     ),
   },

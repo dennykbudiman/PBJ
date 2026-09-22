@@ -149,14 +149,14 @@ export default function Dashboard() {
           <StatCard label="Fleet size" value={stats.fleetSize} sub={`${stats.active} active · ${stats.shop} in shop`} />
           <StatCard label="Open work orders" value={stats.openWorkOrders} sub={`${stats.inProgress} in progress · ${stats.scheduled} scheduled`} />
           <StatCard label="Maintenance spend (MTD)" value={formatRupiah(stats.mtdSpend)} sub="Sum of completed work orders this month" />
-          <StatCard label="Unread alerts" value={alerts.filter((a) => a.is_unread).length} sub="See Alerts for details" />
+          <StatCard label="Unread alerts" value={alerts.filter((a) => a.is_unread).length} sub="See the notification bell for details" />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 16, alignItems: 'stretch' }}>
           <div style={{ background: colors.white, border: `1px solid ${colors.border}`, borderRadius: 12, boxShadow: '0 1px 2px rgba(20,20,20,0.04)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${colors.border}` }}>
               <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Upcoming maintenance</h2>
-              <Link to="/maintenance" style={{ fontSize: 13, fontWeight: 600, color: colors.accent }}>View all →</Link>
+              <Link to="/calendar" style={{ fontSize: 13, fontWeight: 600, color: colors.accent }}>View calendar →</Link>
             </div>
             <div style={{ overflowX: 'auto', flex: '1 1 auto' }}>
               <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
@@ -188,7 +188,7 @@ export default function Dashboard() {
           <div style={{ background: colors.white, border: `1px solid ${colors.border}`, borderRadius: 12, boxShadow: '0 1px 2px rgba(20,20,20,0.04)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: `1px solid ${colors.border}` }}>
               <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Recent alerts</h2>
-              <Link to="/alerts" style={{ fontSize: 13, fontWeight: 600, color: colors.accent }}>View all →</Link>
+              <span style={{ fontSize: 12, color: colors.mutedLight }}>See the bell icon in the header for all notifications</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto' }}>
               {alerts.length === 0 && <div style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No alerts.</div>}

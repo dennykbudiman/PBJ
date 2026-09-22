@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { useAuth } from '../context/AuthContext'
 import { colors, fontMono, LICENSE_CLASSES, severityPalette } from '../lib/theme'
 import PageHeader, { PrimaryButton, SecondaryButton } from '../components/PageHeader'
 import Badge from '../components/Badge'
-import ConfirmModal from '../components/ConfirmModal'
 
 const STATUS_META = {
   active: { label: 'Active', bg: colors.accentBg, color: colors.good },
@@ -19,7 +18,7 @@ const FILTERS = [
   { key: 'inactive', label: 'Inactive' },
 ]
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+export const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function initialsOf(name) {
   return (name || '')
@@ -31,9 +30,7 @@ function initialsOf(name) {
     .toUpperCase()
 }
 
-// License-expiry status label/color, based on whole months until the
-// license_expiry date (Indonesian SIM licenses run 5 years).
-function expiryMeta(dateStr) {
+export function expiryMeta(dateStr) {
   if (!dateStr) return { label: 'Not on file', color: colors.mutedLight }
   const exp = new Date(dateStr + 'T00:00:00')
   if (isNaN(exp)) return { label: 'Not on file', color: colors.mutedLight }
@@ -51,17 +48,14 @@ const EMPTY_FORM = {
 }
 
 export default function Drivers() {
-  const { hasPermission } = useAuth()
+  const navigate = useNavigate()
   const [drivers, setDrivers] = useState([])
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
-  const [draft, setDraft] = useState(null)
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState(EMPTY_FORM)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -101,84 +95,6 @@ export default function Drivers() {
       })
   }, [drivers, filter, search])
 
-  const selected = drivers.find((d) => d.id === selectedId) || null
-
-  function openDetail(d) {
-    const currentVehicle = vehicleForDriver(d.id)
-    setSelectedId(d.id)
-    setDraft({
-      status: d.status,
-      license_class: d.license_class || 'SIM A Umum',
-      license_number: d.license_number || '',
-      license_expiry: d.license_expiry || '',
-      phone: d.phone || '',
-      vehicleId: currentVehicle?.id || '',
-      originalVehicleId: currentVehicle?.id || '',
-    })
-  }
-
-  function closeDetail() {
-    setSelectedId(null)
-    setDraft(null)
-    setShowDeleteConfirm(false)
-  }
-
-  // The expiry select pair is derived from license_expiry (a real date),
-  // always normalized to the 1st of the chosen month.
-  const draftExpParsed = draft?.license_expiry ? new Date(draft.license_expiry + 'T00:00:00') : null
-  const now = new Date()
-  const draftExpMonth = draftExpParsed ? MONTH_NAMES[draftExpParsed.getMonth()] : MONTH_NAMES[now.getMonth()]
-  const draftExpYear = draftExpParsed ? String(draftExpParsed.getFullYear()) : String(now.getFullYear())
-  const YEAR_OPTIONS = useMemo(() => {
-    const y = new Date().getFullYear()
-    return Array.from({ length: 6 }, (_, i) => String(y + i))
-  }, [])
-
-  function setExpiryMonth(monthName) {
-    const mi = MONTH_NAMES.indexOf(monthName)
-    setDraft({ ...draft, license_expiry: `${draftExpYear}-${String(mi + 1).padStart(2, '0')}-01` })
-  }
-  function setExpiryYear(year) {
-    const mi = MONTH_NAMES.indexOf(draftExpMonth)
-    setDraft({ ...draft, license_expiry: `${year}-${String(mi + 1).padStart(2, '0')}-01` })
-  }
-
-  async function saveDetail() {
-    if (!selected) return
-    setSaving(true)
-    await supabase
-      .from('drivers')
-      .update({
-        status: draft.status,
-        license_class: draft.license_class,
-        license_number: draft.license_number || null,
-        license_expiry: draft.license_expiry || null,
-        phone: draft.phone || null,
-      })
-      .eq('id', selected.id)
-
-    // driver_id lives on vehicles, not drivers — move the assignment there.
-    if (draft.vehicleId !== draft.originalVehicleId) {
-      if (draft.originalVehicleId) {
-        await supabase.from('vehicles').update({ driver_id: null }).eq('id', draft.originalVehicleId)
-      }
-      if (draft.vehicleId) {
-        await supabase.from('vehicles').update({ driver_id: selected.id }).eq('id', draft.vehicleId)
-      }
-    }
-    setSaving(false)
-    closeDetail()
-    load()
-  }
-
-  async function deleteDriver() {
-    if (!selected) return
-    await supabase.from('drivers').delete().eq('id', selected.id)
-    setShowDeleteConfirm(false)
-    closeDetail()
-    load()
-  }
-
   async function addDriver(e) {
     e.preventDefault()
     setSaving(true)
@@ -201,7 +117,11 @@ export default function Drivers() {
     setSaving(false)
     setShowAdd(false)
     setAddForm(EMPTY_FORM)
-    load()
+    if (!error && data) {
+      navigate(`/drivers/${data.id}`)
+    } else {
+      load()
+    }
   }
 
   return (
@@ -276,7 +196,7 @@ export default function Drivers() {
                       <td style={{ padding: '14px 20px' }}>
                         <button
                           type="button"
-                          onClick={() => openDetail(d)}
+                          onClick={() => navigate(`/drivers/${d.id}`)}
                           aria-label={`Open ${d.name}`}
                           style={{ display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
                         >
@@ -311,132 +231,6 @@ export default function Drivers() {
           </div>
         )}
       </main>
-
-      {selected && draft && (
-        <>
-          <button
-            type="button"
-            onClick={closeDetail}
-            aria-label="Close driver details"
-            style={{ position: 'fixed', inset: 0, background: 'rgba(20,20,20,0.32)', border: 'none', padding: 0, cursor: 'default' }}
-          />
-          <aside aria-label="Driver details" style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: 420, background: colors.white, boxShadow: '-8px 0 24px rgba(20,20,20,0.10)', display: 'flex', flexDirection: 'column', zIndex: 50 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: `1px solid ${colors.border}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 999, background: colors.accentBg, color: colors.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-                  {initialsOf(selected.name)}
-                </div>
-                <div>
-                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{selected.name}</h2>
-                  <div style={{ fontSize: 12, color: colors.mutedLight, marginTop: 2 }}>
-                    Driver since {selected.hired_date ? new Date(selected.hired_date).getFullYear() : '—'}
-                  </div>
-                </div>
-              </div>
-              <button type="button" onClick={closeDetail} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4B505A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-
-            <div style={{ flex: '1 1 auto', overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <Badge bg={(STATUS_META[draft.status] || {}).bg} color={(STATUS_META[draft.status] || {}).color}>
-                  {(STATUS_META[draft.status] || {}).label || draft.status}
-                </Badge>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Status">
-                  <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })} style={selectStyle}>
-                    <option value="active">Active</option>
-                    <option value="leave">On Leave</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </Field>
-                <Field label="Assigned vehicle">
-                  <select value={draft.vehicleId} onChange={(e) => setDraft({ ...draft, vehicleId: e.target.value })} style={selectStyle}>
-                    <option value="">Unassigned</option>
-                    {vehicles.map((v) => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="License">
-                  <select value={draft.license_class} onChange={(e) => setDraft({ ...draft, license_class: e.target.value })} style={selectStyle}>
-                    {LICENSE_CLASSES.map((lc) => (
-                      <option key={lc} value={lc}>{lc}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="License number">
-                  <input
-                    type="text"
-                    value={draft.license_number}
-                    onChange={(e) => setDraft({ ...draft, license_number: e.target.value })}
-                    style={{ ...inputStyle, fontFamily: fontMono }}
-                  />
-                </Field>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="License expiry">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <select aria-label="Expiry month" value={draftExpMonth} onChange={(e) => setExpiryMonth(e.target.value)} style={selectStyle}>
-                      {MONTH_NAMES.map((m) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                    <select aria-label="Expiry year" value={draftExpYear} onChange={(e) => setExpiryYear(e.target.value)} style={selectStyle}>
-                      {YEAR_OPTIONS.map((y) => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{ fontSize: 11, color: expiryMeta(draft.license_expiry).color, marginTop: 5 }}>
-                    {expiryMeta(draft.license_expiry).label}
-                  </div>
-                </Field>
-              </div>
-
-              <Field label="Phone">
-                <input
-                  type="text"
-                  value={draft.phone}
-                  onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                  style={inputStyle}
-                />
-              </Field>
-            </div>
-
-            <div style={{ padding: '18px 24px', borderTop: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-              {hasPermission('delete_drivers') && (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  style={{ background: colors.white, color: colors.danger, border: `1px solid #F0C4BC`, borderRadius: 8, padding: '11px 14px', font: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Delete
-                </button>
-              )}
-              <div style={{ flex: '1 1 auto' }} />
-              <SecondaryButton onClick={closeDetail}>Cancel</SecondaryButton>
-              <PrimaryButton onClick={saveDetail} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</PrimaryButton>
-            </div>
-          </aside>
-        </>
-      )}
-
-      <ConfirmModal
-        open={showDeleteConfirm}
-        title="Delete driver?"
-        body={`This will permanently remove ${selected?.name || 'this driver'} from the roster. This can't be undone.`}
-        confirmLabel="Delete driver"
-        onCancel={() => setShowDeleteConfirm(false)}
-        onConfirm={deleteDriver}
-      />
 
       {showAdd && (
         <div
@@ -509,7 +303,7 @@ export default function Drivers() {
   )
 }
 
-// Same two-dropdown (month + year) expiry picker as the detail panel, scoped
+// Same two-dropdown (month + year) expiry picker as the detail page, scoped
 // to the "add driver" form's own state instead of `draft`.
 function AddExpiryField({ addForm, setAddForm }) {
   const now = new Date()

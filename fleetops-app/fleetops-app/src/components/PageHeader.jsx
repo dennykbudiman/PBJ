@@ -1,5 +1,6 @@
 import React from 'react'
 import { colors } from '../lib/theme'
+import NotificationBell from './NotificationBell'
 
 // Shared header bar: title on the left, optional actions on the right.
 // Matches the header markup repeated at the top of every prototype page.
@@ -9,11 +10,13 @@ export default function PageHeader({ title, children }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 20, padding: '20px 32px',
         borderBottom: `1px solid ${colors.border}`, background: colors.white,
+        position: 'sticky', top: 0, zIndex: 15,
       }}
     >
       <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, letterSpacing: '-0.01em', flexShrink: 0 }}>{title}</h1>
       <div style={{ flex: '1 1 auto' }} />
       {children}
+      <NotificationBell />
     </header>
   )
 }

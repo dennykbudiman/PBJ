@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { colors, fontMono, formatRupiah, formatDate } from '../lib/theme'
 import PageHeader, { PrimaryButton, SecondaryButton } from '../components/PageHeader'
 import Badge from '../components/Badge'
 import ConfirmModal from '../components/ConfirmModal'
+import DetailHeader from '../components/DetailHeader'
+import { TabBar, TabButton } from '../components/Tabs'
+import { createReorderPO } from '../lib/purchaseOrders'
 
 // Status / priority / line-item-type palettes, ported 1:1 from the
 // WorkOrders.dc.html prototype's statusMeta / priorityMeta / typeMeta maps.
@@ -26,6 +29,18 @@ const PRIORITY_META = {
 const TYPE_META = {
   labor: { label: 'Labor', bg: colors.accentBg, color: colors.accent },
   part: { label: 'Part', bg: colors.neutralBg, color: colors.neutral },
+}
+const PO_STATUS_META = {
+  notordered: { label: 'Not Ordered', bg: colors.neutralBg, color: colors.neutral },
+  ordered: { label: 'Ordered', bg: colors.accentBg, color: colors.accent },
+  partial: { label: 'Partially Received', bg: colors.warnBg, color: colors.warn },
+  received: { label: 'Received', bg: colors.accentBg, color: colors.good },
+}
+function partStockStatus(part) {
+  if (!part) return null
+  if (part.qty_on_hand === 0) return { label: 'Out of stock', bg: colors.dangerBg, color: colors.danger, low: true }
+  if (part.qty_on_hand <= part.reorder_point) return { label: `Low stock · ${part.qty_on_hand} left`, bg: colors.warnBg, color: colors.warn, low: true }
+  return { label: `${part.qty_on_hand} in stock`, bg: colors.neutralBg, color: colors.neutral, low: false }
 }
 const UNIT_OPTIONS = ['hr', 'set', 'L', 'unit', 'kit']
 const STATUS_OPTIONS = ['open', 'inprogress', 'onhold', 'completed']
@@ -63,6 +78,16 @@ async function nextWoNumber() {
   return `WO-${max + 1}`
 }
 
+async function nextInvoiceNumber() {
+  const { data } = await supabase.from('invoices').select('invoice_number')
+  let max = 5000
+  for (const inv of data ?? []) {
+    const m = /^INV-(\d+)$/.exec(inv.invoice_number || '')
+    if (m) max = Math.max(max, parseInt(m[1], 10))
+  }
+  return `INV-${max + 1}`
+}
+
 async function logHistory(workOrderId, action, detail, performedBy) {
   await supabase.from('audit_log').insert({
     entity_type: 'work_order',
@@ -73,11 +98,26 @@ async function logHistory(workOrderId, action, detail, performedBy) {
   })
 }
 
+// Bumping a vehicle's odometer from a work-order reading never moves it
+// backwards — a technician mistyping a lower number shouldn't erase a
+// higher reading that's already on file.
+async function bumpVehicleOdometer(vehicleId, odometerKm, currentVehicles) {
+  if (!vehicleId || odometerKm === '' || odometerKm === null || odometerKm === undefined) return
+  const reading = Number(odometerKm)
+  if (!Number.isFinite(reading)) return
+  const vehicle = currentVehicles.find((v) => v.id === vehicleId)
+  if (vehicle && vehicle.mileage_km != null && Number(vehicle.mileage_km) >= reading) return
+  await supabase.from('vehicles').update({ mileage_km: reading }).eq('id', vehicleId)
+}
+
 export default function WorkOrders() {
   const { user, hasPermission } = useAuth()
   const canDelete = hasPermission('delete_work_orders')
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { id: routeId } = useParams()
+  const isNewRoute = location.pathname.endsWith('/new')
 
-  const [view, setView] = useState('list') // 'list' | 'detail' | 'new'
   const [filter, setFilter] = useState('all')
   const [rows, setRows] = useState([])
   const [loadingRows, setLoadingRows] = useState(true)
@@ -88,15 +128,17 @@ export default function WorkOrders() {
   const [technicians, setTechnicians] = useState([])
   const [parts, setParts] = useState([])
 
-  const [selectedId, setSelectedId] = useState(null)
   const [draft, setDraft] = useState(null) // editable copy of the selected work order
   const [original, setOriginal] = useState(null) // snapshot for diffing on save
   const [historyRows, setHistoryRows] = useState([])
+  const [invoiceInfo, setInvoiceInfo] = useState(null) // { id, invoice_number, status } for this work order, if any
+  const [linkedPOs, setLinkedPOs] = useState([]) // purchase_orders created/reordered because of this work order
+  const [reorderingItemId, setReorderingItemId] = useState(null)
   const [detailTab, setDetailTab] = useState('items')
   const [partSearchOpenId, setPartSearchOpenId] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  const [newForm, setNewForm] = useState({ vehicleId: '', service: '', priority: 'medium', bay: '', eta: '' })
+  const [newForm, setNewForm] = useState({ vehicleId: '', service: '', priority: 'medium', eta: '', odometerKm: '' })
   const [creating, setCreating] = useState(false)
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
@@ -106,7 +148,7 @@ export default function WorkOrders() {
   }, [])
 
   useEffect(() => {
-    supabase.from('vehicles').select('id, name, model').order('name').then(({ data }) => setVehicles(data ?? []))
+    supabase.from('vehicles').select('id, name, model, mileage_km').order('name').then(({ data }) => setVehicles(data ?? []))
     supabase
       .from('profiles')
       .select('id, name, roles!inner(name)')
@@ -116,11 +158,28 @@ export default function WorkOrders() {
     supabase.from('parts').select('id, name, part_number, qty_on_hand, reorder_point, unit_cost').order('name').then(({ data }) => setParts(data ?? []))
   }, [])
 
+  // Route drives which record is open — a real URL for each work order
+  // instead of local view state, so back/forward and deep links both work.
+  useEffect(() => {
+    if (isNewRoute) {
+      setNewForm({ vehicleId: vehicles[0]?.id || '', service: '', priority: 'medium', eta: '', odometerKm: '' })
+    } else if (routeId) {
+      openDetail(routeId)
+    } else {
+      setDraft(null)
+      setOriginal(null)
+      setHistoryRows([])
+      setInvoiceInfo(null)
+      setLinkedPOs([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId, isNewRoute])
+
   async function loadRows() {
     setLoadingRows(true)
     const { data } = await supabase
       .from('work_orders')
-      .select('id, wo_number, service, status, priority, bay, eta, started_at, invoice_sent_at, vehicles(name, model), profiles(id, name), work_order_line_items(qty, rate)')
+      .select('id, wo_number, service, status, priority, eta, started_at, invoice_sent_at, vehicles(name, model), profiles(id, name), work_order_line_items(qty, rate)')
       .order('created_at', { ascending: false })
     setRows(data ?? [])
     setLoadingRows(false)
@@ -146,7 +205,6 @@ export default function WorkOrders() {
         case 'status': return statusRank[w.status] ?? 9
         case 'priority': return priorityRank[w.priority] ?? 9
         case 'tech': return (w.profiles?.name || '').toLowerCase()
-        case 'bay': return (w.bay || '').toLowerCase()
         case 'eta': return w.eta ? new Date(w.eta).getTime() : 0
         case 'cost': return lineItemTotal(w.work_order_line_items)
         default: return ''
@@ -172,13 +230,11 @@ export default function WorkOrders() {
 
   // ---- detail view ----
   async function openDetail(id) {
-    setSelectedId(id)
-    setView('detail')
     setDetailTab('items')
     setPartSearchOpenId(null)
     const { data: wo } = await supabase
       .from('work_orders')
-      .select('*, vehicles(id, name, model), profiles(id, name), work_order_line_items(*)')
+      .select('*, vehicles(id, name, model, owner_id, owners(id, name, email, billing_address)), profiles(id, name), work_order_line_items(*)')
       .eq('id', id)
       .single()
     if (!wo) return
@@ -187,7 +243,7 @@ export default function WorkOrders() {
     setDraft(d)
     setOriginal({
       service: wo.service, status: wo.status, priority: wo.priority,
-      technician_id: wo.technician_id, bay: wo.bay, eta: wo.eta,
+      technician_id: wo.technician_id, eta: wo.eta, odometer_km: wo.odometer_km,
       lineItems: lineItems.map((li) => ({ ...li })),
     })
     const { data: hist } = await supabase
@@ -197,14 +253,22 @@ export default function WorkOrders() {
       .eq('entity_id', id)
       .order('created_at', { ascending: false })
     setHistoryRows(hist ?? [])
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, status')
+      .eq('work_order_id', id)
+      .maybeSingle()
+    setInvoiceInfo(inv ?? null)
+    const { data: linkedPOs } = await supabase
+      .from('purchase_orders')
+      .select('id, po_number, status, supplier, ordered_date, purchase_order_items(qty_ordered, qty_received, parts(name, part_number))')
+      .eq('work_order_id', id)
+      .order('created_at', { ascending: false })
+    setLinkedPOs(linkedPOs ?? [])
   }
 
   function closeDetail() {
-    setView('list')
-    setSelectedId(null)
-    setDraft(null)
-    setOriginal(null)
-    setHistoryRows([])
+    navigate('/work-orders')
   }
 
   function updateDraft(field, value) {
@@ -239,22 +303,45 @@ export default function WorkOrders() {
     setPartSearchOpenId(null)
   }
 
+  // Reordering a part from inside a work order links the new purchase
+  // order back to this work order (purchase_orders.work_order_id), so it
+  // shows up in the "Parts Ordered" section below instead of only in the
+  // general Parts page.
+  async function reorderLineItemPart(lineItem) {
+    const part = parts.find((p) => p.id === lineItem.part_id)
+    if (!part) {
+      alert('This line item isn\'t linked to a part in inventory, so it can\'t be reordered automatically. Reorder it from the Parts page instead.')
+      return
+    }
+    setReorderingItemId(lineItem.id)
+    try {
+      const { po, qty } = await createReorderPO(part, { workOrderId: draft.id })
+      await logHistory(draft.id, 'Part reordered', `${po.po_number} — ${qty} × ${part.name}`, user?.id)
+      openDetail(draft.id)
+    } catch (e) {
+      alert('Could not create purchase order: ' + (e.message || e))
+    } finally {
+      setReorderingItemId(null)
+    }
+  }
+
   const totals = useMemo(() => computeTotals(draft?.lineItems), [draft?.lineItems])
   const hasLineItems = (draft?.lineItems || []).length > 0
   const isCheckedOut = !!draft?.checked_out
   const isInvoiced = !!draft?.invoice_sent_at
 
   async function saveChanges() {
-    if (!draft) return
+    if (!draft || isCheckedOut) return
     setSaving(true)
     try {
       const fieldChanges = []
-      const labelFor = { service: 'Description', status: 'Status', priority: 'Priority', technician_id: 'Technician', bay: 'Bay', eta: 'ETA' }
+      const labelFor = { service: 'Description', status: 'Status', priority: 'Priority', technician_id: 'Technician', eta: 'ETA', odometer_km: 'Odometer' }
       const displayFor = (field, val) => {
         if (field === 'status') return STATUS_META[val]?.label || val || '—'
         if (field === 'priority') return PRIORITY_META[val]?.label || val || '—'
         if (field === 'technician_id') return technicians.find((t) => t.id === val)?.name || 'Unassigned'
         if (field === 'eta') return val ? formatDate(val) : '—'
+        if (field === 'odometer_km') return val != null && val !== '' ? `${Number(val).toLocaleString('id-ID')} km` : '—'
         return val || '—'
       }
       Object.keys(labelFor).forEach((field) => {
@@ -269,14 +356,20 @@ export default function WorkOrders() {
         status: draft.status,
         priority: draft.priority,
         technician_id: draft.technician_id || null,
-        bay: draft.bay || null,
         eta: draft.eta || null,
+        odometer_km: draft.odometer_km === '' || draft.odometer_km == null ? null : Number(draft.odometer_km),
       }
       if (draft.status === 'inprogress' && !draft.started_at) {
         patch.started_at = new Date().toISOString()
       }
       const { error: woErr } = await supabase.from('work_orders').update(patch).eq('id', draft.id)
       if (woErr) throw woErr
+
+      // An odometer reading logged on the work order is the source of truth
+      // for the vehicle's current mileage — keep it in sync automatically.
+      if (patch.odometer_km !== (original?.odometer_km ?? null)) {
+        await bumpVehicleOdometer(draft.vehicle_id, patch.odometer_km, vehicles)
+      }
 
       // Diff line items: insert new, update changed, delete removed.
       const origById = {}
@@ -321,18 +414,72 @@ export default function WorkOrders() {
     if (!draft || isCheckedOut || !hasLineItems) return
     const { error } = await supabase.from('work_orders').update({ checked_out: true }).eq('id', draft.id)
     if (error) { alert(error.message); return }
-    await logHistory(draft.id, 'Checked out', 'Marked ready for invoicing', user?.id)
+    await logHistory(draft.id, 'Checked out', 'Marked ready for invoicing — locked from further edits', user?.id)
     setDraft((d) => ({ ...d, checked_out: true }))
     openDetail(draft.id)
   }
 
+  // Sending an invoice writes a real ledger row (invoices table) with a
+  // snapshot of the line items and totals, rather than just stamping a
+  // timestamp on the work order. Actually emailing it is simulated for now
+  // — no message provider is connected yet — but the record this creates
+  // (recipient, amounts, status) is exactly what a real send would produce,
+  // so wiring up a provider later only means replacing the "simulate"
+  // step below with a real API call; nothing about the data model changes.
   async function handleSendInvoice() {
     if (!draft || !isCheckedOut) return
     const now = new Date().toISOString()
-    const { error } = await supabase.from('work_orders').update({ invoice_sent_at: now }).eq('id', draft.id)
-    if (error) { alert(error.message); return }
-    await logHistory(draft.id, isInvoiced ? 'Invoice resent' : 'Invoice sent', `Sent to customer on ${formatDate(now)}`, user?.id)
-    setDraft((d) => ({ ...d, invoice_sent_at: now }))
+    const owner = draft.vehicles?.owners || null
+    const recipientEmail = owner?.email || null
+
+    let invoiceRow = null
+    if (invoiceInfo?.id) {
+      const { data, error } = await supabase
+        .from('invoices')
+        .update({ sent_at: now, recipient_email: recipientEmail })
+        .eq('id', invoiceInfo.id)
+        .select('id, invoice_number, status')
+        .single()
+      if (error) { alert('Could not resend invoice: ' + error.message); return }
+      invoiceRow = data
+    } else {
+      const invoiceNumber = await nextInvoiceNumber()
+      const dueDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+      const { data, error } = await supabase
+        .from('invoices')
+        .insert({
+          invoice_number: invoiceNumber,
+          work_order_id: draft.id,
+          vehicle_id: draft.vehicle_id,
+          owner_id: owner?.id || null,
+          recipient_email: recipientEmail,
+          line_items: draft.lineItems.map((li) => ({ type: li.type, description: li.description, qty: Number(li.qty) || 0, unit: li.unit, rate: Number(li.rate) || 0 })),
+          subtotal: totals.subtotal,
+          tax: totals.tax,
+          total: totals.total,
+          status: 'sent',
+          sent_at: now,
+          due_date: dueDate,
+        })
+        .select('id, invoice_number, status')
+        .single()
+      if (error) { alert('Could not create invoice: ' + error.message); return }
+      invoiceRow = data
+    }
+
+    // SIMULATE: this is the one line that would become a real API call to
+    // an email provider (e.g. Resend) once one is connected — see
+    // invoiceRow / recipientEmail above for exactly what it would send.
+    console.info(`[simulated email] Invoice ${invoiceRow?.invoice_number} would be sent to ${recipientEmail || '(no owner email on file)'}`)
+
+    const { error: woErr } = await supabase.from('work_orders').update({ invoice_sent_at: now }).eq('id', draft.id)
+    if (woErr) { alert(woErr.message); return }
+    await logHistory(
+      draft.id,
+      isInvoiced ? 'Invoice resent' : 'Invoice sent',
+      `${invoiceRow?.invoice_number || ''} — ${recipientEmail ? `email to ${recipientEmail} simulated (no provider connected yet)` : 'no owner email on file, recorded without sending'} · ${formatDate(now)}`,
+      user?.id
+    )
     openDetail(draft.id)
   }
 
@@ -347,8 +494,7 @@ export default function WorkOrders() {
 
   // ---- new work order ----
   function openNew() {
-    setNewForm({ vehicleId: vehicles[0]?.id || '', service: '', priority: 'medium', bay: '', eta: '' })
-    setView('new')
+    navigate('/work-orders/new')
   }
 
   async function createWorkOrder() {
@@ -359,6 +505,7 @@ export default function WorkOrders() {
     setCreating(true)
     try {
       const woNumber = await nextWoNumber()
+      const odometerKm = newForm.odometerKm === '' ? null : Number(newForm.odometerKm)
       const { data, error } = await supabase
         .from('work_orders')
         .insert({
@@ -367,17 +514,17 @@ export default function WorkOrders() {
           service: newForm.service.trim(),
           priority: newForm.priority,
           status: 'open',
-          bay: newForm.bay || null,
           eta: newForm.eta || null,
+          odometer_km: odometerKm,
         })
         .select()
         .single()
       if (error) throw error
       const vehicleName = vehicles.find((v) => v.id === newForm.vehicleId)?.name || ''
       await logHistory(data.id, 'Work order created', `${newForm.service.trim()} for ${vehicleName}`, user?.id)
+      await bumpVehicleOdometer(newForm.vehicleId, odometerKm, vehicles)
       await loadRows()
-      setView('list')
-      openDetail(data.id)
+      navigate(`/work-orders/${data.id}`)
     } catch (e) {
       alert('Could not create work order: ' + (e.message || e))
     } finally {
@@ -389,11 +536,11 @@ export default function WorkOrders() {
   // RENDER
   // ======================================================================
 
-  if (view === 'new') {
+  if (isNewRoute) {
     return (
       <>
         <PageHeader title="New Work Order">
-          <SecondaryButton onClick={() => setView('list')}>Cancel</SecondaryButton>
+          <SecondaryButton onClick={() => navigate('/work-orders')}>Cancel</SecondaryButton>
         </PageHeader>
         <main style={{ flex: '1 1 auto', padding: '24px 32px 48px 32px', display: 'flex', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -406,24 +553,32 @@ export default function WorkOrders() {
             <Field label="Description">
               <input type="text" value={newForm.service} onChange={(e) => setNewForm((f) => ({ ...f, service: e.target.value }))} placeholder="e.g. Oil & Filter Change" style={inputStyle} />
             </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Priority">
-                <select value={newForm.priority} onChange={(e) => setNewForm((f) => ({ ...f, priority: e.target.value }))} style={selectStyle}>
-                  {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
-                </select>
-              </Field>
-              <Field label="Bay">
-                <input type="text" value={newForm.bay} onChange={(e) => setNewForm((f) => ({ ...f, bay: e.target.value }))} placeholder="e.g. Bay 1" style={inputStyle} />
-              </Field>
-            </div>
+            <Field label="Priority">
+              <select value={newForm.priority} onChange={(e) => setNewForm((f) => ({ ...f, priority: e.target.value }))} style={selectStyle}>
+                {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
+              </select>
+            </Field>
             <Field label="ETA">
               <input type="datetime-local" value={newForm.eta} onChange={(e) => setNewForm((f) => ({ ...f, eta: e.target.value }))} style={inputStyle} />
+            </Field>
+            <Field label="Odometer at check-in (km)">
+              <input
+                type="number"
+                value={newForm.odometerKm}
+                onChange={(e) => setNewForm((f) => ({ ...f, odometerKm: e.target.value }))}
+                placeholder={(() => {
+                  const v = vehicles.find((v) => v.id === newForm.vehicleId)
+                  return v?.mileage_km != null ? `Current: ${Number(v.mileage_km).toLocaleString('id-ID')} km` : 'Optional'
+                })()}
+                style={{ ...inputStyle, fontFamily: fontMono }}
+              />
+              <div style={{ fontSize: 11.5, color: colors.mutedLight, marginTop: 5 }}>If set, this becomes the vehicle's current odometer.</div>
             </Field>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
               <PrimaryButton onClick={createWorkOrder} disabled={creating} style={creating ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
                 {creating ? 'Creating…' : 'Create Work Order'}
               </PrimaryButton>
-              <SecondaryButton onClick={() => setView('list')}>Cancel</SecondaryButton>
+              <SecondaryButton onClick={() => navigate('/work-orders')}>Cancel</SecondaryButton>
             </div>
           </div>
         </main>
@@ -431,7 +586,7 @@ export default function WorkOrders() {
     )
   }
 
-  if (view === 'detail' && draft) {
+  if (routeId && draft) {
     return (
       <>
         <ConfirmModal
@@ -442,33 +597,35 @@ export default function WorkOrders() {
           onCancel={() => setConfirmDeleteOpen(false)}
           onConfirm={handleDelete}
         />
-        <header style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 32px', borderBottom: `1px solid ${colors.border}`, background: colors.white }}>
-          <button type="button" onClick={closeDetail} aria-label="Back to work orders" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, fontWeight: 700, color: colors.accent, flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.accent} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-            Work Orders
-          </button>
-          <div style={{ width: 1, height: 26, background: colors.border, flexShrink: 0 }} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em' }}>{draft.vehicles?.name || '—'}</h1>
-              <Badge bg={STATUS_META[draft.status].bg} color={STATUS_META[draft.status].color}>{STATUS_META[draft.status].label}</Badge>
-            </div>
-            <div style={{ fontSize: 12, color: colors.mutedLight, fontFamily: fontMono, marginTop: 2 }}>{draft.wo_number} · {draft.service}</div>
-          </div>
-          <div style={{ flex: '1 1 auto' }} />
+        <DetailHeader
+          backTo="/work-orders"
+          backLabel="Work Orders"
+          title={draft.vehicles?.name || '—'}
+          subtitle={`${draft.wo_number} · ${draft.service}`}
+          badge={<Badge bg={STATUS_META[draft.status].bg} color={STATUS_META[draft.status].color}>{STATUS_META[draft.status].label}</Badge>}
+        >
           {canDelete && (
             <SecondaryButton onClick={() => setConfirmDeleteOpen(true)} style={{ color: colors.danger, borderColor: 'rgba(192,57,43,0.35)' }}>Delete</SecondaryButton>
           )}
-          <SecondaryButton onClick={closeDetail}>Cancel</SecondaryButton>
-          <PrimaryButton onClick={saveChanges} disabled={saving} style={saving ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </PrimaryButton>
-        </header>
+          <SecondaryButton onClick={closeDetail}>{isCheckedOut ? 'Close' : 'Cancel'}</SecondaryButton>
+          {!isCheckedOut && (
+            <PrimaryButton onClick={saveChanges} disabled={saving} style={saving ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </PrimaryButton>
+          )}
+        </DetailHeader>
 
         <main style={{ flex: '1 1 auto', padding: '24px 32px 48px 32px', display: 'flex', justifyContent: 'center' }}>
           <div style={{ width: '100%', maxWidth: 920, display: 'flex', flexDirection: 'column', gap: 22 }}>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {isCheckedOut && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: colors.neutralBg, border: `1px solid ${colors.border}`, borderRadius: 10, padding: '12px 16px' }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={colors.neutral} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+                <div style={{ fontSize: 13, color: colors.text2 }}>This work order is checked out and locked — details and line items can no longer be edited. You can still send or resend the invoice below.</div>
+              </div>
+            )}
+
+            <fieldset disabled={isCheckedOut} style={{ border: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <Field label="Description">
                 <input type="text" value={draft.service || ''} onChange={(e) => updateDraft('service', e.target.value)} style={inputStyle} />
               </Field>
@@ -484,29 +641,35 @@ export default function WorkOrders() {
                   </select>
                 </Field>
               </div>
+              <Field label="Technician">
+                <select value={draft.technician_id || ''} onChange={(e) => updateDraft('technician_id', e.target.value || null)} style={selectStyle}>
+                  <option value="">Unassigned</option>
+                  {technicians.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Field label="Technician">
-                  <select value={draft.technician_id || ''} onChange={(e) => updateDraft('technician_id', e.target.value || null)} style={selectStyle}>
-                    <option value="">Unassigned</option>
-                    {technicians.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
+                <Field label="ETA">
+                  <input
+                    type="datetime-local"
+                    value={draft.eta ? draft.eta.slice(0, 16) : ''}
+                    onChange={(e) => updateDraft('eta', e.target.value ? new Date(e.target.value).toISOString() : null)}
+                    style={inputStyle}
+                  />
                 </Field>
-                <Field label="Bay">
-                  <input type="text" value={draft.bay || ''} onChange={(e) => updateDraft('bay', e.target.value)} style={inputStyle} />
+                <Field label="Odometer (km)">
+                  <input
+                    type="number"
+                    value={draft.odometer_km ?? ''}
+                    onChange={(e) => updateDraft('odometer_km', e.target.value)}
+                    style={{ ...inputStyle, fontFamily: fontMono }}
+                  />
                 </Field>
               </div>
-              <Field label="ETA">
-                <input
-                  type="datetime-local"
-                  value={draft.eta ? draft.eta.slice(0, 16) : ''}
-                  onChange={(e) => updateDraft('eta', e.target.value ? new Date(e.target.value).toISOString() : null)}
-                  style={{ ...inputStyle, maxWidth: 260 }}
-                />
-              </Field>
-            </div>
+            </fieldset>
 
             <div role="tablist" aria-label="Work order sections" style={{ display: 'flex', gap: 20, borderBottom: `1px solid ${colors.border}` }}>
               <TabButton active={detailTab === 'items'} onClick={() => setDetailTab('items')}>Line Items</TabButton>
+              <TabButton active={detailTab === 'parts'} onClick={() => setDetailTab('parts')}>Parts Ordered{linkedPOs.length > 0 ? ` · ${linkedPOs.length}` : ''}</TabButton>
               <TabButton active={detailTab === 'history'} onClick={() => setDetailTab('history')}>History{historyRows.length > 0 ? ` · ${historyRows.length}` : ''}</TabButton>
             </div>
 
@@ -532,11 +695,13 @@ export default function WorkOrders() {
                         <tbody>
                           {draft.lineItems.map((item) => {
                             const isPart = item.type === 'part'
-                            const showSuggestions = isPart && partSearchOpenId === item.id
+                            const showSuggestions = isPart && partSearchOpenId === item.id && !isCheckedOut
                             const q = (item.description || '').trim().toLowerCase()
                             const suggestions = showSuggestions
                               ? parts.filter((p) => q === '' || p.name.toLowerCase().includes(q)).slice(0, 6)
                               : []
+                            const linkedPart = isPart && item.part_id ? parts.find((p) => p.id === item.part_id) : null
+                            const stock = partStockStatus(linkedPart)
                             return (
                               <tr key={item.id} style={{ borderTop: `1px solid rgba(28,30,34,0.07)` }}>
                                 <td style={{ padding: '8px 10px' }}>
@@ -546,6 +711,7 @@ export default function WorkOrders() {
                                   <input
                                     type="text"
                                     autoComplete="off"
+                                    disabled={isCheckedOut}
                                     placeholder={isPart ? 'Type to search parts…' : 'Labor description'}
                                     value={item.description || ''}
                                     onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
@@ -553,6 +719,21 @@ export default function WorkOrders() {
                                     onBlur={() => isPart && setTimeout(() => setPartSearchOpenId(null), 120)}
                                     style={{ ...liInputStyle, minWidth: 150 }}
                                   />
+                                  {stock && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                                      <Badge bg={stock.bg} color={stock.color}>{stock.label}</Badge>
+                                      {stock.low && (
+                                        <button
+                                          type="button"
+                                          onClick={() => reorderLineItemPart(item)}
+                                          disabled={reorderingItemId === item.id}
+                                          style={{ background: 'none', border: 'none', padding: 0, fontFamily: 'inherit', fontSize: 11, fontWeight: 700, color: colors.accent, cursor: reorderingItemId === item.id ? 'not-allowed' : 'pointer', textDecoration: 'underline' }}
+                                        >
+                                          {reorderingItemId === item.id ? 'Reordering…' : 'Reorder'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                   {showSuggestions && (
                                     <div style={suggestBoxStyle}>
                                       {suggestions.map((p) => {
@@ -575,21 +756,23 @@ export default function WorkOrders() {
                                   )}
                                 </td>
                                 <td style={{ padding: '8px 8px' }}>
-                                  <input type="number" step="0.5" min="0" value={item.qty} onChange={(e) => updateLineItem(item.id, 'qty', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 64 }} />
+                                  <input type="number" step="0.5" min="0" disabled={isCheckedOut} value={item.qty} onChange={(e) => updateLineItem(item.id, 'qty', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 64 }} />
                                 </td>
                                 <td style={{ padding: '8px 8px' }}>
-                                  <select value={item.unit || ''} onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)} style={{ ...liInputStyle, width: 74 }}>
+                                  <select disabled={isCheckedOut} value={item.unit || ''} onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)} style={{ ...liInputStyle, width: 74 }}>
                                     {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
                                   </select>
                                 </td>
                                 <td style={{ padding: '8px 8px' }}>
-                                  <input type="number" step="1000" min="0" value={item.rate} onChange={(e) => updateLineItem(item.id, 'rate', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 100, fontFamily: fontMono }} />
+                                  <input type="number" step="1000" min="0" disabled={isCheckedOut} value={item.rate} onChange={(e) => updateLineItem(item.id, 'rate', parseFloat(e.target.value) || 0)} style={{ ...liInputStyle, width: 100, fontFamily: fontMono }} />
                                 </td>
                                 <td style={{ padding: '8px 10px', fontSize: 12, fontWeight: 600, fontFamily: fontMono, whiteSpace: 'nowrap' }}>{formatRupiah((Number(item.qty) || 0) * (Number(item.rate) || 0))}</td>
                                 <td style={{ padding: '8px 10px', textAlign: 'right' }}>
-                                  <button type="button" onClick={() => removeLineItem(item.id)} aria-label="Remove line item" style={removeBtnStyle}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={colors.danger} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-                                  </button>
+                                  {!isCheckedOut && (
+                                    <button type="button" onClick={() => removeLineItem(item.id)} aria-label="Remove line item" style={removeBtnStyle}>
+                                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={colors.danger} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                                    </button>
+                                  )}
                                 </td>
                               </tr>
                             )
@@ -601,10 +784,12 @@ export default function WorkOrders() {
                     <div style={{ fontSize: 13, color: colors.mutedLight, padding: '6px 0 14px 0' }}>No labor or parts added yet.</div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <DashedButton onClick={() => addLineItem('labor')}>+ Add Labor</DashedButton>
-                    <DashedButton onClick={() => addLineItem('part')}>+ Add Part</DashedButton>
-                  </div>
+                  {!isCheckedOut && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <DashedButton onClick={() => addLineItem('labor')}>+ Add Labor</DashedButton>
+                      <DashedButton onClick={() => addLineItem('part')}>+ Add Part</DashedButton>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -623,7 +808,11 @@ export default function WorkOrders() {
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#227A3E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" /></svg>
                       <div style={{ fontSize: 13, color: '#1B5E33' }}>
                         Invoice sent · {formatDate(draft.invoice_sent_at)}
+                        {invoiceInfo?.id && (
+                          <> · <Link to={`/invoices/${invoiceInfo.id}`} style={{ color: '#1B5E33', fontWeight: 700 }}>{invoiceInfo.invoice_number}</Link></>
+                        )}
                         <button type="button" onClick={handleSendInvoice} style={linkBtnStyle}>Resend invoice</button>
+                        <div style={{ fontSize: 11, color: '#3F7A56', marginTop: 4 }}>Email delivery is simulated for now — no message provider is connected yet.</div>
                       </div>
                     </div>
                   ) : (
@@ -662,6 +851,43 @@ export default function WorkOrders() {
               </>
             )}
 
+            {detailTab === 'parts' && (
+              <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 18 }}>
+                <h3 style={sectionTitleStyle}>Parts ordered for this work order</h3>
+                <div style={{ fontSize: 12.5, color: colors.mutedLight, marginBottom: 14 }}>
+                  Purchase orders created by reordering a part directly from the Line Items tab above. Reorder any low or out-of-stock part there to see it show up here.
+                </div>
+                {linkedPOs.length === 0 ? (
+                  <div style={{ fontSize: 13, color: colors.mutedLight, padding: '6px 0 14px 0' }}>No parts have been reordered for this work order yet.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {linkedPOs.map((po) => {
+                      const meta = PO_STATUS_META[po.status] || PO_STATUS_META.notordered
+                      const items = po.purchase_order_items ?? []
+                      return (
+                        <div key={po.id} style={{ border: `1px solid ${colors.border}`, borderRadius: 10, padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <div>
+                              <Link to="/parts" style={{ fontSize: 13, fontWeight: 700, color: colors.accent, fontFamily: fontMono }}>{po.po_number}</Link>
+                              {po.supplier && <span style={{ fontSize: 12, color: colors.mutedLight, marginLeft: 8 }}>{po.supplier}</span>}
+                            </div>
+                            <Badge bg={meta.bg} color={meta.color}>{meta.label}</Badge>
+                          </div>
+                          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {items.map((it, i) => (
+                              <div key={i} style={{ fontSize: 12.5, color: colors.text2 }}>
+                                {it.parts?.name || 'Unknown part'} — {it.qty_received}/{it.qty_ordered} received
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {detailTab === 'history' && (
               <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: 18 }}>
                 <h3 style={sectionTitleStyle}>History</h3>
@@ -696,7 +922,7 @@ export default function WorkOrders() {
   return (
     <>
       <PageHeader title="Work Orders">
-        <Link to="/maintenance" style={{ fontSize: 13, fontWeight: 600, color: colors.accent, whiteSpace: 'nowrap' }}>View Maintenance schedule →</Link>
+        <Link to="/calendar" style={{ fontSize: 13, fontWeight: 600, color: colors.accent, whiteSpace: 'nowrap' }}>View Calendar →</Link>
         <PrimaryButton onClick={openNew}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
           New Work Order
@@ -740,17 +966,16 @@ export default function WorkOrders() {
                   <SortableTh label="Status" col="status" sortKey={sortKey} onClick={sortClick} arrow={sortArrow('status')} />
                   <SortableTh label="Priority" col="priority" sortKey={sortKey} onClick={sortClick} arrow={sortArrow('priority')} />
                   <SortableTh label="Technician" col="tech" sortKey={sortKey} onClick={sortClick} arrow={sortArrow('tech')} />
-                  <SortableTh label="Bay" col="bay" sortKey={sortKey} onClick={sortClick} arrow={sortArrow('bay')} />
                   <SortableTh label="ETA" col="eta" sortKey={sortKey} onClick={sortClick} arrow={sortArrow('eta')} />
                   <SortableTh label="Cost" col="cost" sortKey={sortKey} onClick={sortClick} arrow={sortArrow('cost')} />
                 </tr>
               </thead>
               <tbody>
                 {loadingRows && (
-                  <tr><td colSpan={8} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>Loading…</td></tr>
+                  <tr><td colSpan={7} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>Loading…</td></tr>
                 )}
                 {!loadingRows && sorted.length === 0 && (
-                  <tr><td colSpan={8} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No work orders match this filter.</td></tr>
+                  <tr><td colSpan={7} style={{ padding: 20, fontSize: 13, color: colors.mutedLight }}>No work orders match this filter.</td></tr>
                 )}
                 {!loadingRows && sorted.map((w) => {
                   const cost = lineItemTotal(w.work_order_line_items)
@@ -759,7 +984,7 @@ export default function WorkOrders() {
                   return (
                     <tr key={w.id} style={{ borderTop: `1px solid rgba(28,30,34,0.07)` }}>
                       <td style={{ padding: '14px 20px' }}>
-                        <button type="button" onClick={() => openDetail(w.id)} aria-label={`Open work order ${w.wo_number}`} style={{ display: 'block', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        <button type="button" onClick={() => navigate(`/work-orders/${w.id}`)} aria-label={`Open work order ${w.wo_number}`} style={{ display: 'block', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
                           <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: colors.accent }}>{w.vehicles?.name || '—'}</span>
                           <span style={{ display: 'block', fontSize: 12, color: colors.mutedLight, fontFamily: fontMono, marginTop: 1 }}>{w.wo_number}</span>
                         </button>
@@ -768,7 +993,6 @@ export default function WorkOrders() {
                       <td style={tdStyle}><Badge bg={sm.bg} color={sm.color}>{sm.label}</Badge></td>
                       <td style={tdStyle}><Badge bg={pm.bg} color={pm.color}>{pm.label}</Badge></td>
                       <td style={{ ...tdStyle, color: colors.text2 }}>{w.profiles?.name || 'Unassigned'}</td>
-                      <td style={{ ...tdStyle, color: colors.text2 }}>{w.bay || 'Unassigned'}</td>
                       <td style={{ ...tdStyle, color: colors.text2 }}>{w.eta ? formatDate(w.eta) : '—'}</td>
                       <td style={{ padding: '14px 20px', fontSize: 13, color: colors.ink, fontWeight: 600, fontFamily: fontMono, whiteSpace: 'nowrap' }}>
                         {formatRupiah(cost)}
@@ -795,25 +1019,6 @@ function Field({ label, children }) {
       <label style={fieldLabelStyle}>{label}</label>
       {children}
     </div>
-  )
-}
-
-function TabButton({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      style={{
-        padding: '10px 2px', background: 'none', border: 'none',
-        borderBottom: `2px solid ${active ? colors.accent : 'transparent'}`,
-        color: active ? colors.accent : colors.mutedLight,
-        fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-      }}
-    >
-      {children}
-    </button>
   )
 }
 
