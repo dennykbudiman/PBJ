@@ -1,90 +1,39 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import { FullPageSpinner } from './components/ui'
+import { useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
-import Dashboard from './pages/Dashboard'
-import Vehicles from './pages/Vehicles'
-import VehicleDetail from './pages/VehicleDetail'
-import Calendar from './pages/Calendar'
-import WorkOrders from './pages/WorkOrders'
-import Invoices from './pages/Invoices'
-import InvoiceDetail from './pages/InvoiceDetail'
-import Parts from './pages/Parts'
-import PartDetail from './pages/PartDetail'
-import Drivers from './pages/Drivers'
-import DriverDetail from './pages/DriverDetail'
-import FleetGroups from './pages/FleetGroups'
-import OwnerDetail from './pages/OwnerDetail'
-import Technicians from './pages/Technicians'
-import TechnicianDetail from './pages/TechnicianDetail'
-import Settings from './pages/Settings'
-import { colors } from './lib/theme'
-
-function ProtectedRoute({ children }) {
-  const { session, loading, needsPasswordSetup } = useAuth()
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: colors.bg, color: colors.muted, fontSize: 14 }}>
-        Loading…
-      </div>
-    )
-  }
-  if (!session) return <Navigate to="/login" replace />
-  // Arrived via an invite or password-reset link — Supabase already signed
-  // them in to verify the link, but they must set a password before they
-  // can use the rest of the app (or sign in again later).
-  if (needsPasswordSetup) return <Navigate to="/set-password" replace />
-  return children
-}
-
-function SetPasswordRoute() {
-  const { session, loading } = useAuth()
-  if (loading) return null
-  // Supabase signs the visitor in as part of verifying the invite/reset
-  // link, so a session is expected to already exist here.
-  if (!session) return <Navigate to="/login" replace />
-  return <SetPassword />
-}
+import AccountPending from './pages/AccountPending'
+import ComingSoon, { Dashboard, NotFound, SearchPage } from './pages/ComingSoon'
+import Settings from './pages/settings/Settings'
 
 export default function App() {
+  const { session, loading, needsPasswordSetup, isStaff } = useAuth()
+
+  if (loading) return <FullPageSpinner />
+  if (!session) return <Login />
+  if (needsPasswordSetup) return <SetPassword />
+  if (!isStaff) return <AccountPending />
+
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/set-password" element={<SetPasswordRoute />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="vehicles" element={<Vehicles />} />
-            <Route path="vehicles/:id" element={<VehicleDetail />} />
-            <Route path="calendar" element={<Calendar />} />
-            <Route path="work-orders" element={<WorkOrders />} />
-            <Route path="work-orders/new" element={<WorkOrders />} />
-            <Route path="work-orders/:id" element={<WorkOrders />} />
-            <Route path="invoices" element={<Invoices />} />
-            <Route path="invoices/:id" element={<InvoiceDetail />} />
-            <Route path="parts" element={<Parts />} />
-            <Route path="parts/:id" element={<PartDetail />} />
-            <Route path="drivers" element={<Drivers />} />
-            <Route path="drivers/:id" element={<DriverDetail />} />
-            <Route path="fleet-groups" element={<FleetGroups />} />
-            <Route path="fleet-groups/:id" element={<OwnerDetail />} />
-            <Route path="technicians" element={<Technicians />} />
-            <Route path="technicians/:id" element={<TechnicianDetail />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Dashboard />} />
+        <Route path="board" element={<ComingSoon titleKey="nav.board" stage="board" icon="layout-kanban" />} />
+        <Route path="calendar" element={<ComingSoon titleKey="nav.calendar" stage="board" icon="calendar" />} />
+        <Route path="customers/*" element={<ComingSoon titleKey="nav.customers" stage="customers" icon="users" />} />
+        <Route path="vehicles/*" element={<ComingSoon titleKey="nav.vehicles" stage="customers" icon="car" />} />
+        <Route path="catalog/*" element={<ComingSoon titleKey="nav.catalog" stage="catalog" icon="book" />} />
+        <Route path="jobs/*" element={<ComingSoon titleKey="nav.jobs" stage="jobs" icon="wrench" />} />
+        <Route path="inventory/*" element={<ComingSoon titleKey="nav.inventory" stage="inventory" icon="packages" />} />
+        <Route path="reports/*" element={<ComingSoon titleKey="nav.reports" stage="reports" icon="chart-bar" />} />
+        <Route path="search" element={<SearchPage />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="set-password" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
   )
 }

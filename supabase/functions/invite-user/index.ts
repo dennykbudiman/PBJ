@@ -1,109 +1,94 @@
-// Supabase Edge Function: invite-user
+// Supabase Edge Function: invite-user (Axle v2)
 //
-// Why this exists: creating a real login (a row in auth.users) requires the
-// `service_role` key, which must never be shipped to the browser. This
-// function runs on Supabase's servers, holds that key as a secret, and is
-// the only place that key is ever used. The React app calls this function
-// (via supabase.functions.invoke) instead of touching auth.users directly.
+// Creating a login needs the service-role key, which must never reach the
+// browser, so the app calls this function instead. It:
+//   1. checks the caller is signed in and has the `manage_users` permission
+//      (checked here, server-side, with the caller's own token);
+//   2. checks the role exists and the username is free (case-insensitive);
+//   3. sends a Supabase invite email (creates the auth user; the database's
+//      handle_new_user trigger creates a profile);
+//   4. sets the profile's name, username, phone and role, and makes it active.
+//      If that fails, the new login is removed again so nothing is left half-made.
 //
-// What it does:
-//   1. Checks the CALLER is signed in and has the `manage_users` permission
-//      (re-checked here, server-side — never trust the client's own check).
-//   2. Sends a real Supabase invite email via auth.admin.inviteUserByEmail,
-//      which creates the auth.users row. That insert fires the existing
-//      on_auth_user_created trigger, which auto-creates a `profiles` row
-//      defaulted to the 'Viewer' role.
-//   3. Updates that new profiles row with the name/phone/role actually
-//      chosen in the invite form.
-//
-// Deploy with:
-//   supabase functions deploy invite-user
-// (see the project README for the one-time setup this needs).
+// The invite link opens the app's "set your password" screen. Its address must be
+// listed under Authentication → URL Configuration → Redirect URLs.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return json({ error: 'Use POST' }, 405)
 
   try {
-    const { email, name, username, phone, roleId } = await req.json()
-    if (!email || !roleId || !username) {
-      return json({ error: 'email, username, and roleId are required' }, 400)
-    }
+    const body = await req.json().catch(() => ({}))
+    const email = String(body.email ?? '').trim().toLowerCase()
+    const name = String(body.name ?? '').trim()
+    const username = String(body.username ?? '').trim().toLowerCase()
+    const phone = body.phone ? String(body.phone).trim() : null
+    const roleId = String(body.roleId ?? '')
+    const redirectTo = typeof body.redirectTo === 'string' ? body.redirectTo : undefined
+
+    if (!email || !name || !username || !roleId) return json({ error: 'Name, email, username and role are required.' }, 400)
+    if (!/^\S+@\S+\.\S+$/.test(email)) return json({ error: 'That email address does not look right.' }, 400)
+    if (!/^[a-z0-9._-]{3,30}$/.test(username)) return json({ error: 'Usernames are 3–30 characters: letters, numbers, dot, dash or underscore.' }, 400)
 
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return json({ error: 'Missing Authorization header' }, 401)
-    }
+    if (!authHeader) return json({ error: 'Not signed in.' }, 401)
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    const url = Deno.env.get('SUPABASE_URL')!
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    // Client scoped to the CALLER's own JWT, purely to verify who they are
-    // and that they're allowed to invite people. This client never uses
-    // the service role key, so it's bound by the same RLS as the app.
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
+    // Caller-scoped client: same access rules as the app.
+    const caller = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } })
+    const { data: who, error: whoErr } = await caller.auth.getUser()
+    if (whoErr || !who?.user) return json({ error: 'Not signed in.' }, 401)
+    const { data: allowed, error: permErr } = await caller.rpc('has_permission', { perm: 'manage_users' })
+    if (permErr || !allowed) return json({ error: 'You do not have permission to invite people.' }, 403)
+
+    const admin = createClient(url, serviceKey, { auth: { persistSession: false } })
+
+    const { data: role } = await admin.from('roles').select('id, name').eq('id', roleId).maybeSingle()
+    if (!role) return json({ error: 'That role does not exist.' }, 400)
+
+    const { data: taken } = await admin.from('profiles').select('id').ilike('username', username.replace(/[\\%_]/g, (c) => `\\${c}`)).limit(1)
+    if (taken && taken.length) return json({ error: 'That username is already taken.' }, 409)
+
+    const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
+      data: { name },
+      redirectTo,
     })
-    const { data: userData, error: userErr } = await callerClient.auth.getUser()
-    if (userErr || !userData?.user) {
-      return json({ error: 'Not authenticated' }, 401)
+    if (inviteErr || !invited?.user) {
+      const msg = inviteErr?.message || 'The invite could not be sent.'
+      return json({ error: /already been registered|already exists/i.test(msg) ? 'Someone with that email already has an account.' : msg }, 400)
     }
+    const newId = invited.user.id
 
-    const { data: allowed, error: permErr } = await callerClient.rpc('has_permission', {
-      perm: 'manage_users',
-    })
-    if (permErr || !allowed) {
-      return json({ error: 'You do not have permission to invite users' }, 403)
-    }
+    // Keep role and username in app metadata too (only the server can set it).
+    await admin.auth.admin.updateUserById(newId, { app_metadata: { role: role.name, username } })
 
-    // Admin client, using the service role key — ONLY reachable here,
-    // server-side, never in the browser bundle.
-    const adminClient = createClient(supabaseUrl, serviceRoleKey)
-
-    const { data: invited, error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: { name: name || email },
-    })
-    if (inviteErr) {
-      return json({ error: inviteErr.message }, 400)
-    }
-
-    const newUserId = invited.user.id
-
-    // The on_auth_user_created trigger already inserted a default 'Viewer'
-    // profile row for this id — update it with what the form actually chose.
-    const { error: profileErr } = await adminClient
+    const { error: profErr } = await admin
       .from('profiles')
-      .update({ name: name || email, username: username.toLowerCase(), phone: phone || null, role_id: roleId, status: 'invited' })
-      .eq('id', newUserId)
-
-    if (profileErr) {
-      // Username collisions land here (profiles.username is unique) — the
-      // auth.users row and invite email already went out at this point, so
-      // surface the real reason rather than a generic 500.
-      const reason = profileErr.message?.includes('profiles_username_key')
-        ? 'That username is already taken.'
-        : profileErr.message
-      return json({ error: `User invited, but profile update failed: ${reason}` }, 500)
+      .update({ name, username, phone, role_id: role.id, status: 'active' })
+      .eq('id', newId)
+    if (profErr) {
+      await admin.auth.admin.deleteUser(newId)
+      const reason = /username/i.test(profErr.message) ? 'That username is already taken.' : profErr.message
+      return json({ error: `The invite was cancelled: ${reason}` }, 500)
     }
 
-    return json({ ok: true, userId: newUserId })
+    return json({ ok: true, userId: newId })
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500)
   }
 })
-
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
-}

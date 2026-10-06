@@ -1,115 +1,109 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
+// Read invite / password-reset links once, when the app first loads. supabase-js
+// signs the person in from the link by itself and then clears the address bar,
+// so this has to happen before that.
+const LINK = (() => {
+  const params = new URLSearchParams(window.location.search)
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  return {
+    type: params.get('type') || hash.get('type'),
+    error: params.get('error_description') || hash.get('error_description'),
+  }
+})()
+
+// An invited person must choose a password before using the app. Their login has
+// invited_at set; once they save a password we record password_set on the login,
+// so reloading the page halfway can't skip the step.
+function mustSetPassword(user) {
+  return Boolean(user?.invited_at && !user?.user_metadata?.password_set)
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined) // undefined = still loading
-  const [profile, setProfile] = useState(null)
-  const [permissions, setPermissions] = useState([])
-  // True right after someone lands here via an invite or password-reset
-  // link — Supabase logs them in automatically so it can verify the link,
-  // but they haven't actually set a password yet. Until they do, force them
-  // to the "set password" screen instead of the rest of the app.
-  const [needsPasswordSetup, setNeedsPasswordSetup] = useState(false)
+  const [loaded, setLoaded] = useState({ userId: undefined, profile: null, permissions: [], staff: false })
+  const [recovery, setRecovery] = useState(LINK.type === 'recovery' || LINK.type === 'invite')
+  const [linkError, setLinkError] = useState(LINK.error)
 
   useEffect(() => {
-    // Supabase invite/reset links come in one of two shapes depending on
-    // project settings: a hash fragment (#access_token=...&type=invite),
-    // which supabase-js's `detectSessionInUrl` (on by default) picks up
-    // automatically, or a query-string PKCE code (?code=...), which needs
-    // an explicit exchange. Handle both so this works regardless of which
-    // flow this Supabase project uses.
-    const params = new URLSearchParams(window.location.search)
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-    const linkType = params.get('type') || hash.get('type') // 'invite' | 'recovery' | ...
-    const code = params.get('code')
-
-    async function init() {
-      if (code) {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href)
-        if (!error && data.session) {
-          setSession(data.session)
-          // Clean the ?code=... out of the URL bar without a reload.
-          window.history.replaceState({}, '', window.location.pathname)
-        }
-      } else {
-        const { data } = await supabase.auth.getSession()
-        setSession(data.session)
-      }
-      if (linkType === 'invite' || linkType === 'recovery') {
-        setNeedsPasswordSetup(true)
-      }
-    }
-    init()
-
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null)
+      if (!data.session) setRecovery(false)
+    })
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
-      setSession(sess)
-      if (event === 'PASSWORD_RECOVERY') setNeedsPasswordSetup(true)
+      setSession(sess ?? null)
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true)
+      if (event === 'SIGNED_OUT') setRecovery(false)
     })
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  useEffect(() => {
-    if (!session) {
-      setProfile(null)
-      setPermissions([])
+  const userId = session?.user?.id
+
+  const loadProfile = useCallback(async () => {
+    if (!userId) {
+      setLoaded({ userId: null, profile: null, permissions: [], staff: false })
       return
     }
-    let cancelled = false
-    async function loadProfile() {
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('id, name, username, phone, status, role_id, roles(name)')
-        .eq('id', session.user.id)
-        .single()
-      if (cancelled) return
-      setProfile(p ?? null)
-
-      if (p?.role_id) {
-        const { data: perms } = await supabase
-          .from('role_permissions')
-          .select('permission_key')
-          .eq('role_id', p.role_id)
-        if (!cancelled) setPermissions((perms ?? []).map((r) => r.permission_key))
-      } else {
-        setPermissions([])
-      }
+    const [{ data: p, error }, { data: staff }] = await Promise.all([
+      supabase.from('profiles').select('id, name, username, phone, status, language, role_id, roles(name)').eq('id', userId).maybeSingle(),
+      // The database's own answer to "may this person use the app?" (active and not a Fleet manager).
+      supabase.rpc('is_staff'),
+    ])
+    if (error) console.error('profile load failed', error)
+    let permissions = []
+    if (p?.role_id && staff) {
+      const { data: perms } = await supabase.from('role_permissions').select('permission_key').eq('role_id', p.role_id)
+      permissions = (perms ?? []).map((r) => r.permission_key)
     }
+    setLoaded({ userId, profile: p ?? null, permissions, staff: staff === true })
+  }, [userId])
+
+  useEffect(() => {
+    if (session === undefined) return
     loadProfile()
-    return () => {
-      cancelled = true
+  }, [session === undefined, loadProfile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const value = useMemo(() => {
+    const profile = loaded.userId === (userId ?? null) ? loaded.profile : undefined
+    const isStaff = loaded.userId === userId && loaded.staff
+    const permissions = isStaff ? loaded.permissions : []
+    return {
+      session,
+      user: session?.user ?? null,
+      profile,
+      roleName: profile?.roles?.name ?? null,
+      permissions,
+      isStaff,
+      can: (key) => isStaff && permissions.includes(key),
+      // Still loading until the profile we hold belongs to the person signed in.
+      loading: session === undefined || (Boolean(session) && loaded.userId !== userId),
+      needsPasswordSetup: Boolean(session) && (recovery || mustSetPassword(session?.user)),
+      linkError,
+      clearLinkError: () => setLinkError(null),
+      completePasswordSetup: () => setRecovery(false),
+      refreshProfile: loadProfile,
+      // People sign in with a username (or their email). A username is resolved
+      // to its email by the get_email_for_username database function.
+      signIn: async (identifier, password) => {
+        let email = identifier.trim()
+        if (!email.includes('@')) {
+          const { data, error } = await supabase.rpc('get_email_for_username', { p_username: email })
+          if (error) return { error }
+          if (!data) return { error: { code: 'no_user' } }
+          email = data
+        }
+        return supabase.auth.signInWithPassword({ email, password })
+      },
+      sendPasswordReset: (email) =>
+        supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/set-password` }),
+      // Sign out of this browser only, not every device the person uses.
+      signOut: () => supabase.auth.signOut({ scope: 'local' }),
     }
-  }, [session])
-
-  const hasPermission = (key) => permissions.includes(key)
-
-  const value = {
-    session,
-    user: session?.user ?? null,
-    profile,
-    permissions,
-    hasPermission,
-    loading: session === undefined,
-    needsPasswordSetup,
-    completePasswordSetup: () => setNeedsPasswordSetup(false),
-    signIn: (email, password) => supabase.auth.signInWithPassword({ email, password }),
-    // The app only ever shows a "username" field to the person — this
-    // resolves it to the matching email server-side (via the
-    // get_email_for_username RPC from 004_username_login.sql) and signs in
-    // with that, so Supabase's actual email-based auth stays invisible.
-    signInWithUsername: async (username, password) => {
-      const { data: email, error: lookupError } = await supabase.rpc('get_email_for_username', {
-        p_username: username,
-      })
-      if (lookupError) return { error: lookupError }
-      if (!email) return { error: { message: 'No account found with that username.' } }
-      return supabase.auth.signInWithPassword({ email, password })
-    },
-    signUp: (email, password, name) =>
-      supabase.auth.signUp({ email, password, options: { data: { name } } }),
-    signOut: () => supabase.auth.signOut(),
-  }
+  }, [session, userId, loaded, recovery, linkError, loadProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

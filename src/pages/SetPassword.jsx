@@ -1,104 +1,49 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabaseClient'
+import { Button, Input, Notice } from '../components/ui'
+import { AuthShell } from './Login'
 import { useAuth } from '../context/AuthContext'
-import { colors } from '../lib/theme'
+import { useT } from '../lib/i18n'
+import { supabase, errorText } from '../lib/supabase'
 
-// Shown when someone arrives via an invite email or a "reset password" link.
-// Supabase logs them in automatically just to verify the link is real, but
-// they don't have a password yet (invite) or want a new one (reset) — this
-// is the one place in the app that lets them set it.
+// Shown after an invite or password-reset link: the person is signed in by the
+// link but still has to choose a password.
 export default function SetPassword() {
-  const { completePasswordSetup, profile } = useAuth()
+  const { t } = useT()
   const navigate = useNavigate()
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const { profile, completePasswordSetup, signOut } = useAuth()
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
 
-  async function handleSubmit(e) {
+  async function submit(e) {
     e.preventDefault()
-    setError('')
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
-      return
-    }
-    if (password !== confirm) {
-      setError('Passwords do not match.')
-      return
-    }
-    setLoading(true)
-    const { error } = await supabase.auth.updateUser({ password })
-    setLoading(false)
-    if (error) {
-      setError(error.message)
-      return
-    }
+    setError(null)
+    if (a.length < 8) return setError(t('auth.pwTooShort'))
+    if (a !== b) return setError(t('auth.pwMismatch'))
+    setBusy(true)
+    // password_set tells the app this login has finished its invite.
+    const { error: err } = await supabase.auth.updateUser({ password: a, data: { password_set: true } })
+    setBusy(false)
+    if (err) return setError(errorText(err, t))
     completePasswordSetup()
     navigate('/', { replace: true })
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: colors.bg }}>
-      <form
-        onSubmit={handleSubmit}
-        style={{ width: 360, background: colors.white, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 32, boxShadow: '0 1px 2px rgba(20,20,20,0.04)' }}
-      >
-        <h1 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 6px 0' }}>Set your password</h1>
-        <p style={{ fontSize: 13, color: colors.muted, margin: '0 0 20px 0' }}>
-          {profile?.name ? `Welcome, ${profile.name}. ` : ''}Choose a password to finish setting up your account.
-        </p>
-
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }} htmlFor="new-password">
-          New password
-        </label>
-        <input
-          id="new-password"
-          type="password"
-          required
-          autoFocus
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={inputStyle}
-        />
-
-        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, margin: '16px 0 6px 0' }} htmlFor="confirm-password">
-          Confirm password
-        </label>
-        <input
-          id="confirm-password"
-          type="password"
-          required
-          minLength={8}
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          style={inputStyle}
-        />
-
-        {error && (
-          <div style={{ marginTop: 14, fontSize: 13, color: colors.danger, background: colors.dangerBg, borderRadius: 8, padding: '8px 12px' }}>
-            {error}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            marginTop: 20, width: '100%', background: colors.accent, color: colors.white, border: 'none',
-            borderRadius: 8, padding: '11px 16px', fontSize: 14, fontWeight: 700,
-            cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? 'Saving…' : 'Save password and continue'}
-        </button>
+    <AuthShell>
+      <h1>{t('auth.setTitle')}</h1>
+      <p className="muted" style={{ margin: 0, lineHeight: 1.55 }}>
+        {profile?.username ? t('auth.setTextUser', { username: profile.username }) : t('auth.setText')}
+      </p>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {error && <Notice kind="err">{error}</Notice>}
+        <Input type="password" label={t('auth.newPassword')} value={a} onChange={(e) => setA(e.target.value)} autoComplete="new-password" autoFocus />
+        <Input type="password" label={t('auth.confirmPassword')} value={b} onChange={(e) => setB(e.target.value)} autoComplete="new-password" />
+        <Button type="submit" variant="primary" loading={busy}>{t('auth.savePassword')}</Button>
+        <button type="button" className="linkbtn" style={{ alignSelf: 'center' }} onClick={() => signOut()}>{t('auth.signOut')}</button>
       </form>
-    </div>
+    </AuthShell>
   )
-}
-
-const inputStyle = {
-  width: '100%', border: '1px solid rgba(28,30,34,0.14)', borderRadius: 8,
-  padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', outline: 'none',
 }

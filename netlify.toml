@@ -2,14 +2,27 @@
   command = "npm run build"
   publish = "dist"
 
-# React Router uses client-side routing (e.g. /work-orders, /drivers) — every
-# path that isn't a real static file must fall through to index.html so the
-# router can handle it, or a direct link / page refresh on any page but "/"
-# would 404 on Netlify.
+[build.environment]
+  NODE_VERSION = "20"
+
+# Axle v2 talks to the STAGING Supabase project ("Axle v2 staging").
+# These values are public by design (the anon key only works through the
+# database's access rules). They override any variables set in the Netlify UI,
+# so a preview of this branch can never reach the live database.
+[context.production.environment]
+  VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2FiaHd2bnpobGNjdHh3cGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODI0MTAsImV4cCI6MjEwNjc1ODQxMH0.cXKhovsB-JYtO5ubGi3Nxnp8WMuCYXkqalzdChcnK7g"
+
+[context.deploy-preview.environment]
+  VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2FiaHd2bnpobGNjdHh3cGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODI0MTAsImV4cCI6MjEwNjc1ODQxMH0.cXKhovsB-JYtO5ubGi3Nxnp8WMuCYXkqalzdChcnK7g"
+
+[context.branch-deploy.environment]
+  VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2FiaHd2bnpobGNjdHh3cGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODI0MTAsImV4cCI6MjEwNjc1ODQxMH0.cXKhovsB-JYtO5ubGi3Nxnp8WMuCYXkqalzdChcnK7g"
+
+# Client-side routing: every path falls through to index.html.
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[build.environment]
-  NODE_VERSION = "20"
