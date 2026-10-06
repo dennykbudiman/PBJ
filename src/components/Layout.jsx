@@ -21,7 +21,7 @@ export const NAV = [
 
 // The "+" quick-create menu. Each entry switches on as its screen is built.
 const CREATE = [
-  { key: 'create.job', icon: 'wrench' },
+  { key: 'create.job', icon: 'wrench', to: '/jobs/new', perm: 'edit_jobs' },
   { key: 'create.customer', icon: 'users', to: '/customers?new=1', perm: 'edit_customers' },
   { key: 'create.vehicle', icon: 'car', to: '/customers/vehicles?new=1', perm: 'edit_customers' },
   { key: 'create.part', icon: 'book', to: '/catalog/parts/new', perm: 'edit_catalog' },

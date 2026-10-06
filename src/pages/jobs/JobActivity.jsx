@@ -1,0 +1,170 @@
+import React, { useEffect, useState } from 'react'
+import { Badge, Empty } from '../../components/ui'
+import { useT } from '../../lib/i18n'
+import { useShop } from '../../context/ShopContext'
+import { supabase, errorText } from '../../lib/supabase'
+import { fmtDateTime, invoiceNo, num, rp } from '../../lib/format'
+import { APPROVAL_COLOR } from '../../lib/jobs'
+
+const MONEY = ['price', 'cost', 'discount_amount', 'core_charge', 'flat_price', 'amount', 'value_money', 'total', 'max_amount']
+const HIDE = ['id', 'ro_id', 'service_id', 'position', 'created_at', 'updated_at', 'service_total', 'service_discount', 'service_net', 'amount_calc',
+  'parts_total', 'labor_total', 'other_total', 'service_fees_total', 'item_discount_total', 'service_discount_total', 'job_fees_total', 'job_discount_total',
+  'subtotal', 'taxable_base', 'tax_total', 'paid_total', 'balance', 'payment_status', 'bill_to_snapshot', 'shop_snapshot', 'stock_deducted', 'completed_at', 'catalog_item_id']
+const COSTS = ['cost']
+
+// Everything that happened on this job, newest first: edits, approvals, payments, invoicing and voids.
+export default function JobActivity({ job, cat, staff, showCost }) {
+  const { t, lang } = useT()
+  const { timezone } = useShop()
+  const [rows, setRows] = useState(null)
+  const [error, setError] = useState(null)
+  const [people, setPeople] = useState({})
+  const id = job.ro.id
+  // Everyone who ever worked here, including people who have left, so their edits keep their names.
+  useEffect(() => { supabase.from('profiles').select('id, name').then(({ data }) => setPeople(Object.fromEntries((data || []).map((p) => [p.id, p.name])))) }, [])
+  const svcIds = job.services.map((s) => s.id)
+
+  useEffect(() => {
+    let live = true
+    const ids = [id, ...svcIds, ...job.items.map((x) => x.id), ...job.fees.map((x) => x.id), ...job.discounts.map((x) => x.id),
+      ...job.approvals.map((x) => x.id), ...job.payments.map((x) => x.id), ...job.appliedCredits.map((x) => x.id)]
+    Promise.all([
+      supabase.from('activity_log').select('*').in('entity_id', ids).order('created_at', { ascending: false }).limit(300),
+      // Removed services, fees and discounts no longer have an id to look up; their delete record names the job.
+      supabase.from('activity_log').select('*').eq('action', 'delete').in('entity_type', ['ro_services', 'ro_job_fees', 'ro_job_discounts', 'payments', 'approvals'])
+        .eq('changes->>ro_id', id).order('created_at', { ascending: false }).limit(100),
+      svcIds.length ? supabase.from('activity_log').select('*').eq('action', 'delete').eq('entity_type', 'ro_service_items')
+        .in('changes->>service_id', svcIds).order('created_at', { ascending: false }).limit(100) : { data: [] },
+    ]).then(([a, b, c]) => {
+      if (!live) return
+      const err = a.error || b.error || c.error
+      if (err) setError(errorText(err, t))
+      const seen = new Set()
+      const all = [...(a.data || []), ...(b.data || []), ...(c.data || [])].filter((r) => (seen.has(r.id) ? false : seen.add(r.id)))
+      all.sort((x, y) => (x.created_at < y.created_at ? 1 : x.created_at > y.created_at ? -1 : y.id - x.id))
+      setRows(all)
+    })
+    return () => { live = false }
+  }, [job.version]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const who = (uid) => people[uid] || staff.find((p) => p.id === uid)?.name || t('cat.hist.system')
+  const svcName = (sid) => job.services.find((s) => s.id === sid)?.name
+  const value = (field, v) => {
+    if (v == null || v === '') return '—'
+    if (typeof v === 'boolean') return v ? t('cat.yes') : t('cat.no')
+    if (MONEY.includes(field)) return rp(v)
+    if (field === 'technician_id' || field === 'service_advisor_id') return staff.find((p) => p.id === v)?.name || '?'
+    if (field === 'workflow_status') return t(`job.wf.${v}`)
+    if (field === 'work_status') return t(`job.work.${v}`)
+    if (field === 'approval_status') return t(`job.appr.${v}`)
+    if (field === 'priority') return t(`job.pri.${v}`)
+    if (field === 'order_status') return v === 'invoice' ? t('job.invoice') : t('job.estimate')
+    if (field === 'item_type') return t(`job.type.${v}`)
+    if (field === 'invoice_number') return invoiceNo(v)
+    if (field === 'archived_at' || field === 'closed_at' || field === 'invoiced_at') return fmtDateTime(v, lang, timezone)
+    if (typeof v === 'number') return num(v, 2)
+    if (Array.isArray(v)) return v.join(', ') || '—'
+    return String(v)
+  }
+  const label = (field) => {
+    const k = `job.f.${field}`
+    const s = t(k)
+    return s === k ? field : s
+  }
+  function changes(diff) {
+    const list = Object.entries(diff || {}).filter(([k]) => !HIDE.includes(k) && (showCost || !COSTS.includes(k)))
+    return list.map(([k, [a, b]]) => <div key={k} className="hist-change"><span className="muted">{label(k)}:</span> {value(k, a)} → <b>{value(k, b)}</b></div>)
+  }
+
+  function describe(r) {
+    const old = r.action === 'delete' ? r.changes : null
+    switch (r.entity_type) {
+      case 'repair_orders':
+        if (r.action === 'create') return <div>{t('job.act.created')}</div>
+        if (r.changes?.order_status?.[1] === 'invoice') return <div><b>{t('job.act.invoiced', { no: invoiceNo(r.changes.invoice_number?.[1]) })}</b></div>
+        if (r.changes?.order_status?.[1] === 'estimate') return <div><b style={{ color: 'var(--red)' }}>{t('job.act.voided', { no: invoiceNo(r.changes.invoice_number?.[0]) })}</b></div>
+        if (r.changes?.closed_at && r.changes.closed_at[1]) return <div><b>{t('job.act.closed')}</b>{r.changes.close_reason?.[1] && <span className="muted"> · {r.changes.close_reason[1]}</span>}</div>
+        if (r.changes?.closed_at && !r.changes.closed_at[1]) return <div><b>{t('job.act.reopened')}</b></div>
+        return changes(r.changes)
+      case 'ro_services': {
+        const name = old?.name || svcName(r.entity_id) || '?'
+        if (r.action === 'create') return <div>{t('job.act.serviceAdded')}: <b>{name}</b></div>
+        if (r.action === 'delete') return <div>{t('job.act.serviceRemoved')}: <b>{name}</b></div>
+        const diff = { ...(r.changes || {}) }
+        delete diff.approval_status
+        const list = changes(diff)
+        return list.length ? <><div className="muted small">{name}</div>{list}</> : null
+      }
+      case 'ro_service_items': {
+        const cur = job.items.find((x) => x.id === r.entity_id)
+        const name = old?.name || cur?.name || '?'
+        const where = svcName(old?.service_id || cur?.service_id)
+        if (r.action === 'create') return <div>{t('job.act.lineAdded')}: <b>{name}</b>{cur && <span className="muted"> · {num(cur.qty, 2)} × {rp(cur.price)}</span>}{where && <span className="muted"> · {where}</span>}</div>
+        if (r.action === 'delete') return <div>{t('job.act.lineRemoved')}: <b>{name}</b>{where && <span className="muted"> · {where}</span>}</div>
+        const list = changes(r.changes)
+        return list.length ? <><div className="muted small">{name}</div>{list}</> : null
+      }
+      case 'ro_job_fees':
+      case 'ro_job_discounts': {
+        const cur = (r.entity_type === 'ro_job_fees' ? job.fees : job.discounts).find((x) => x.id === r.entity_id)
+        const name = old?.name || cur?.name || '?'
+        const what = r.entity_type === 'ro_job_fees' ? t('job.fee') : t('job.discount')
+        if (r.action === 'create') return <div>{what} {t('job.act.added')}: <b>{name}</b></div>
+        if (r.action === 'delete') return <div>{what} {t('job.act.removed')}: <b>{name}</b></div>
+        return <><div className="muted small">{name}</div>{changes(r.changes)}</>
+      }
+      case 'approvals': {
+        const a = old || job.approvals.find((x) => x.id === r.entity_id)
+        if (!a) return null
+        if (r.action === 'delete') return <div className="muted">{t('job.act.approvalRemoved')}: {svcName(a.service_id) || '?'}</div>
+        if (r.action === 'update') return changes(r.changes)
+        return (
+          <div>
+            <Badge color={APPROVAL_COLOR[a.decision]}>{t(`job.appr.${a.decision}`)}</Badge> <b>{svcName(a.service_id) || '?'}</b>
+            <span className="muted"> · {[a.approved_by_name, t(`job.via.${a.method}`)].filter(Boolean).join(' · ')}</span>
+            {a.note && <div className="muted">{a.note}</div>}
+          </div>
+        )
+      }
+      case 'payments': {
+        const p = old || job.payments.find((x) => x.id === r.entity_id)
+        if (!p) return null
+        if (r.action === 'delete') return <div className="muted">{t('job.act.paymentDeleted')}: {rp(p.amount)}</div>
+        if (r.action === 'update') return changes(r.changes)
+        return <div>{p.kind === 'refund' ? t('job.act.refund') : t('job.act.payment')}: <b>{rp(p.amount)}</b> <span className="muted">· {t(`job.pay.${p.method}`)}{p.reference ? ` · ${p.reference}` : ''}</span></div>
+      }
+      case 'credit_memos': {
+        const c = job.appliedCredits.find((x) => x.id === r.entity_id)
+        if (r.action === 'update' && r.changes?.applied_ro_id) {
+          return <div>{r.changes.applied_ro_id[1] ? t('job.act.creditApplied') : t('job.act.creditUnapplied')}{c && <b> {rp(c.amount)}</b>}</div>
+        }
+        return c ? <div>{t('job.act.creditApplied')} <b>{rp(c.amount)}</b></div> : null
+      }
+      default:
+        return null
+    }
+  }
+
+  const items = (rows || []).map((r) => ({ r, body: describe(r) })).filter((x) => x.body)
+  return (
+    <section className="card">
+      <h2>{t('job.tab.activity')}</h2>
+      {job.voids.length > 0 && (
+        <div className="notice warn" style={{ marginBottom: 12 }}>
+          {job.voids.map((v) => <div key={v.id}>{t('job.voidLine', { no: v.invoice_no, date: fmtDateTime(v.voided_at, lang, timezone), reason: v.reason, who: who(v.voided_by) })}</div>)}
+        </div>
+      )}
+      {error && <div className="error">{error}</div>}
+      {!rows ? <div className="muted">{t('common.loading')}</div> : items.length === 0 ? <Empty icon="clock" title={t('cat.hist.none')} /> : (
+        <ol className="hist">
+          {items.map(({ r, body }) => (
+            <li key={r.id}>
+              <div className="hist-meta">{who(r.user_id)} · {fmtDateTime(r.created_at, lang, timezone)}</div>
+              <div className="hist-body">{body}</div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}

@@ -2,6 +2,10 @@ import React, { useState } from 'react'
 import { Badge, Button, Empty, Notice, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import ContactForm from './ContactForm'
+import { DeferredList, JobsFor } from '../jobs/JobLists'
+import { IssueCreditModal } from '../jobs/JobModals'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import { supabase, errorText } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
@@ -30,6 +34,9 @@ function Kpi({ label, value, note, noteColor }) {
 const TABS = ['contact', 'vehicles', 'jobs', 'deferred', 'finances']
 
 export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEdit, onReload, onClose, onAddVehicle, onOpenVehicle, onDeleted }) {
+  const navigate = useNavigate()
+  const { can } = useAuth()
+  const [creditOpen, setCreditOpen] = useState(false)
   const { t, lang } = useT()
   const toast = useToast()
   const { settings } = useShop()
@@ -129,10 +136,10 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
             </div>
 
             <div className="row wrap" style={{ marginTop: 14 }}>
-              <Button variant="primary" icon="plus" disabled title={t('cust.jobsSoon')}>{t('create.job')}</Button>
+              {can('edit_jobs') && <Button variant="primary" icon="plus" onClick={() => navigate(`/jobs/new?customer=${customer.id}`)}>{t('create.job')}</Button>}
               <Button disabled title={t('cust.calendarSoon')}>{t('cust.appointment')}</Button>
               {canEdit && <Button onClick={onAddVehicle}>{t('cust.addVehicle')}</Button>}
-              <Button disabled title={t('cust.jobsSoon')}>{t('cust.creditMemo')}</Button>
+              {can('issue_credits') && <Button onClick={() => setCreditOpen(true)}>{t('cust.creditMemo')}</Button>}
             </div>
             <div className="hint">{t('cust.availableCredit', { amount: rp(s.credit) })}</div>
           </>
@@ -167,9 +174,8 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
           </>
         )}
 
-        {(tab === 'jobs' || tab === 'deferred') && (
-          <Empty icon="wrench" title={t('soon.title')}>{t('soon.text', { stage: 4, name: t('stage.jobs') })}</Empty>
-        )}
+        {tab === 'jobs' && <JobsFor customerId={customer.id} />}
+        {tab === 'deferred' && <DeferredList customerId={customer.id} embedded />}
 
         {tab === 'finances' && (
           <>
@@ -211,6 +217,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
         onClose={() => setContact(undefined)}
         onSaved={() => { setContact(undefined); onReload() }}
       />
+      <IssueCreditModal open={creditOpen} customer={customer} onClose={() => setCreditOpen(false)} onDone={() => { setCreditOpen(false); onReload?.() }} />
     </aside>
   )
 }

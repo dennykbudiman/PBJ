@@ -12,8 +12,8 @@ address for every Netlify context of this branch, so a preview can never reach l
 
 1. **Foundations** ✓: sign-in by username, invite / reset password, app layout, EN/ID, notifications bell, Settings (shop profile and logo, appearance / colour theme, language and printing, numbering, fees and tax, labor rates, users and access)
 2. **Customers & vehicles** ✓
-3. **Catalog** ✓ (this delivery): labor, parts, fees, flat rate items, discounts, service bundles, inspections, checklists, categories, suppliers
-4. Jobs, estimates, invoices & payments
+3. **Catalog** ✓: labor, parts, fees, discounts, flat rate items, service bundles, inspections, checklists, categories, suppliers
+4. **Jobs, estimates, invoices & payments** ✓ (this delivery): job page, approvals, invoicing and voiding, payments and credits, inspections, activity, job lists
 5. Printed invoices & estimates
 6. Work board & calendar
 7. Inventory & purchase orders
@@ -36,7 +36,7 @@ npm run dev
 - `src/lib` — Supabase client, EN/ID text (`strings.js`), number and date formatting
 - `src/components` — app layout (top bar), shared UI pieces
 - `src/pages` — screens; `pages/settings` is the Settings page
-- `src/pages/customers`, `src/pages/catalog` — Customers & vehicles, Catalog
+- `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs` — Customers & vehicles, Catalog, Jobs
 - `supabase/migrations` — database migrations 100–118 (100–117 applied to staging; 118 adds stock adjustments and catalog edit history)
 - `supabase/functions/invite-user` — invites a person (deployed to staging)
 

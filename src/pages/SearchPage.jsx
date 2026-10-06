@@ -5,13 +5,16 @@ import { Badge, Empty, Notice, PageHead } from '../components/ui'
 import Icon from '../components/Icon'
 import { supabase, errorText } from '../lib/supabase'
 import { useT } from '../lib/i18n'
-import { km } from '../lib/format'
+import { fmtDate, invoiceNo, jobNo, km, rp } from '../lib/format'
+import { useShop } from '../context/ShopContext'
+import { STATE_COLOR, jobState } from '../lib/jobs'
+import { shopToday } from '../lib/customers'
 import { TYPE_COLOR, normalizePlate, normalizeVin, npwpDigits, vehicleName } from '../lib/customers'
 
 const MAX = 25
 
 // Global search: companies (by name, NPWP or a contact's name, phone or email) and
-// vehicles (by plate, VIN, make or model). Repair orders join in stage 4.
+// vehicles (by plate, VIN, make or model) and jobs (by job or invoice number, or the vehicles found).
 export default function SearchPage() {
   const { t } = useT()
   const navigate = useNavigate()
@@ -20,6 +23,8 @@ export default function SearchPage() {
   useEffect(() => setTyped(q), [q])
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const [jobs, setJobs] = useState(null)
+  const { timezone } = useShop()
 
   useEffect(() => {
     let cancelled = false
@@ -57,6 +62,34 @@ export default function SearchPage() {
       || [v.make, v.model, vehicleName(v)].filter(Boolean).join(' ').toLowerCase().includes(needle))
     return { customers, vehicles, byId, viaContact }
   }, [data, q])
+
+  // Jobs: by job / invoice number, plus the latest jobs of the vehicles found.
+  useEffect(() => {
+    setJobs(null)
+    if (!results) return
+    let live = true
+    const digits = q.replace(/\D/g, '')
+    const vehIds = results.vehicles.slice(0, 5).map((v) => v.id)
+    const cols = 'id, job_number, invoice_number, customer_id, vehicle_id, order_status, payment_status, balance, due_date, total, closed_at, workflow_status, created_at'
+    Promise.all([
+      digits.length >= 3 ? supabase.from('repair_orders').select(cols).or(`job_no.ilike.*${digits}*,invoice_no.ilike.*${digits}*`).limit(MAX) : { data: [] },
+      vehIds.length ? supabase.from('repair_orders').select(cols).in('vehicle_id', vehIds).order('created_at', { ascending: false }).limit(10) : { data: [] },
+    ]).then(([a, b]) => {
+      if (!live) return
+      const byNo = (a.data || []).filter((j) => jobNo(j.job_number).includes(digits) || (j.invoice_number && String(invoiceNo(j.invoice_number)).includes(digits)))
+      const seen = new Set()
+      setJobs([...byNo, ...(b.data || [])].filter((j) => (seen.has(j.id) ? false : seen.add(j.id))))
+    })
+    return () => { live = false }
+  }, [results]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A full job or invoice number opens that job straight away.
+  useEffect(() => {
+    if (!jobs || !results) return
+    const digits = q.replace(/\D/g, '')
+    const exact = jobs.filter((j) => jobNo(j.job_number) === digits || (j.invoice_number && invoiceNo(j.invoice_number).replace(/\D/g, '') === digits))
+    if (digits.length >= 6 && exact.length === 1 && results.customers.length === 0 && results.vehicles.length === 0) navigate(`/jobs/${exact[0].id}`, { replace: true })
+  }, [jobs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A single exact plate match opens that vehicle straight away.
   useEffect(() => {
@@ -101,8 +134,19 @@ export default function SearchPage() {
             ))}
           </div>
           <div className="card" style={{ padding: 0 }}>
-            <div className="row" style={{ padding: '14px 14px 8px' }}><Icon name="wrench" size={16} /><b>{t('cust.area.repair-orders')}</b></div>
-            <div className="muted small" style={{ padding: '6px 14px 16px' }}>{t('soon.text', { stage: 4, name: t('stage.jobs') })}</div>
+            <div className="row" style={{ padding: '14px 14px 8px' }}><Icon name="wrench" size={16} /><b>{t('search.jobs')}</b><span className="muted small">{jobs ? jobs.length : ''}</span></div>
+            {!jobs ? <div className="muted small" style={{ padding: '6px 14px 16px' }}>{t('common.loading')}</div>
+              : jobs.length === 0 ? <div className="muted small" style={{ padding: '6px 14px 16px' }}>{t('search.none')}</div>
+                : jobs.slice(0, MAX).map((j) => {
+                  const st = jobState(j, shopToday(timezone))
+                  const v = data.vehicles.find((x) => x.id === j.vehicle_id)
+                  return (
+                    <Link key={j.id} className="resultrow" to={`/jobs/${j.id}`}>
+                      <div className="row" style={{ gap: 6 }}><b>{j.invoice_number ? invoiceNo(j.invoice_number) : `#${jobNo(j.job_number)}`}</b><Badge color={STATE_COLOR[st]}>{t(`job.state.${st}`)}</Badge></div>
+                      <div className="muted small">{[results.byId[j.customer_id]?.display_name, v?.plate, rp(j.total), fmtDate(j.created_at)].filter(Boolean).join(' · ')}</div>
+                    </Link>
+                  )
+                })}
           </div>
         </div>
       )}

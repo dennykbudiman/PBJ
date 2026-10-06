@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Empty, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import TransferForm from './TransferForm'
+import { JobsFor, VehicleInspections } from '../jobs/JobLists'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import { supabase, errorText } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
@@ -20,6 +23,8 @@ function Field({ label, children }) {
 const TABS = ['overview', 'jobs', 'inspections']
 
 export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onEdit, onClose, onChanged, onOpenCustomer, onDeleted }) {
+  const navigate = useNavigate()
+  const { can } = useAuth()
   const { t, lang } = useT()
   const toast = useToast()
   const { timezone } = useShop()
@@ -73,7 +78,10 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
           </div>
         </div>
         <div className="spacer" />
-        {canEdit && <Button size="sm" icon="edit" onClick={onEdit}>{t('common.edit')}</Button>}
+        <div className="row" style={{ gap: 6 }}>
+          {can('edit_jobs') && vehicle.status !== 'sold' && <Button size="sm" variant="primary" icon="plus" onClick={() => navigate(`/jobs/new?vehicle=${vehicle.id}`)}>{t('create.job')}</Button>}
+          {canEdit && <Button size="sm" icon="edit" onClick={onEdit}>{t('common.edit')}</Button>}
+        </div>
       </div>
 
       <div className="subtabs panel-tabs">
@@ -137,9 +145,8 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
             )}
           </>
         )}
-        {tab !== 'overview' && (
-          <Empty icon="wrench" title={t('soon.title')}>{t('soon.text', { stage: 4, name: t('stage.jobs') })}</Empty>
-        )}
+        {tab === 'jobs' && <JobsFor vehicleId={vehicle.id} />}
+        {tab === 'inspections' && <VehicleInspections vehicleId={vehicle.id} />}
       </div>
 
       <TransferForm open={transfer} vehicle={vehicle} customers={customers} minDate={lastTransferDate} onClose={() => setTransfer(false)}

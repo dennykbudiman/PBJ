@@ -7,6 +7,7 @@ import CustomerPanel from './CustomerPanel'
 import CustomerForm from './CustomerForm'
 import VehiclePanel from './VehiclePanel'
 import VehicleForm from './VehicleForm'
+import JobLists from '../jobs/JobLists'
 import { useCustomerData } from './useCustomerData'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
@@ -70,8 +71,7 @@ export default function CustomersArea() {
   if (!['customers', 'vehicles'].includes(tab)) {
     return (
       <Page tabs={tabs}>
-        <PageHead title={t(`cust.area.${tab}`)} />
-        <div className="card"><Empty icon="receipt" title={t('soon.title')}>{t('soon.text', { stage: 4, name: t('stage.jobs') })}</Empty></div>
+        <JobLists tab={tab} />
       </Page>
     )
   }

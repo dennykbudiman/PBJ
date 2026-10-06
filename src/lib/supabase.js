@@ -21,9 +21,23 @@ export function errorText(error, t) {
     return t ? t('err.permission') : 'You do not have permission to do this.'
   }
   if (error.code === '23505') return t ? t('err.duplicate') : 'That value is already in use.'
+  if (error.code === '23503' && /update or delete/i.test(msg)) return t ? t('err.inUse') : 'This is still used elsewhere, so it can\'t be removed.'
   if (/Failed to fetch|NetworkError/i.test(msg)) return t ? t('err.network') : 'Cannot reach the server. Check your connection.'
+  // Database rules are written in English; known ones have an Indonesian wording (key "db:<message>").
+  if (t) {
+    const exact = t(`db:${msg}`)
+    if (exact !== `db:${msg}`) return exact
+    const prefix = DB_PREFIXES.find((x) => msg.startsWith(x))
+    if (prefix) {
+      const tr = t(`db:${prefix}`)
+      if (tr !== `db:${prefix}`) return tr
+    }
+  }
   return msg
 }
+
+// Messages that end with an amount or number; matched by their start.
+const DB_PREFIXES = ['That is more than the balance due on this invoice', 'Payments received (Rp', 'This credit (Rp', 'Invoice number']
 
 export const LOGO_BUCKET = 'shop-assets'
 
