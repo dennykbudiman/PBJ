@@ -1,13 +1,21 @@
 import React from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { FullPageSpinner } from './components/ui'
 import { useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import AccountPending from './pages/AccountPending'
-import ComingSoon, { Dashboard, NotFound, SearchPage } from './pages/ComingSoon'
+import ComingSoon, { Dashboard, NotFound } from './pages/ComingSoon'
 import Settings from './pages/settings/Settings'
+import CustomersArea from './pages/customers/CustomersArea'
+import SearchPage from './pages/SearchPage'
+
+// Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
+function VehiclesRedirect() {
+  const rest = useLocation().pathname.replace(/^\/vehicles/, '')
+  return <Navigate to={`/customers/vehicles${rest}`} replace />
+}
 
 export default function App() {
   const { session, loading, needsPasswordSetup, isStaff } = useAuth()
@@ -23,8 +31,8 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="board" element={<ComingSoon titleKey="nav.board" stage="board" icon="layout-kanban" />} />
         <Route path="calendar" element={<ComingSoon titleKey="nav.calendar" stage="board" icon="calendar" />} />
-        <Route path="customers/*" element={<ComingSoon titleKey="nav.customers" stage="customers" icon="users" />} />
-        <Route path="vehicles/*" element={<ComingSoon titleKey="nav.vehicles" stage="customers" icon="car" />} />
+        <Route path="customers/*" element={<CustomersArea />} />
+        <Route path="vehicles/*" element={<VehiclesRedirect />} />
         <Route path="catalog/*" element={<ComingSoon titleKey="nav.catalog" stage="catalog" icon="book" />} />
         <Route path="jobs/*" element={<ComingSoon titleKey="nav.jobs" stage="jobs" icon="wrench" />} />
         <Route path="inventory/*" element={<ComingSoon titleKey="nav.inventory" stage="inventory" icon="packages" />} />

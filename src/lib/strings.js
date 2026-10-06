@@ -1,5 +1,7 @@
 // All screen text in English and Bahasa Indonesia. Missing Indonesian keys fall back to English.
-export const dict = {
+import { customersEn, customersId } from './strings-customers.js'
+
+const base = {
   en: {
     'common.cancel': 'Cancel', 'common.close': 'Close', 'common.save': 'Save', 'common.delete': 'Delete', 'common.edit': 'Edit',
     'common.remove': 'Remove', 'common.loading': 'Loading…', 'common.soon': 'Soon', 'common.days': 'days',
@@ -246,4 +248,9 @@ export const dict = {
     'users.confirmRemove': '{name} akan dihapus sepenuhnya dari Axle dan tidak bisa masuk lagi. Ini hanya bisa untuk orang yang belum punya catatan pekerjaan; jika sudah, nonaktifkan saja.',
     'users.confirmRemoveYes': 'Ya, hapus', 'users.removed': '{name} dihapus',
   },
+}
+
+export const dict = {
+  en: { ...base.en, ...customersEn },
+  id: { ...base.id, ...customersId },
 }

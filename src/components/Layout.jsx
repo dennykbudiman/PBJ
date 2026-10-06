@@ -22,8 +22,8 @@ export const NAV = [
 // The "+" quick-create menu. Each entry switches on as its screen is built.
 const CREATE = [
   { key: 'create.job', icon: 'wrench' },
-  { key: 'create.customer', icon: 'users' },
-  { key: 'create.vehicle', icon: 'car' },
+  { key: 'create.customer', icon: 'users', to: '/customers?new=1', perm: 'edit_customers' },
+  { key: 'create.vehicle', icon: 'car', to: '/customers/vehicles?new=1', perm: 'edit_customers' },
   { key: 'create.appointment', icon: 'calendar' },
   { key: 'create.po', icon: 'packages' },
 ]
@@ -52,6 +52,8 @@ function SearchBox() {
 
 function CreateMenu() {
   const { t } = useT()
+  const { can } = useAuth()
+  const navigate = useNavigate()
   const pop = usePopover()
   return (
     <div className="popwrap" ref={pop.ref}>
@@ -61,13 +63,19 @@ function CreateMenu() {
       {pop.open && (
         <div className="popover">
           <div className="menuhead small muted" style={{ fontWeight: 700 }}>{t('create.title')}</div>
-          {CREATE.map((c) => (
-            <button key={c.key} className="menuitem" disabled>
-              <Icon name={c.icon} size={16} />
-              {t(c.key)}
-              <span className="soon">{t('common.soon')}</span>
-            </button>
-          ))}
+          {CREATE.map((c) => {
+            const ready = Boolean(c.to)
+            const allowed = ready && can(c.perm)
+            return (
+              <button key={c.key} className="menuitem" disabled={!allowed}
+                onClick={() => { pop.setOpen(false); navigate(c.to) }}
+                title={ready && !allowed ? t('err.permission') : undefined}>
+                <Icon name={c.icon} size={16} />
+                {t(c.key)}
+                {!ready && <span className="soon">{t('common.soon')}</span>}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
@@ -130,6 +138,9 @@ export default function Layout() {
         </nav>
         <div className="topright">
           <SearchBox />
+          <NavLink to="/search" className="iconbtn mobile-only" aria-label={t('nav.search')} title={t('nav.search')}>
+            <Icon name="search" size={20} color="#fff" />
+          </NavLink>
           <CreateMenu />
           <NavLink to="/settings" className="iconbtn" aria-label={t('nav.settings')} title={t('nav.settings')}>
             <Icon name="gear" size={20} color="#fff" />
