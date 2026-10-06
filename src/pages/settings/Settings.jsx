@@ -4,6 +4,7 @@ import { Button, Card, Input, Notice, PageHead, Select, Textarea, Toggle, useToa
 import Icon from '../../components/Icon'
 import LaborRates from './LaborRates'
 import Users from './Users'
+import { useScrollSpy } from '../../lib/useScrollSpy'
 import { supabase, errorText, LOGO_BUCKET } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
@@ -156,7 +157,18 @@ export default function Settings() {
   const [form, setForm] = useState(() => toForm(settings))
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
-  const [active, setActive] = useState('shop')
+  const [active, go] = useScrollSpy(SECTIONS, { prefix: 'set-' })
+  const navRef = useRef(null)
+
+  // On phones the section menu is a sideways strip: keep the highlighted entry in view.
+  useEffect(() => {
+    const nav = navRef.current
+    const btn = nav?.querySelector('button.on')
+    if (nav && btn && nav.scrollWidth > nav.clientWidth) {
+      const left = nav.scrollLeft + btn.getBoundingClientRect().left - nav.getBoundingClientRect().left - 16
+      nav.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+    }
+  }, [active])
 
   // Fill the form when settings first arrive. After that the form only resets on
   // Save or Discard, so e.g. uploading a logo never wipes unsaved edits.
@@ -193,11 +205,6 @@ export default function Settings() {
     toast(t('settings.saved'))
   }
 
-  function go(id) {
-    setActive(id)
-    document.getElementById(`set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
   if (!settings) {
     return (
       <Page>
@@ -218,9 +225,9 @@ export default function Settings() {
         actions={editable && <Button variant="primary" onClick={save} loading={busy} disabled={!dirty}>{t('settings.save')}</Button>}
       />
       <div className="settings">
-        <nav className="settings-nav" aria-label={t('nav.settings')}>
+        <nav className="settings-nav" aria-label={t('nav.settings')} ref={navRef}>
           {SECTIONS.map((s) => (
-            <button key={s} className={active === s ? 'on' : ''} onClick={() => go(s)}>{t(`settings.nav.${s}`)}</button>
+            <button key={s} className={active === s ? 'on' : ''} aria-current={active === s ? 'true' : undefined} onClick={() => go(s)}>{t(`settings.nav.${s}`)}</button>
           ))}
         </nav>
 

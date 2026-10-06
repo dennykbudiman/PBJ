@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Avatar, Badge, Button, Card, Input, Modal, Notice, Select, useToast } from '../../components/ui'
 import { supabase, errorText } from '../../lib/supabase'
+import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
 import { useT } from '../../lib/i18n'
 
@@ -22,7 +23,7 @@ export default function Users({ id }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [savingId, setSavingId] = useState(null)
-  const [confirm, setConfirm] = useState(null) // { person, patch, text }
+  const [confirm, setConfirm] = useState(null) // { person, patch | remove, text }
 
   const load = useCallback(async () => {
     const [p, r] = await Promise.all([
@@ -63,6 +64,26 @@ export default function Users({ id }) {
     load()
   }
 
+  // Edge functions return their message in the response body.
+  async function functionError(data, err) {
+    let message = data?.error
+    if (err && !message) {
+      try { message = (await err.context?.json())?.error } catch { /* not JSON */ }
+      message = message || errorText(err, t)
+    }
+    return message
+  }
+
+  async function remove(person) {
+    setSavingId(person.id)
+    const { data, error: err } = await supabase.functions.invoke('delete-user', { body: { userId: person.id } })
+    setSavingId(null)
+    const message = await functionError(data, err)
+    if (message) return toast(message, 'err')
+    toast(t('users.removed', { name: person.name }))
+    load()
+  }
+
   async function sendInvite() {
     setError(null)
     const f = { ...invite, name: invite.name.trim(), email: invite.email.trim().toLowerCase(), username: invite.username.trim().toLowerCase(), phone: invite.phone.trim() }
@@ -74,12 +95,7 @@ export default function Users({ id }) {
       body: { name: f.name, email: f.email, username: f.username, phone: f.phone || null, roleId: f.role_id, redirectTo: `${window.location.origin}/set-password` },
     })
     setBusy(false)
-    let message = data?.error
-    if (err && !message) {
-      // Functions return their error text in the response body.
-      try { message = (await err.context?.json())?.error } catch { /* not JSON */ }
-      message = message || errorText(err, t)
-    }
+    const message = await functionError(data, err)
     if (message) return setError(message)
     setInvite(null)
     toast(t('users.invited', { email: f.email }))
@@ -97,7 +113,7 @@ export default function Users({ id }) {
         <div className="table" style={{ border: 'none', borderRadius: 0 }}>
           <table>
             <thead>
-              <tr><th>{t('users.person')}</th><th>{t('users.username')}</th><th>{t('users.role')}</th><th>{t('users.status')}</th></tr>
+              <tr><th>{t('users.person')}</th><th>{t('users.username')}</th><th>{t('users.role')}</th><th>{t('users.status')}</th>{manage && <th aria-label={t('users.remove')} />}</tr>
             </thead>
             <tbody>
               {people.map((p) => {
@@ -133,6 +149,16 @@ export default function Users({ id }) {
                         )}
                       </div>
                     </td>
+                    {manage && (
+                      <td style={{ width: 44 }}>
+                        {canTouch(p) && !ownerLocked(p) && (
+                          <button className="btn ghost sm danger" disabled={savingId === p.id} title={t('users.remove')} aria-label={t('users.removeWho', { name: p.name })}
+                            onClick={() => setConfirm({ person: p, remove: true, text: t('users.confirmRemove', { name: p.name }) })}>
+                            <Icon name="trash" size={15} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -143,7 +169,8 @@ export default function Users({ id }) {
 
       <div className="sectionlabel">{t('users.rolesTitle')}</div>
       <div className="rolelist">
-        <b>{t('role.Owner')} / {t('role.Admin')}</b><span>{t('users.desc.owner')}</span>
+        <b>{t('role.Owner')}</b><span>{t('users.desc.owner')}</span>
+        <b>{t('role.Admin')}</b><span>{t('users.desc.admin')}</span>
         <b>{t('role.Service advisor')}</b><span>{t('users.desc.advisor')}</span>
         <b>{t('role.Technician')}</b><span>{t('users.desc.technician')}</span>
         <b>{t('role.Viewer')}</b><span>{t('users.desc.viewer')}</span>
@@ -157,7 +184,10 @@ export default function Users({ id }) {
         title={t('users.confirmTitle')}
         footer={<>
           <Button onClick={() => setConfirm(null)}>{t('common.cancel')}</Button>
-          <Button variant="primary" onClick={() => { const c = confirm; setConfirm(null); change(c.person, c.patch) }}>{t('users.confirmYes')}</Button>
+          <Button variant={confirm?.remove ? 'danger' : 'primary'} className={confirm?.remove ? 'solid' : ''}
+            onClick={() => { const c = confirm; setConfirm(null); if (c.remove) remove(c.person); else change(c.person, c.patch) }}>
+            {confirm?.remove ? t('users.confirmRemoveYes') : t('users.confirmYes')}
+          </Button>
         </>}
       >
         <div style={{ lineHeight: 1.55 }}>{confirm?.text}</div>

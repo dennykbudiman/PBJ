@@ -99,7 +99,8 @@ export const dict = {
     'users.status.active': 'Active', 'users.status.invited': 'Waiting', 'users.status.disabled': 'Disabled',
     'users.activate': 'Activate', 'users.disable': 'Disable', 'users.you': 'you', 'users.updated': '{name} updated',
     'users.rolesTitle': 'What each role can do',
-    'users.desc.owner': 'Everything, including settings, users, voiding invoices, issuing and refunding credits, and changing payments on issued invoices',
+    'users.desc.owner': 'Everything, including settings, users, voiding invoices, issuing and refunding credits, changing payments on issued invoices, and making or removing Owners',
+    'users.desc.admin': 'The same as an Owner, except they can\'t change, disable or remove an Owner, or make someone an Owner',
     'users.desc.advisor': 'Jobs, invoices, payments, customers, catalog and inventory',
     'users.desc.technician': 'View only (assigned on jobs and the calendar)',
     'users.desc.viewer': 'View only',
@@ -118,6 +119,9 @@ export const dict = {
     'users.confirmDisable': '{name} will be signed out of Axle and can\'t sign in again until someone activates the account.',
     'users.confirmOwner': '{name} will become an Owner, with full access to everything including users and settings.',
     'nav.language': 'Language', 'nav.main': 'Main menu',
+    'users.remove': 'Remove', 'users.removeWho': 'Remove {name}',
+    'users.confirmRemove': '{name} will be removed from Axle completely and can\'t sign in again. This only works for people with no work recorded yet; otherwise disable them instead.',
+    'users.confirmRemoveYes': 'Yes, remove', 'users.removed': '{name} removed',
   },
 
   id: {
@@ -218,7 +222,8 @@ export const dict = {
     'users.status.active': 'Aktif', 'users.status.invited': 'Menunggu', 'users.status.disabled': 'Nonaktif',
     'users.activate': 'Aktifkan', 'users.disable': 'Nonaktifkan', 'users.you': 'Anda', 'users.updated': '{name} diperbarui',
     'users.rolesTitle': 'Hak setiap peran',
-    'users.desc.owner': 'Semuanya, termasuk pengaturan, pengguna, membatalkan invoice, menerbitkan dan mengembalikan kredit, serta mengubah pembayaran pada invoice terbit',
+    'users.desc.owner': 'Semuanya, termasuk pengaturan, pengguna, membatalkan invoice, menerbitkan dan mengembalikan kredit, mengubah pembayaran pada invoice terbit, serta menambah atau menghapus Pemilik',
+    'users.desc.admin': 'Sama seperti Pemilik, kecuali tidak bisa mengubah, menonaktifkan atau menghapus Pemilik, atau menjadikan seseorang Pemilik',
     'users.desc.advisor': 'Pekerjaan, invoice, pembayaran, pelanggan, katalog dan inventaris',
     'users.desc.technician': 'Hanya lihat (ditugaskan di pekerjaan dan kalender)',
     'users.desc.viewer': 'Hanya lihat',
@@ -237,5 +242,8 @@ export const dict = {
     'users.confirmDisable': '{name} akan dikeluarkan dari Axle dan tidak bisa masuk lagi sampai akunnya diaktifkan.',
     'users.confirmOwner': '{name} akan menjadi Pemilik, dengan akses penuh termasuk pengguna dan pengaturan.',
     'nav.language': 'Bahasa', 'nav.main': 'Menu utama',
+    'users.remove': 'Hapus', 'users.removeWho': 'Hapus {name}',
+    'users.confirmRemove': '{name} akan dihapus sepenuhnya dari Axle dan tidak bisa masuk lagi. Ini hanya bisa untuk orang yang belum punya catatan pekerjaan; jika sudah, nonaktifkan saja.',
+    'users.confirmRemoveYes': 'Ya, hapus', 'users.removed': '{name} dihapus',
   },
 }

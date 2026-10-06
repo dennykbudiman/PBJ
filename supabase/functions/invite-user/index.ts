@@ -60,6 +60,11 @@ Deno.serve(async (req) => {
 
     const { data: role } = await admin.from('roles').select('id, name').eq('id', roleId).maybeSingle()
     if (!role) return json({ error: 'That role does not exist.' }, 400)
+    if (role.name === 'Owner') {
+      const { data: me } = await admin.from('profiles').select('roles(name)').eq('id', who.user.id).maybeSingle()
+      const myRole = Array.isArray(me?.roles) ? me?.roles[0]?.name : (me?.roles as any)?.name
+      if (myRole !== 'Owner') return json({ error: 'Only an Owner can make someone an Owner.' }, 403)
+    }
 
     const { data: taken } = await admin.from('profiles').select('id').ilike('username', username.replace(/[\\%_]/g, (c) => `\\${c}`)).limit(1)
     if (taken && taken.length) return json({ error: 'That username is already taken.' }, 409)
