@@ -129,7 +129,7 @@ export default function JobPage({ id }) {
               run={run} busy={busy} openApproval={(ids) => open('approval', { preselect: ids })} />
           )}
           {tab === 'concerns' && <ConcernsTab job={job} editable={editable} run={run} busy={busy} />}
-          {tab === 'inspections' && <JobInspections job={job} cat={cat} staff={staff} editable={workEditable} run={run} busy={busy} />}
+          {tab === 'inspections' && <JobInspections job={job} cat={cat} staff={staff} editable={editable} run={run} busy={busy} />}
           {tab === 'activity' && <JobActivity job={job} cat={cat} staff={staff} showCost={showCost} />}
 
           {(editable || invoiced) && (

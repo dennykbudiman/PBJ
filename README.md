@@ -37,7 +37,7 @@ npm run dev
 - `src/components` — app layout (top bar), shared UI pieces
 - `src/pages` — screens; `pages/settings` is the Settings page
 - `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs` — Customers & vehicles, Catalog, Jobs
-- `supabase/migrations` — database migrations 100–119 (100–118 applied to staging; 119 records concerns, inspections and credits in a job's activity)
+- `supabase/migrations` — database migrations 100–120 (100–119 applied to staging; 120 locks inspections once a job is invoiced)
 - `supabase/functions/invite-user` — invites a person (deployed to staging)
 
 ## Rules the screens rely on

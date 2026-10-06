@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Badge, Button, Empty, Modal, Select } from '../../components/ui'
+import { Badge, Button, Empty, Modal, Notice, Select } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
@@ -31,6 +31,7 @@ export default function JobInspections({ job, cat, staff, editable, run, busy })
   const waiting = job.services.filter((s) => s.checklist_id && !job.inspections.some((x) => x.service_id === s.id))
   return (
     <div>
+      {job.ro.order_status === 'invoice' && <Notice kind="info" style={{ marginBottom: 14 }}>{t('job.inspLocked')}</Notice>}
       {editable && (
         <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
           {waiting.map((s) => {
