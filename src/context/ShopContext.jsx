@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase, publicFileUrl, LOGO_BUCKET } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { applyTheme, rememberTheme } from '../lib/theme'
 
 const ShopContext = createContext(null)
 
@@ -23,6 +24,13 @@ export function ShopProvider({ children }) {
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // The shop's colour theme applies to everyone once settings load.
+  useEffect(() => {
+    if (!settings?.theme) return
+    applyTheme(settings.theme)
+    rememberTheme(settings.theme)
+  }, [settings?.theme])
 
   const value = useMemo(
     () => ({

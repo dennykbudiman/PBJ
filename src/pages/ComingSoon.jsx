@@ -7,7 +7,7 @@ import { useT } from '../lib/i18n'
 
 // Build order agreed for step 3. Each placeholder says which stage brings it.
 export const STAGES = ['foundations', 'customers', 'catalog', 'jobs', 'print', 'board', 'inventory', 'schedules', 'reports']
-export const READY = 2 // stages built so far
+export const READY = 3 // stages built so far
 
 export default function ComingSoon({ titleKey, stage, icon }) {
   const { t } = useT()

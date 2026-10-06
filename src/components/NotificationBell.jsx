@@ -106,7 +106,7 @@ export default function NotificationBell() {
           <div style={{ maxHeight: 420, overflowY: 'auto' }}>
             {items.length === 0 && <div className="muted small" style={{ padding: '28px 14px', textAlign: 'center' }}>{t('notif.empty')}</div>}
             {items.map((n) => (
-              <button key={n.id} className="menuitem" style={{ alignItems: 'flex-start', fontWeight: 500, background: isUnread(n) ? '#F7FBFA' : undefined }} onClick={() => open(n)}>
+              <button key={n.id} className="menuitem" style={{ alignItems: 'flex-start', fontWeight: 500, background: isUnread(n) ? 'var(--accent-soft)' : undefined }} onClick={() => open(n)}>
                 <span style={{ width: 8, height: 8, borderRadius: 99, marginTop: 5, flexShrink: 0, background: isUnread(n) ? SEVERITY_DOT[n.severity] || SEVERITY_DOT.info : 'transparent' }} />
                 <span style={{ minWidth: 0, flex: 1 }}>
                   <span style={{ display: 'block', fontWeight: isUnread(n) ? 800 : 600 }}>{n.title}</span>

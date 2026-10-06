@@ -1,5 +1,6 @@
 // All screen text in English and Bahasa Indonesia. Missing Indonesian keys fall back to English.
 import { customersEn, customersId } from './strings-customers.js'
+import { catalogEn, catalogId } from './strings-catalog.js'
 
 const base = {
   en: {
@@ -251,6 +252,6 @@ const base = {
 }
 
 export const dict = {
-  en: { ...base.en, ...customersEn },
-  id: { ...base.id, ...customersId },
+  en: { ...base.en, ...customersEn, ...catalogEn },
+  id: { ...base.id, ...customersId, ...catalogId },
 }

@@ -24,6 +24,7 @@ const CREATE = [
   { key: 'create.job', icon: 'wrench' },
   { key: 'create.customer', icon: 'users', to: '/customers?new=1', perm: 'edit_customers' },
   { key: 'create.vehicle', icon: 'car', to: '/customers/vehicles?new=1', perm: 'edit_customers' },
+  { key: 'create.part', icon: 'book', to: '/catalog/parts/new', perm: 'edit_catalog' },
   { key: 'create.appointment', icon: 'calendar' },
   { key: 'create.po', icon: 'packages' },
 ]

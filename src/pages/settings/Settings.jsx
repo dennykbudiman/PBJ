@@ -4,6 +4,8 @@ import { Button, Card, Input, Notice, PageHead, Select, Textarea, Toggle, useToa
 import Icon from '../../components/Icon'
 import LaborRates from './LaborRates'
 import Users from './Users'
+import Appearance, { themeError } from './Appearance'
+import { applyTheme, DEFAULT_THEME, normTheme } from '../../lib/theme'
 import { useScrollSpy } from '../../lib/useScrollSpy'
 import { supabase, errorText, LOGO_BUCKET } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -11,7 +13,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { initials, invoiceNo, jobNo, stockPoNo, readAmount, parseDecimal, rp, num } from '../../lib/format'
 
-const SECTIONS = ['shop', 'language', 'numbering', 'fees', 'labor', 'users']
+const ALL_SECTIONS = ['shop', 'appearance', 'language', 'numbering', 'fees', 'labor', 'users']
 
 // shop_settings columns edited on this page, with how each is read from the form.
 const TEXT = ['shop_name', 'legal_name', 'npwp', 'address', 'phone', 'email', 'bank_details', 'terms_id', 'terms_en', 'tax_name']
@@ -33,6 +35,7 @@ function toForm(s) {
   // Shop supplies rate is a percentage, or a Rupiah amount when the type is "fixed".
   const r = s?.shop_supplies_rate
   f.shop_supplies_rate = r == null ? '' : s.shop_supplies_type === 'fixed' ? num(r) : String(Number(r)).replace('.', ',')
+  f.theme = normTheme(s?.theme)
   return f
 }
 
@@ -73,6 +76,9 @@ function fromForm(f, s, t) {
   const mx = readAmount(f.shop_supplies_max)
   if (mn !== null && mx !== null && !Number.isNaN(mn) && !Number.isNaN(mx) && mn > mx) errors.shop_supplies_max = t('settings.minMax')
   if (f.email.trim() && !/^\S+@\S+\.\S+$/.test(f.email.trim())) errors.email = t('settings.badEmail')
+  const te = themeError(f.theme, t)
+  if (te) errors.theme = te
+  else if (JSON.stringify(normTheme(f.theme)) !== JSON.stringify(normTheme(s.theme))) patch.theme = normTheme(f.theme)
   return { patch, errors }
 }
 
@@ -157,6 +163,8 @@ export default function Settings() {
   const [form, setForm] = useState(() => toForm(settings))
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
+  // Appearance (colour theme) is only for people who can change settings (Owner, Admin).
+  const SECTIONS = editable ? ALL_SECTIONS : ALL_SECTIONS.filter((x) => x !== 'appearance')
   const [active, go] = useScrollSpy(SECTIONS, { prefix: 'set-' })
   const navRef = useRef(null)
 
@@ -188,6 +196,15 @@ export default function Settings() {
     window.addEventListener('beforeunload', h)
     return () => window.removeEventListener('beforeunload', h)
   }, [dirty])
+
+  // Preview the theme being chosen; go back to the saved one when leaving the page.
+  useEffect(() => {
+    if (!settings) return // keep the remembered theme until the saved settings arrive
+    if (form.theme && !themeError(form.theme, t)) applyTheme(form.theme)
+  }, [form.theme, settings]) // eslint-disable-line react-hooks/exhaustive-deps
+  const savedTheme = useRef(settings?.theme)
+  savedTheme.current = settings?.theme
+  useEffect(() => () => applyTheme(savedTheme.current ?? DEFAULT_THEME), [])
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e?.target ? e.target.value : e }))
 
@@ -256,6 +273,11 @@ export default function Settings() {
               />
             </div>
           </Card>
+
+          {editable && (
+            <Appearance id="set-appearance" value={form.theme} error={errors.theme}
+              onChange={(theme) => { setForm((f) => ({ ...f, theme })); setErrors((e) => ({ ...e, theme: null })) }} />
+          )}
 
           <Card title={t('settings.nav.language')} id="set-language">
             <div className="grid3">

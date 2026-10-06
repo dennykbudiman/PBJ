@@ -10,6 +10,7 @@ import ComingSoon, { Dashboard, NotFound } from './pages/ComingSoon'
 import Settings from './pages/settings/Settings'
 import CustomersArea from './pages/customers/CustomersArea'
 import SearchPage from './pages/SearchPage'
+import CatalogArea from './pages/catalog/CatalogArea'
 
 // Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
 function VehiclesRedirect() {
@@ -33,7 +34,7 @@ export default function App() {
         <Route path="calendar" element={<ComingSoon titleKey="nav.calendar" stage="board" icon="calendar" />} />
         <Route path="customers/*" element={<CustomersArea />} />
         <Route path="vehicles/*" element={<VehiclesRedirect />} />
-        <Route path="catalog/*" element={<ComingSoon titleKey="nav.catalog" stage="catalog" icon="book" />} />
+        <Route path="catalog/*" element={<CatalogArea />} />
         <Route path="jobs/*" element={<ComingSoon titleKey="nav.jobs" stage="jobs" icon="wrench" />} />
         <Route path="inventory/*" element={<ComingSoon titleKey="nav.inventory" stage="inventory" icon="packages" />} />
         <Route path="reports/*" element={<ComingSoon titleKey="nav.reports" stage="reports" icon="chart-bar" />} />
