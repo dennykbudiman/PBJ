@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Badge, Input, Toggle, useToast } from '../../components/ui'
 import { EditorPanel, EmptyCard, ListShell, RowButtons, SearchBox, Section, StatusSelect, RowLink, deleteErrorText, statusMatch, syncRows } from './common'
 import { supabase, errorText } from '../../lib/supabase'
+import History from './History'
 import { useT } from '../../lib/i18n'
 
 export const FLAGS = ['green', 'yellow', 'red']
@@ -102,6 +103,24 @@ function InspectionEditor({ item, data, groups, canEdit, onClose, onSaved, onDel
   const setNote = (i, patch) => setNotes((ns) => ns.map((n, j) => (j === i ? { ...n, ...patch } : n)))
   const usedIn = item ? data.checklistItems.filter((c) => c.item_id === item.id).map((c) => data.checklists.find((l) => l.id === c.checklist_id)?.name).filter(Boolean) : []
 
+  // Copy the canned notes of another inspection point, skipping notes this one already has.
+  const noteCount = data.notes.reduce((m, n) => ({ ...m, [n.item_id]: (m[n.item_id] || 0) + 1 }), {})
+  const sources = data.insp.filter((x) => x.id !== item?.id && noteCount[x.id])
+    .sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name))
+  const sourceGroups = [...new Set(sources.map((x) => x.category || ''))]
+  function copyFrom(sourceId) {
+    const src = data.insp.find((x) => x.id === sourceId)
+    if (!src) return
+    const have = new Set(notes.map((n) => n.note.trim().toLowerCase()).filter(Boolean))
+    const add = data.notes.filter((n) => n.item_id === sourceId && !have.has(n.note.trim().toLowerCase()))
+      .sort((a, b) => FLAGS.indexOf(flagOf(a)) - FLAGS.indexOf(flagOf(b)))
+      .map((n) => ({ key: ++rowKey, note: n.note, flag: flagOf(n) }))
+    // Empty rows are replaced by the copied notes rather than left in between.
+    setNotes((ns) => [...ns.filter((n) => n.note.trim()), ...add])
+    toast(add.length ? t('cat.copiedNotes', { n: add.length, name: src.name }) : t('cat.copiedNone', { name: src.name }))
+    if (!f.category.trim() && src.category) setF((x) => ({ ...x, category: src.category }))
+  }
+
   async function save() {
     const e = {}
     if (!f.name.trim()) e.name = t('settings.required')
@@ -166,7 +185,22 @@ function InspectionEditor({ item, data, groups, canEdit, onClose, onSaved, onDel
             </div>
           ))}
         </div>
-        {canEdit && <button type="button" className="linkbtn small mt" onClick={() => setNotes((ns) => [...ns, { key: ++rowKey, note: '', flag: 'green' }])}>+ {t('cat.addNote')}</button>}
+        {canEdit && (
+          <div className="row wrap mt" style={{ gap: 12 }}>
+            <button type="button" className="linkbtn small" onClick={() => setNotes((ns) => [...ns, { key: ++rowKey, note: '', flag: 'green' }])}>+ {t('cat.addNote')}</button>
+            {sources.length > 0 && (
+              <select className="select" style={{ width: 'auto', flex: '1 1 200px', minHeight: 32, padding: '5px 30px 5px 10px' }} value="" aria-label={t('cat.copyNotes')}
+                onChange={(e) => copyFrom(e.target.value)}>
+                <option value="">{t('cat.copyNotes')}</option>
+                {sourceGroups.map((g) => (
+                  <optgroup key={g} label={g || t('cat.noGroup')}>
+                    {sources.filter((x) => (x.category || '') === g).map((x) => <option key={x.id} value={x.id}>{x.name} ({noteCount[x.id]})</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
         <div className="hint">{t('cat.notesHint2')}</div>
       </Section>
 
@@ -180,6 +214,7 @@ function InspectionEditor({ item, data, groups, canEdit, onClose, onSaved, onDel
       <Section title={t('cat.settings')}>
         <Toggle checked={f.active} onChange={set('active')} disabled={dis} label={t('cat.activeLabel')} />
       </Section>
+      {!isNew && <Section title={t('cat.hist.section')}><History entityType={'inspection_items'} entityId={item.id} data={data} /></Section>}
     </EditorPanel>
   )
 }

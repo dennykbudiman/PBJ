@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Badge, Input, Select, Toggle, useToast } from '../../components/ui'
 import { EditorPanel, EmptyCard, ListShell, RowButtons, SearchBox, Section, StatusSelect, RowLink, deleteErrorText, move, parseTags, statusMatch, syncRows } from './common'
 import { supabase, errorText } from '../../lib/supabase'
+import History from './History'
 import { useT } from '../../lib/i18n'
 import { num, parseDecimal, readAmount, rp } from '../../lib/format'
 
@@ -277,6 +278,7 @@ function TemplateEditor({ flat, template, data, canEdit, onClose, onSaved, onDel
       <Section title={t('cat.settings')}>
         <Toggle checked={f.active} onChange={set('active')} disabled={dis} label={t('cat.activeLabel')} />
       </Section>
+      {!isNew && <Section title={t('cat.hist.section')}><History entityType={'service_templates'} entityId={template.id} data={data} /></Section>}
     </EditorPanel>
   )
 }

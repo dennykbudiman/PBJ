@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Badge, Input, Select, Textarea, Toggle, useToast } from '../../components/ui'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, StatusSelect, RowLink, deleteErrorText, statusMatch } from './common'
 import { supabase, errorText } from '../../lib/supabase'
+import History from './History'
 import { useT } from '../../lib/i18n'
 
 const TYPE_COLOR = { internal: 'blue', sublet: 'purple' }
@@ -156,6 +157,7 @@ function SupplierEditor({ supplier, data, canEdit, onClose, onSaved, onDeleted }
           </div>
         </Section>
       )}
+      {!isNew && <Section title={t('cat.hist.section')}><History entityType={'suppliers'} entityId={supplier.id} data={data} /></Section>}
     </EditorPanel>
   )
 }

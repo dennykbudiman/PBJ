@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { Badge, Input, Select, useToast } from '../../components/ui'
-import { EditorPanel, EmptyCard, ListShell, SearchBox, RowLink, deleteErrorText } from './common'
+import { EditorPanel, EmptyCard, Section, ListShell, SearchBox, RowLink, deleteErrorText } from './common'
 import { categoryPath } from './useCatalogData'
 import { supabase, errorText } from '../../lib/supabase'
+import History from './History'
 import { useT } from '../../lib/i18n'
 
 export const APPLIES = ['part', 'labor', 'fee', 'any']
@@ -142,6 +143,7 @@ function CategoryEditor({ category, data, canEdit, onClose, onSaved, onDeleted }
           options={APPLIES.map((a) => ({ value: a, label: t(`cat.applies.${a}`) }))} />
       </div>
       {!isNew && (itemCount > 0 || subCount > 0) && <div className="hint" style={{ marginTop: 12 }}>{t('cat.categoryInUse')}</div>}
+      {!isNew && <Section title={t('cat.hist.section')}><History entityType={'categories'} entityId={category.id} data={data} /></Section>}
     </EditorPanel>
   )
 }

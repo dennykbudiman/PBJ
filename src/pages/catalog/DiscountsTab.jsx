@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Badge, Input, Select, Toggle, useToast } from '../../components/ui'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, StatusSelect, RowLink, deleteErrorText, statusMatch } from './common'
 import { supabase, errorText } from '../../lib/supabase'
+import History from './History'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { fmtDate, num, parseDecimal, readAmount, rp } from '../../lib/format'
@@ -38,7 +39,7 @@ export default function DiscountsTab({ data, id, canEdit, reload, go }) {
   const isNew = id === 'new'
   const selected = isNew ? null : data.discounts.find((x) => x.id === id)
   const panel = id && (isNew || selected) ? (
-    <DiscountEditor key={`${id}:${data.version}`} discount={selected} canEdit={canEdit} today={today}
+    <DiscountEditor key={`${id}:${data.version}`} discount={selected} data={data} canEdit={canEdit} today={today}
       onClose={() => go(base)}
       onSaved={async (row) => { await reload(); go(`${base}/${row.id}`) }}
       onDeleted={async () => { await reload(); go(base) }} />
@@ -82,7 +83,7 @@ export default function DiscountsTab({ data, id, canEdit, reload, go }) {
   )
 }
 
-function DiscountEditor({ discount, canEdit, today, onClose, onSaved, onDeleted }) {
+function DiscountEditor({ discount, data, canEdit, today, onClose, onSaved, onDeleted }) {
   const { t } = useT()
   const toast = useToast()
   const isNew = !discount
@@ -161,6 +162,7 @@ function DiscountEditor({ discount, canEdit, today, onClose, onSaved, onDeleted 
       <Section title={t('cat.settings')}>
         <Toggle checked={f.active} onChange={set('active')} disabled={dis} label={t('cat.activeLabel')} />
       </Section>
+      {!isNew && <Section title={t('cat.hist.section')}><History entityType={'discounts'} entityId={discount.id} data={data} /></Section>}
     </EditorPanel>
   )
 }

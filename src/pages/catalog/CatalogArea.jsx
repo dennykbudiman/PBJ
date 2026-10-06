@@ -14,7 +14,7 @@ import ChecklistsTab from './ChecklistsTab'
 import CategoriesTab from './CategoriesTab'
 import SuppliersTab from './SuppliersTab'
 
-export const CATALOG_TABS = ['labor', 'parts', 'fees', 'flat-rate', 'discounts', 'bundles', 'inspections', 'checklists', 'categories', 'suppliers']
+export const CATALOG_TABS = ['labor', 'parts', 'fees', 'discounts', 'flat-rate', 'bundles', 'inspections', 'checklists', 'categories', 'suppliers']
 
 // /catalog → Parts, /catalog/<tab>, /catalog/<tab>/<id>, /catalog/<tab>/new
 export function parseCatalogPath(pathname) {
@@ -37,7 +37,7 @@ export default function CatalogArea() {
   if (!data) return <Page tabs={tabs}><div className="muted">{t('common.loading')}</div></Page>
 
   // After a partial load failure, editing is paused so child lists aren't saved over rows that didn't load.
-  const props = { tab, data, id, canEdit: canEdit && !error, showCost: can('view_costs'), reload, go }
+  const props = { tab, data, id, canEdit: canEdit && !error, showCost: can('view_costs'), canAdjust: can('adjust_stock'), reload, go }
   let body
   if (['labor', 'parts', 'fees'].includes(tab)) body = <ItemsTab key={tab} {...props} />
   else if (tab === 'flat-rate' || tab === 'bundles') body = <TemplatesTab key={tab} {...props} />

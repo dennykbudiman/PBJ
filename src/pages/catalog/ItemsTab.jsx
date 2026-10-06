@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Badge, Input, Select, Textarea, Toggle, useToast } from '../../components/ui'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Badge, Button, Input, Select, Textarea, Toggle, useToast } from '../../components/ui'
+import Icon from '../../components/Icon'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, RowLink, deleteErrorText } from './common'
 import { categoryPath } from './useCatalogData'
 import { supabase, errorText } from '../../lib/supabase'
+import History from './History'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { num, parseDecimal, readAmount, rp } from '../../lib/format'
@@ -14,7 +16,7 @@ const dec = (v) => (v == null || v === '' ? '' : String(Number(v)).replace('.', 
 const amt = (v) => (v == null || v === '' ? '' : num(v))
 
 // Labor, Parts and Fees are all catalog items; this tab shows one type at a time.
-export default function ItemsTab({ tab, data, id, canEdit, showCost, reload, go }) {
+export default function ItemsTab({ tab, data, id, canEdit, showCost, canAdjust, reload, go }) {
   const { t } = useT()
   const type = TYPE_OF_TAB[tab]
   const [q, setQ] = useState('')
@@ -46,7 +48,8 @@ export default function ItemsTab({ tab, data, id, canEdit, showCost, reload, go 
   const total = data.items.filter((x) => x.item_type === type).length
 
   const panel = id && (isNew || selected) ? (
-    <ItemEditor key={`${id}:${data.version}`} type={type} item={selected} data={data} canEdit={canEdit} showCost={showCost}
+    <ItemEditor key={`${id}:${data.version}`} type={type} item={selected} data={data} canEdit={canEdit} showCost={showCost} canAdjust={canAdjust}
+      onAdjusted={reload}
       onClose={() => go(base)}
       onSaved={async (row) => { await reload(); go(`${base}/${row.id}`) }}
       onDeleted={async () => { await reload(); go(base) }} />
@@ -135,7 +138,7 @@ function emptyItem(type, settings, rates) {
   }
 }
 
-function ItemEditor({ type, item, data, canEdit, showCost, onClose, onSaved, onDeleted }) {
+function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted, onClose, onSaved, onDeleted }) {
   const { t } = useT()
   const toast = useToast()
   const { settings } = useShop()
@@ -157,6 +160,10 @@ function ItemEditor({ type, item, data, canEdit, showCost, onClose, onSaved, onD
   const [msg, setMsg] = useState(null)
   const dis = !canEdit
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? e.target.value : e }))
+  // Unsaved edits block a stock adjustment, because the adjustment reloads the part.
+  const initial = useRef(null)
+  if (initial.current === null) initial.current = JSON.stringify([f, fees])
+  const dirty = JSON.stringify([f, fees]) !== initial.current
 
   // Labor price follows hours × rate unless someone typed a different price.
   const rate = data.rateById[f.rate_id]
@@ -384,6 +391,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, onClose, onSaved, onD
             </div>
           )}
           {f.track_inventory && <div className="hint">{isNew ? t('cat.openingHint') : t('cat.stockHint')}</div>}
+          {!isNew && item.track_inventory && canAdjust && <StockAdjust item={item} onHand={onHand} dirty={dirty} onDone={onAdjusted} />}
         </Section>
       )}
 
@@ -396,6 +404,62 @@ function ItemEditor({ type, item, data, canEdit, showCost, onClose, onSaved, onD
         </div>
         <Textarea label={t('cat.notes')} value={f.notes} onChange={set('notes')} disabled={dis} rows={2} hint={t('cat.notesHint')} fieldClass="mt" />
       </Section>
+      {!isNew && <Section title={t('cat.hist.section')}><History entityType={'catalog_items'} entityId={item.id} data={data} showCost={showCost} stock={type === 'part'} /></Section>}
     </EditorPanel>
+  )
+}
+
+// Owners and Admins can correct the live stock count. It takes a deliberate click, a new count
+// and a reason; the database works out the difference from the live count and logs who did it.
+function StockAdjust({ item, onHand, dirty, onDone }) {
+  const { t } = useT()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [count, setCount] = useState('')
+  const [reason, setReason] = useState('')
+  const [errors, setErrors] = useState({})
+  const [busy, setBusy] = useState(false)
+  const next = parseDecimal(count)
+  const delta = next == null ? null : Math.round((next - onHand) * 100) / 100
+
+  async function confirm() {
+    const e = {}
+    if (next === null || next < 0 || next > 1000000) e.count = t('cat.adjust.countRule')
+    else if (delta === 0) e.count = t('cat.adjust.same')
+    if (!reason.trim()) e.reason = t('settings.required')
+    setErrors(e)
+    if (Object.keys(e).length) return
+    setBusy(true)
+    const { error } = await supabase.rpc('adjust_stock', { p_item: item.id, p_new_qty: next, p_note: reason.trim() })
+    if (error) { setBusy(false); return setErrors({ rpc: errorText(error, t) }) }
+    toast(t('cat.adjust.done', { name: item.name, n: num(next, 2) }))
+    await onDone()
+    setBusy(false)
+  }
+
+  if (!open) {
+    return (
+      <div className="row wrap mt" style={{ gap: 8 }}>
+        <Button size="sm" icon="lock" disabled={dirty} onClick={() => { setCount(String(onHand).replace('.', ',')); setReason(''); setErrors({}); setOpen(true) }}>{t('cat.adjust.button')}</Button>
+        <span className="hint" style={{ margin: 0 }}>{dirty ? t('cat.adjust.saveFirst') : t('cat.adjust.who')}</span>
+      </div>
+    )
+  }
+  return (
+    <div className="adjustbox" role="group" aria-label={t('cat.adjust.title')}>
+      <div className="row" style={{ gap: 6, fontWeight: 800 }}><Icon name="lock" size={14} /> {t('cat.adjust.title')}</div>
+      <div className="hint" style={{ marginTop: 2, marginBottom: 10 }}>{t('cat.adjust.intro', { n: num(onHand, 2) })}</div>
+      {errors.rpc && <div className="error" style={{ marginBottom: 8 }}>{errors.rpc}</div>}
+      <div className="grid2">
+        <Input label={t('cat.adjust.newCount')} value={count} onChange={(e) => { setCount(e.target.value); setErrors((x) => ({ ...x, count: null })) }} inputMode="decimal" error={errors.count} autoFocus
+          hint={delta != null && delta !== 0 && !errors.count ? t('cat.adjust.change', { d: `${delta > 0 ? '+' : ''}${num(delta, 2)}` }) : null} />
+        <Input label={t('cat.adjust.reason')} value={reason} onChange={(e) => { setReason(e.target.value); setErrors((x) => ({ ...x, reason: null })) }} maxLength={500} error={errors.reason} placeholder={t('cat.adjust.reasonExample')} />
+      </div>
+      <div className="row mt" style={{ gap: 8 }}>
+        <div className="spacer" />
+        <Button size="sm" onClick={() => setOpen(false)} disabled={busy}>{t('common.cancel')}</Button>
+        <Button size="sm" variant="primary" onClick={confirm} loading={busy}>{t('cat.adjust.confirm')}</Button>
+      </div>
+    </div>
   )
 }
