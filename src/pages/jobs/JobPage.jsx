@@ -16,7 +16,9 @@ import { BlurInput, MoreMenu, useRun } from './common'
 import ServicesTab from './ServicesTab'
 import JobInspections from './JobInspections'
 import JobActivity from './JobActivity'
-import { ApprovalsCard, ProfitCard, StatusCard, TotalsCard } from './JobSide'
+import { AppointmentsCard, ApprovalsCard, ProfitCard, StatusCard, TotalsCard } from './JobSide'
+import { DeferredBanner } from './Deferred'
+import AppointmentModal from '../calendar/AppointmentModal'
 import { ApprovalModal, CreditModal, DiscountModal, FeeModal, InvoiceModal, PaymentModal, ReasonModal } from './JobModals'
 
 const TABS = ['services', 'concerns', 'inspections', 'activity']
@@ -122,6 +124,8 @@ export default function JobPage({ id }) {
             </div>
           </section>
 
+          <DeferredBanner job={job} editable={editable} onCarried={reload} />
+
           <div className="card tabcard">{tabs}</div>
 
           {tab === 'services' && (
@@ -143,6 +147,7 @@ export default function JobPage({ id }) {
 
         <aside className="jobside">
           <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')} />
+          <AppointmentsCard job={job} staff={staff} canBook={editable} onOpen={(a) => open('appt', { appointment: a })} onNew={() => open('appt', {})} />
           <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} editable={editable} canVoid={canVoid && invoiced}
             run={run} onInvoice={() => open('invoice')} onVoid={() => open('void')} />
           <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canVoid} canCredit={canPay || canIssue}
@@ -151,6 +156,9 @@ export default function JobPage({ id }) {
         </aside>
       </div>
 
+      <AppointmentModal open={modal?.kind === 'appt'} onClose={close} appointment={modal?.appointment}
+        defaults={{ ro_id: ro.id, customer_id: ro.customer_id, vehicle_id: ro.vehicle_id }}
+        onSaved={() => { close(); reload() }} onDeleted={() => { close(); reload() }} />
       <ApprovalModal open={modal?.kind === 'approval'} onClose={close} job={job} preselect={modal?.preselect} run={run} busy={busy} />
       <InvoiceModal open={modal?.kind === 'invoice'} onClose={close} job={job} settings={settings} run={runStock} busy={busy} />
       <PaymentModal open={modal?.kind === 'payment'} onClose={close} job={job} canRefund={!invoiced || canVoid} run={run} busy={busy} />

@@ -10,6 +10,8 @@ import { fmtDate, invoiceNo, jobNo, rp } from '../../lib/format'
 import { shopToday, vehicleName } from '../../lib/customers'
 import { STATE_COLOR, WORKFLOW_COLOR, jobState } from '../../lib/jobs'
 import { selectAll } from '../customers/useCustomerData'
+import { MoreMenu } from './common'
+import { AddToJobModal, DismissModal } from './Deferred'
 
 const JOB_COLS = 'id, job_number, invoice_number, customer_id, vehicle_id, order_status, workflow_status, priority, total, balance, paid_total, payment_status, invoiced_at, due_date, closed_at, archived_at, created_at'
 
@@ -248,49 +250,95 @@ function PaymentsList() {
 function DeferredList({ customerId, embedded }) {
   const { t, lang } = useT()
   const navigate = useNavigate()
+  const { can } = useAuth()
   const { timezone } = useShop()
   const names = useNames()
   const [rows, setRows] = useState(null)
   const [jobs, setJobs] = useState({})
+  const [gone, setGone] = useState({ carried: {}, dismissed: {} })
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
+  const [show, setShow] = useState('open')
+  const [modal, setModal] = useState(null) // { kind: 'add' | 'dismiss', service }
+  const [n, setN] = useState(0)
+  const canEdit = can('edit_jobs')
   useEffect(() => {
     Promise.all([
       selectAll(() => supabase.from('ro_services').select('id, ro_id, name, approval_status, service_net, service_total, created_at').eq('approval_status', 'deferred').order('created_at', { ascending: false }).order('id')),
-      selectAll(() => supabase.from('repair_orders').select('id, job_number, invoice_number, customer_id, vehicle_id, order_status, closed_at').order('id')),
+      selectAll(() => supabase.from('repair_orders').select('id, job_number, invoice_number, customer_id, vehicle_id, order_status, closed_at, invoiced_at').order('id')),
       selectAll(() => supabase.from('approvals').select('service_id, decided_at, decision').eq('decision', 'deferred').order('decided_at', { ascending: false }).order('id')),
-    ]).then(([s, j, a]) => {
+      // Carried into a later job (migration 121) or dismissed: off the list.
+      selectAll(() => supabase.from('ro_services').select('id, ro_id, carried_from').not('carried_from', 'is', null).order('id')),
+      selectAll(() => supabase.from('deferred_dismissals').select('*').order('service_id')),
+    ]).then(([s, j, a, c, d]) => {
       const when = {}
       for (const x of a.data || []) if (!when[x.service_id]) when[x.service_id] = x.decided_at
       setRows((s.data || []).map((x) => ({ ...x, deferred_at: when[x.id] || x.created_at })))
       setJobs(Object.fromEntries((j.data || []).map((x) => [x.id, x])))
-      setError(s.error || j.error || a.error || null)
+      setGone({
+        // Carried over while the copy's job wasn't closed without invoicing (migration 121).
+        carried: Object.fromEntries((c.data || []).filter((x) => x.carried_from && j.data?.find((r) => r.id === x.ro_id && !r.closed_at)).map((x) => [x.carried_from, x.ro_id])),
+        dismissed: Object.fromEntries((d.data || []).map((x) => [x.service_id, x])),
+      })
+      setError(s.error || j.error || a.error || c.error || d.error || null)
     })
-  }, [])
+  }, [n])
+  const reload = () => setN((x) => x + 1)
   const needle = q.trim().toLowerCase()
+  // Deferred on an estimate still open isn't waiting yet: it can be approved on that job.
+  const stateOf = (s) => {
+    const j = jobs[s.ro_id]
+    if (gone.carried[s.id]) return 'carried'
+    if (gone.dismissed[s.id]) return 'dismissed'
+    return j && (j.order_status === 'invoice' || j.closed_at) ? 'open' : 'onjob'
+  }
   const shown = (rows || []).filter((s) => {
     const j = jobs[s.ro_id]
     if (!j || (customerId && j.customer_id !== customerId)) return false
+    // "Waiting" also lists work deferred on estimates still open (shown with a note, without actions).
+    const st = stateOf(s)
+    if (show !== 'all' && st !== show && !(show === 'open' && st === 'onjob')) return false
     return matches(needle, s.name, names?.customer[j.customer_id]?.display_name, names?.vehicle[j.vehicle_id]?.plate, jobNo(j.job_number))
   })
+  async function restore(s) {
+    const { error: err } = await supabase.from('deferred_dismissals').delete().eq('service_id', s.id)
+    if (err) setError(err)
+    reload()
+  }
   const body = !rows || !names ? <div className="muted">{t('common.loading')}</div> : shown.length === 0 ? (
     embedded ? <Empty icon="clock" title={t('jobs.noDeferred')}>{t('jobs.noDeferredText')}</Empty>
       : <div className="card"><Empty icon="clock" title={rows.length ? t('cust.noMatch') : t('jobs.noDeferred')}>{t('jobs.noDeferredText')}</Empty></div>
   ) : (
     <div className="table" style={embedded ? { borderRadius: 10 } : undefined}>
       <table style={embedded ? { minWidth: 0 } : undefined}>
-        <thead><tr><th>{t('jobs.col.service')}</th><th>{t('job.vehicle')}</th>{!embedded && <th>{t('job.company')}</th>}<th>{t('jobs.col.job')}</th><th className="wide-only">{t('jobs.col.deferredOn')}</th><th className="num">{t('cat.amount')}</th></tr></thead>
+        <thead><tr><th>{t('jobs.col.service')}</th><th>{t('job.vehicle')}</th>{!embedded && <th>{t('job.company')}</th>}<th>{t('jobs.col.job')}</th><th className="wide-only">{t('jobs.col.deferredOn')}</th><th className="num">{t('cat.amount')}</th>{canEdit && <th aria-label={t('def.actions')} />}</tr></thead>
         <tbody>
           {shown.map((s) => {
             const j = jobs[s.ro_id]
+            const st = stateOf(s)
+            const into = gone.carried[s.id] && jobs[gone.carried[s.id]]
             return (
               <tr key={s.id} className="click" onClick={() => navigate(`/jobs/${s.ro_id}`)}>
-                <td><b>{s.name}</b></td>
+                <td>
+                  <b>{s.name}</b>
+                  {st === 'carried' && <div className="small muted">{t('def.carriedInto')} {into ? <Link to={`/jobs/${into.id}`} onClick={(e) => e.stopPropagation()}>#{jobNo(into.job_number)}</Link> : '—'}</div>}
+                  {st === 'onjob' && <div className="small muted">{t('def.onOpenJob')}</div>}
+                  {st === 'dismissed' && <div className="small muted">{t('def.dismissedOn', { date: fmtDate(gone.dismissed[s.id].dismissed_at, lang, timezone) })}{gone.dismissed[s.id].note ? ` · ${gone.dismissed[s.id].note}` : ''}</div>}
+                </td>
                 <td>{names.vehicle[j.vehicle_id]?.plate}</td>
                 {!embedded && <td>{names.customer[j.customer_id]?.display_name}</td>}
                 <td><Link className="rowlink" to={`/jobs/${s.ro_id}`} onClick={(e) => e.stopPropagation()}>#{jobNo(j.job_number)}</Link></td>
                 <td className="wide-only muted">{fmtDate(s.deferred_at, lang, timezone)}</td>
                 <td className="num">{rp(s.service_total)}</td>
+                {canEdit && (
+                  <td className="num" onClick={(e) => e.stopPropagation()}>
+                    {st === 'open' && <MoreMenu label={t('def.actionsFor', { name: s.name })} items={[
+                      { label: t('def.addToJob'), icon: 'wrench', onClick: () => setModal({ kind: 'add', service: { ...s, job: j } }) },
+                      { label: t('def.dismiss'), icon: 'x', onClick: () => setModal({ kind: 'dismiss', service: s }) },
+                    ]} />}
+                    {st === 'dismissed' && <button type="button" className="linkbtn small" onClick={() => restore(s)}>{t('def.restore')}</button>}
+                  </td>
+                )}
               </tr>
             )
           })}
@@ -298,13 +346,28 @@ function DeferredList({ customerId, embedded }) {
       </table>
     </div>
   )
-  if (embedded) return body
+  const filter = (
+    <select className="select chipselect" value={show} onChange={(e) => setShow(e.target.value)} aria-label={t('cat.status')}>
+      <option value="open">{t('def.f.open')}</option>
+      <option value="carried">{t('def.f.carried')}</option>
+      <option value="dismissed">{t('def.f.dismissed')}</option>
+      <option value="all">{t('cat.statusAll')}</option>
+    </select>
+  )
+  const modals = (
+    <>
+      <AddToJobModal open={modal?.kind === 'add'} service={modal?.service} onClose={() => setModal(null)} onDone={(ro) => { setModal(null); navigate(`/jobs/${ro.id}`) }} />
+      <DismissModal open={modal?.kind === 'dismiss'} service={modal?.service} onClose={() => setModal(null)} onDone={() => { setModal(null); reload() }} />
+    </>
+  )
+  if (embedded) return <>{error && <Notice kind="err" style={{ marginBottom: 12 }}>{errorText(error, t)}</Notice>}{rows && rows.length > 0 && <div className="filterbar">{filter}</div>}{body}{modals}</>
   return (
     <>
       <PageHead title={t('cust.area.deferred')} sub={t('jobs.defSub')} />
-      <div className="filterbar"><SearchBox value={q} onChange={setQ} placeholder={t('jobs.searchDef')} /></div>
+      <div className="filterbar"><SearchBox value={q} onChange={setQ} placeholder={t('jobs.searchDef')} />{filter}</div>
       {error && <Notice kind="err" style={{ marginBottom: 12 }}>{errorText(error, t)}</Notice>}
       {body}
+      {modals}
     </>
   )
 }

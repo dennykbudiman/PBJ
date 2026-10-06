@@ -5,6 +5,7 @@ import { useShop } from '../../context/ShopContext'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDateTime, invoiceNo, num, rp } from '../../lib/format'
 import { APPROVAL_COLOR } from '../../lib/jobs'
+import { APPT_COLOR } from '../../lib/calendar'
 
 const MONEY = ['price', 'cost', 'discount_amount', 'core_charge', 'flat_price', 'amount', 'value_money', 'total', 'max_amount']
 const HIDE = ['id', 'ro_id', 'service_id', 'position', 'created_at', 'updated_at', 'service_total', 'service_discount', 'service_net', 'amount_calc',
@@ -119,6 +120,21 @@ export default function JobActivity({ job, cat, staff, showCost }) {
         if (diff.concern_id && diff.concern_id[1]) parts.push(<span key="k">{parts.length ? ' · ' : ''}{t('job.isConcern')}</span>)
         return parts.length ? <div><b>{row.item_name}</b>: {parts}</div> : null
       }
+      case 'appointments': {
+        const when = (iso) => fmtDateTime(iso, lang, timezone)
+        if (add) return <div>{t('job.act.apptBooked')}: <b>{when(row.start_time)}</b> <Badge color={APPT_COLOR[row.status]}>{t(`appt.st.${row.status}`)}</Badge></div>
+        if (remove) return <div>{t('job.act.apptRemoved')}: <b>{when(row.start_time)}</b></div>
+        const parts = []
+        if (diff.start_time || diff.end_time) parts.push(<div key="t">{t('job.act.apptMoved')}: {when((diff.start_time || [row.start_time])[0])} → <b>{when(row.start_time)}</b></div>)
+        if (diff.status) parts.push(<div key="s">{t('appt.status')}: {t(`appt.st.${diff.status[0]}`)} → <b>{t(`appt.st.${diff.status[1]}`)}</b></div>)
+        if (diff.technician_id) parts.push(<div key="k">{t('board.technician')}: {value('technician_id', diff.technician_id[0])} → <b>{value('technician_id', diff.technician_id[1])}</b></div>)
+        if (diff.notes || diff.title) parts.push(<div key="n" className="muted">{t('job.act.apptNotes')}</div>)
+        return parts.length ? <><div className="muted small">{t('job.act.appt')}</div>{parts}</> : null
+      }
+      case 'deferred_dismissals':
+        return add
+          ? <div>{t('job.act.deferredDismissed')}: <b>{row.name}</b>{row.note && <span className="muted"> · {row.note}</span>}</div>
+          : <div>{t('job.act.deferredRestored')}: <b>{row.name}</b></div>
       case 'credit_memos':
         return add
           ? <div>{t('job.act.creditApplied')}: <b>{rp(row.amount)}</b>{row.reason && <span className="muted"> · {row.reason}</span>}</div>

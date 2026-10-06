@@ -6,6 +6,7 @@ import { useShop } from '../../context/ShopContext'
 import { supabase } from '../../lib/supabase'
 import { fmtDate, fmtDateTime, invoiceNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
+import { APPT_COLOR, clock, dayLabel, isActiveAppt, shopParts } from '../../lib/calendar'
 import { APPROVALS, APPROVAL_COLOR, PAYMENT_COLOR, PRIORITIES, WORKFLOW_COLOR, WORKFLOW_MANUAL, jobState, STATE_COLOR, lineNet } from '../../lib/jobs'
 import { BlurInput, TotalRow } from './common'
 
@@ -229,6 +230,46 @@ export function ProfitCard({ job }) {
       <div className="trow strong"><span>{t('job.grossProfit')}</span><span className="trow-val">{rp(gross)}</span></div>
       <div className="trow muted"><span>{t('job.hoursBilledWorked')}</span><span className="trow-val">{num(billed, 2)} / {num(worked, 2)}</span></div>
       <div className="hint">{t('job.profitHint')}</div>
+    </section>
+  )
+}
+
+// Bookings for this job. New ones can be made while it is an open estimate.
+export function AppointmentsCard({ job, staff, canBook, onOpen, onNew }) {
+  const { t, lang } = useT()
+  const { timezone } = useShop()
+  const now = Date.now()
+  // Coming bookings first (soonest first), then past or cancelled ones (latest first).
+  const list = [...job.appointments].sort((a, b) => {
+    const fa = Date.parse(a.end_time) >= now && isActiveAppt(a); const fb = Date.parse(b.end_time) >= now && isActiveAppt(b)
+    if (fa !== fb) return fa ? -1 : 1
+    const d = Date.parse(a.start_time) - Date.parse(b.start_time)
+    return fa ? d : -d
+  })
+  if (!list.length && !canBook) return null
+  return (
+    <section className="card side-card">
+      <div className="row" style={{ gap: 8 }}>
+        <div className="sectionlabel" style={{ marginTop: 0 }}>{t('job.appointments')}</div>
+        <div className="spacer" />
+        {canBook && <button type="button" className="linkbtn small" onClick={onNew}><Icon name="calendar" size={13} /> {t('board.book')}</button>}
+      </div>
+      {list.length === 0 ? <div className="muted small">{t('job.noAppointments')}</div> : (
+        <div className="apptlist">
+          {list.slice(0, 4).map((a) => {
+            const p = shopParts(a.start_time, timezone)
+            const e = shopParts(a.end_time, timezone)
+            const tech = staff.find((s) => s.id === a.technician_id)
+            return (
+              <button key={a.id} type="button" className={`apptrow ${isActiveAppt(a) ? '' : 'off'}`} onClick={() => onOpen(a)}>
+                <span><b>{dayLabel(p.date, lang)}</b> {clock(p.minutes, lang)}–{e.date !== p.date && <b>{dayLabel(e.date, lang)} </b>}{clock(e.minutes, lang)}{tech && <span className="muted"> · {tech.name}</span>}</span>
+                <Badge color={APPT_COLOR[a.status]}>{t(`appt.st.${a.status}`)}</Badge>
+              </button>
+            )
+          })}
+          {list.length > 4 && <div className="muted small">{t('job.moreAppointments', { n: list.length - 4 })}</div>}
+        </div>
+      )}
     </section>
   )
 }

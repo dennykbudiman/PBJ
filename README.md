@@ -14,8 +14,8 @@ address for every Netlify context of this branch, so a preview can never reach l
 2. **Customers & vehicles** ✓
 3. **Catalog** ✓: labor, parts, fees, discounts, flat rate items, service bundles, inspections, checklists, categories, suppliers
 4. **Jobs, estimates, invoices & payments** ✓: job page, approvals, invoicing and voiding, payments and credits, inspections, activity, job lists
-5. **Printed invoices & estimates** ✓ (this delivery): A4 estimate and invoice in Indonesian or English (`/print/jobs/<id>`)
-6. Work board & calendar
+5. **Printed invoices & estimates** ✓: A4 estimate and invoice in Indonesian or English (`/print/jobs/<id>`)
+6. **Work board & calendar** ✓ (this delivery): Kanban / list board by workflow (`/board`), calendar by day (per technician) / week / month with appointments (`/calendar`), bookings on the job page, deferred work carried into new estimates or dismissed
 7. Inventory & purchase orders
 8. Service schedules
 9. Dashboard & reports
@@ -36,8 +36,8 @@ npm run dev
 - `src/lib` — Supabase client, EN/ID text (`strings.js`), number and date formatting
 - `src/components` — app layout (top bar), shared UI pieces
 - `src/pages` — screens; `pages/settings` is the Settings page
-- `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs` — Customers & vehicles, Catalog, Jobs
-- `supabase/migrations` — database migrations 100–120 (100–119 applied to staging; 120 locks inspections once a job is invoiced)
+- `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs`, `src/pages/board`, `src/pages/calendar` — Customers & vehicles, Catalog, Jobs, Work board, Calendar
+- `supabase/migrations` — database migrations 100–121 (100–120 applied to staging; 121 adds the board / calendar rules and deferred-work carry-over)
 - `supabase/functions/invite-user` — invites a person (deployed to staging)
 
 ## Rules the screens rely on
