@@ -27,7 +27,8 @@ export default function JobActivity({ job, cat, staff, showCost }) {
   useEffect(() => {
     let live = true
     const ids = [id, ...svcIds, ...job.items.map((x) => x.id), ...job.fees.map((x) => x.id), ...job.discounts.map((x) => x.id),
-      ...job.approvals.map((x) => x.id), ...job.payments.map((x) => x.id), ...job.appliedCredits.map((x) => x.id)]
+      ...job.approvals.map((x) => x.id), ...job.payments.map((x) => x.id)]
+    const itemIds = job.items.map((x) => x.id)
     Promise.all([
       supabase.from('activity_log').select('*').in('entity_id', ids).order('created_at', { ascending: false }).limit(300),
       // Removed services, fees and discounts no longer have an id to look up; their delete record names the job.
@@ -35,14 +36,29 @@ export default function JobActivity({ job, cat, staff, showCost }) {
         .eq('changes->>ro_id', id).order('created_at', { ascending: false }).limit(100),
       svcIds.length ? supabase.from('activity_log').select('*').eq('action', 'delete').eq('entity_type', 'ro_service_items')
         .in('changes->>service_id', svcIds).order('created_at', { ascending: false }).limit(100) : { data: [] },
-    ]).then(([a, b, c]) => {
+      // Parts taken from stock at invoicing (and put back by a void).
+      itemIds.length ? supabase.from('stock_movements').select('*').in('ro_service_item_id', itemIds).order('created_at', { ascending: false }).limit(200) : { data: [] },
+    ]).then(([a, b, c, d]) => {
       if (!live) return
-      const err = a.error || b.error || c.error
+      const err = a.error || b.error || c.error || d.error
       if (err) setError(errorText(err, t))
       const seen = new Set()
-      const all = [...(a.data || []), ...(b.data || []), ...(c.data || [])].filter((r) => (seen.has(r.id) ? false : seen.add(r.id)))
-      all.sort((x, y) => (x.created_at < y.created_at ? 1 : x.created_at > y.created_at ? -1 : y.id - x.id))
-      setRows(all)
+      const stock = (d.data || []).map((m) => ({ id: `sm-${m.id}`, entity_type: 'stock', action: 'stock', created_at: m.created_at, user_id: m.created_by, changes: m }))
+      const all = [...(a.data || []), ...(b.data || []), ...(c.data || []), ...stock].filter((r) => (seen.has(r.id) ? false : seen.add(r.id)))
+      all.sort((x, y) => (x.created_at < y.created_at ? 1 : x.created_at > y.created_at ? -1 : String(y.id).localeCompare(String(x.id))))
+      // Starting an inspection adds every checklist point at once: show that as one entry.
+      const grouped = []
+      for (const r of all) {
+        const prev = grouped[grouped.length - 1]
+        const isAdd = r.action === 'line_add' && r.changes?.table === 'ro_inspection_results'
+        if (isAdd && prev?.action === 'line_add' && prev.changes?.table === 'ro_inspection_results' && prev.user_id === r.user_id
+          && Math.abs(new Date(prev.created_at) - new Date(r.created_at)) < 5000) {
+          prev.count = (prev.count || 1) + 1
+          continue
+        }
+        grouped.push({ ...r })
+      }
+      setRows(grouped)
     })
     return () => { live = false }
   }, [job.version]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -55,7 +71,7 @@ export default function JobActivity({ job, cat, staff, showCost }) {
     if (MONEY.includes(field)) return rp(v)
     if (field === 'technician_id' || field === 'service_advisor_id') return staff.find((p) => p.id === v)?.name || '?'
     if (field === 'workflow_status') return t(`job.wf.${v}`)
-    if (field === 'work_status') return t(`job.work.${v}`)
+    if (field === 'work_status' || field === 'inspection_status') return t(`job.work.${v}`)
     if (field === 'approval_status') return t(`job.appr.${v}`)
     if (field === 'priority') return t(`job.pri.${v}`)
     if (field === 'order_status') return v === 'invoice' ? t('job.invoice') : t('job.estimate')
@@ -76,11 +92,54 @@ export default function JobActivity({ job, cat, staff, showCost }) {
     return list.map(([k, [a, b]]) => <div key={k} className="hist-change"><span className="muted">{label(k)}:</span> {value(k, a)} → <b>{value(k, b)}</b></div>)
   }
 
+  // Concerns, inspections, inspection points and credits are logged on the job itself (migration 119).
+  function describeLine(r) {
+    const row = r.changes?.row || {}
+    const diff = r.changes?.diff || {}
+    const add = r.action === 'line_add'
+    const remove = r.action === 'line_remove'
+    switch (r.changes?.table) {
+      case 'ro_concerns':
+        if (add) return <div>{t('job.act.concernAdded')}: <b>{row.text}</b></div>
+        if (remove) return <div>{t('job.act.concernRemoved')}: <b>{row.text}</b></div>
+        if (diff.text) return <div>{t('job.act.concernChanged')}: {diff.text[0]} → <b>{diff.text[1]}</b></div>
+        return Object.keys(diff).every((k) => k === 'position') ? <div className="muted">{t('job.act.concernsReordered')}</div> : null
+      case 'ro_inspections': {
+        const name = cat.checklists.find((c) => c.id === row.checklist_id)?.name || t('job.inspection')
+        if (add) return <div>{t('job.act.inspStarted')}: <b>{name}</b></div>
+        if (remove) return <div>{t('job.act.inspDeleted')}: <b>{name}</b></div>
+        return <><div className="muted small">{name}</div>{changes(Object.fromEntries(Object.entries(diff).map(([k, v]) => [k === 'status' ? 'inspection_status' : k, v])))}</>
+      }
+      case 'ro_inspection_results': {
+        if (add) return r.count > 1 ? <div>{t('job.act.pointsAdded', { n: r.count })}</div> : <div>{t('job.act.pointAdded')}: <b>{row.item_name}</b></div>
+        if (remove) return <div>{t('job.act.pointRemoved')}: <b>{row.item_name}</b></div>
+        const parts = []
+        if (diff.color) parts.push(<span key="c">{diff.color[0] ? t(`cat.flag.${diff.color[0]}`) : '—'} → <b>{diff.color[1] ? t(`cat.flag.${diff.color[1]}`) : '—'}</b></span>)
+        if (diff.note) parts.push(<span key="n">{parts.length ? ' · ' : ''}{t('job.f.note')}: <b>{diff.note[1] || '—'}</b></span>)
+        if (diff.concern_id && diff.concern_id[1]) parts.push(<span key="k">{parts.length ? ' · ' : ''}{t('job.isConcern')}</span>)
+        return parts.length ? <div><b>{row.item_name}</b>: {parts}</div> : null
+      }
+      case 'credit_memos':
+        return add
+          ? <div>{t('job.act.creditApplied')}: <b>{rp(row.amount)}</b>{row.reason && <span className="muted"> · {row.reason}</span>}</div>
+          : <div>{t('job.act.creditUnapplied')}: <b>{rp(row.amount)}</b></div>
+      default:
+        return null
+    }
+  }
+
   function describe(r) {
     const old = r.action === 'delete' ? r.changes : null
     switch (r.entity_type) {
+      case 'stock': {
+        const m = r.changes
+        const item = job.items.find((x) => x.id === m.ro_service_item_id)
+        const q = Number(m.qty_change)
+        return <div>{item?.name || '?'}: <b style={{ color: q < 0 ? 'var(--red)' : 'var(--green)' }}>{q > 0 ? '+' : ''}{num(q, 2)}</b> <span className="muted">{q < 0 ? t('job.act.stockTaken') : t('job.act.stockBack')}</span></div>
+      }
       case 'repair_orders':
         if (r.action === 'create') return <div>{t('job.act.created')}</div>
+        if (r.action?.startsWith('line_')) return describeLine(r)
         if (r.changes?.order_status?.[1] === 'invoice') return <div><b>{t('job.act.invoiced', { no: invoiceNo(r.changes.invoice_number?.[1]) })}</b></div>
         if (r.changes?.order_status?.[1] === 'estimate') return <div><b style={{ color: 'var(--red)' }}>{t('job.act.voided', { no: invoiceNo(r.changes.invoice_number?.[0]) })}</b></div>
         if (r.changes?.closed_at && r.changes.closed_at[1]) return <div><b>{t('job.act.closed')}</b>{r.changes.close_reason?.[1] && <span className="muted"> · {r.changes.close_reason[1]}</span>}</div>
@@ -133,13 +192,8 @@ export default function JobActivity({ job, cat, staff, showCost }) {
         if (r.action === 'update') return changes(r.changes)
         return <div>{p.kind === 'refund' ? t('job.act.refund') : t('job.act.payment')}: <b>{rp(p.amount)}</b> <span className="muted">· {t(`job.pay.${p.method}`)}{p.reference ? ` · ${p.reference}` : ''}</span></div>
       }
-      case 'credit_memos': {
-        const c = job.appliedCredits.find((x) => x.id === r.entity_id)
-        if (r.action === 'update' && r.changes?.applied_ro_id) {
-          return <div>{r.changes.applied_ro_id[1] ? t('job.act.creditApplied') : t('job.act.creditUnapplied')}{c && <b> {rp(c.amount)}</b>}</div>
-        }
-        return c ? <div>{t('job.act.creditApplied')} <b>{rp(c.amount)}</b></div> : null
-      }
+      case 'credit_memos':
+        return null
       default:
         return null
     }

@@ -12,6 +12,7 @@ import CustomersArea from './pages/customers/CustomersArea'
 import SearchPage from './pages/SearchPage'
 import CatalogArea from './pages/catalog/CatalogArea'
 import JobsArea from './pages/jobs/JobsArea'
+import PrintJob from './pages/print/PrintJob'
 
 // Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
 function VehiclesRedirect() {
@@ -29,6 +30,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="print/*" element={<PrintJob />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="board" element={<ComingSoon titleKey="nav.board" stage="board" icon="layout-kanban" />} />

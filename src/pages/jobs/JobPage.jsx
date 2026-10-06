@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Page } from '../../components/Layout'
-import { Badge, Button, Card, Empty, Modal, Notice, SubTabs } from '../../components/ui'
+import { Badge, Button, Card, Empty, Modal, Notice, SubTabs, usePopover } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
@@ -83,7 +83,7 @@ export default function JobPage({ id }) {
                 </div>
               </div>
               <div className="row" style={{ gap: 8 }}>
-                <Button icon="print" disabled title={t('job.printSoon')}>{t('job.print')}</Button>
+                <PrintButton invoiced={invoiced} onPrint={(doc) => navigate(`/print/jobs/${ro.id}?doc=${doc}`)} />
                 {editable && job.services.length > 0 && <Button onClick={() => open('approval')}>{t('job.recordApproval')}</Button>}
                 <MoreMenu label={t('job.more')} items={menu} />
               </div>
@@ -222,5 +222,23 @@ function ConcernsTab({ job, editable, run, busy }) {
         </div>
       )}
     </section>
+  )
+}
+
+// Print: an estimate any time; once invoiced, the invoice (or the estimate again).
+function PrintButton({ invoiced, onPrint }) {
+  const { t } = useT()
+  const pop = usePopover()
+  if (!invoiced) return <Button icon="print" onClick={() => onPrint('estimate')}>{t('job.print')}</Button>
+  return (
+    <div style={{ position: 'relative' }} ref={pop.ref}>
+      <Button icon="print" onClick={pop.toggle} aria-expanded={pop.open}>{t('job.print')}</Button>
+      {pop.open && (
+        <div className="popover" style={{ minWidth: 180 }}>
+          <button type="button" className="menuitem" onClick={() => onPrint('invoice')}>{t('pr.invoiceUi')}</button>
+          <button type="button" className="menuitem" onClick={() => onPrint('estimate')}>{t('pr.estimateUi')}</button>
+        </div>
+      )}
+    </div>
   )
 }

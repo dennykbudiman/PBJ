@@ -443,3 +443,58 @@ span.seg-btn { cursor: default; }
 }
 .lines-table td:first-child .select.bare { width: 78px; }
 .lines-table td:first-child { width: 90px; }
+
+/* ---------- Printing (A4) ---------- */
+.print-msg { padding: 40px; text-align: center; color: var(--muted); }
+.print-wrap { min-height: 100vh; background: #e9ecef; padding: 0 0 40px; }
+.print-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 20px; background: #fff; border-bottom: 1px solid var(--line); }
+.doc { width: 210mm; min-height: 297mm; margin: 24px auto 0; background: #fff; color: #111; padding: 14mm 14mm 12mm; box-shadow: 0 6px 24px rgba(0,0,0,.12); font-size: 11.5px; line-height: 1.45; font-family: var(--font); }
+.doc .pre { white-space: pre-wrap; }
+.doc .small { font-size: 10.5px; }
+.doc .muted { color: #555; }
+.doc-head { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 10px; }
+.doc-shop { display: flex; gap: 12px; align-items: flex-start; max-width: 60%; }
+.doc-logo { width: 54px; height: 54px; object-fit: contain; }
+.doc-shopname { font-size: 15px; font-weight: 800; margin-bottom: 2px; }
+.doc-title { text-align: right; }
+.doc-title h1 { font-size: 22px; letter-spacing: .06em; margin: 0 0 6px; }
+.doc-meta { margin-left: auto; border-collapse: collapse; }
+.doc-meta th { text-align: left; font-weight: 600; color: #555; padding: 1px 10px 1px 0; }
+.doc-meta td { text-align: right; padding: 1px 0; }
+.doc-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+.doc-parties > div { border: 1px solid #ccc; border-radius: 6px; padding: 8px 10px; }
+.doc-label { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #555; margin-bottom: 3px; }
+.doc-block { margin: 10px 0; }
+.doc-list { margin: 0; padding-left: 16px; }
+.doc-lines { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.doc-lines th { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: #555; text-align: left; border-bottom: 1.5px solid #111; padding: 5px 4px; }
+.doc-lines td { padding: 3px 4px; vertical-align: top; }
+.doc-lines .num { text-align: right; white-space: nowrap; }
+.doc-lines .svc-row td { padding-top: 9px; border-top: 1px solid #ddd; }
+.doc-lines tbody:first-of-type .svc-row td { border-top: none; }
+.doc-lines .ind { padding-left: 14px; }
+.doc-lines .svc-total td { border-top: 1px dashed #bbb; font-weight: 600; text-align: right; }
+.doc-svc { break-inside: avoid; }
+.doc-tag { margin-left: 8px; font-size: 9.5px; font-weight: 700; border: 1px solid #999; border-radius: 4px; padding: 0 5px; color: #555; }
+.doc-empty { padding: 16px 0; color: #555; }
+.doc-bottom { display: flex; gap: 20px; justify-content: space-between; align-items: flex-start; margin-top: 14px; border-top: 1.5px solid #111; padding-top: 8px; break-inside: avoid; }
+.doc-notes { flex: 1; min-width: 0; }
+.doc-totals { border-collapse: collapse; min-width: 270px; }
+.doc-totals th { text-align: left; font-weight: 500; padding: 2px 16px 2px 0; }
+.doc-totals td { text-align: right; white-space: nowrap; padding: 2px 0; }
+.doc-totals tr.rule th, .doc-totals tr.rule td { border-top: 1px solid #bbb; padding-top: 5px; }
+.doc-totals tr.grand th, .doc-totals tr.grand td { font-weight: 800; font-size: 13px; border-top: 1.5px solid #111; padding-top: 5px; }
+.doc-terms { margin-top: 14px; font-size: 10px; color: #444; border-top: 1px solid #ddd; padding-top: 8px; }
+.doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 26px; text-align: center; break-inside: avoid; }
+.sign-line { border-bottom: 1px solid #111; height: 48px; margin-bottom: 4px; }
+.doc-foot { margin-top: 16px; font-size: 9.5px; color: #666; text-align: center; }
+@page { size: A4; margin: 0; }
+@media print {
+  .no-print { display: none !important; }
+  html, body, #root { background: #fff !important; height: auto; }
+  .print-wrap { background: #fff; padding: 0; min-height: 0; }
+  .doc { margin: 0; box-shadow: none; width: auto; min-height: 0; }
+}
+@media screen and (max-width: 860px) {
+  .doc { width: auto; margin: 12px; padding: 16px; min-height: 0; }
+}
