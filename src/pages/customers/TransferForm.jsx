@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Input, Modal, Notice, Select, Textarea } from '../../components/ui'
+import { Button, Input, Modal, Notice, Select, Textarea, useConfirm } from '../../components/ui'
+import { confirmKm } from '../../lib/mileage'
 import { supabase, errorText } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
-import { num, readAmount } from '../../lib/format'
+import { jobNo, km as kmText, num, readAmount } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 
 // Moves a vehicle to another company (PT) through the database's transfer_vehicle,
@@ -14,6 +15,7 @@ export default function TransferForm({ open, vehicle, customers, minDate, onClos
   const [f, setF] = useState({ to: '', date: '', km: '', note: '' })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [confirm, confirmEl] = useConfirm()
 
   useEffect(() => {
     if (open && vehicle) {
@@ -35,7 +37,10 @@ export default function TransferForm({ open, vehicle, customers, minDate, onClos
     if (minDate && f.date < minDate) return setMsg(t('veh.notBeforeLast', { date: minDate }))
     const km = readAmount(f.km)
     if (Number.isNaN(km) || km > 9999999) return setMsg(t('veh.kmRule'))
+    // A reading lower than what's known (e.g. a back-dated transfer) is fine, but asked about first.
+    if (busy) return
     setBusy(true)
+    if (!(await confirmKm({ value: km, vehicleId: vehicle.id, confirm, t, fmt: kmText, jobNo }))) { setBusy(false); return }
     const { error } = await supabase.rpc('transfer_vehicle', {
       p_vehicle: vehicle.id, p_to: f.to, p_date: f.date, p_odometer: km, p_note: f.note.trim() || null,
     })
@@ -45,6 +50,7 @@ export default function TransferForm({ open, vehicle, customers, minDate, onClos
   }
 
   return (
+    <>
     <Modal open={open} onClose={onClose} title={t('veh.transferTitle', { plate: vehicle.plate })}
       footer={<>
         <Button onClick={onClose}>{t('common.cancel')}</Button>
@@ -61,5 +67,7 @@ export default function TransferForm({ open, vehicle, customers, minDate, onClos
       <Textarea label={t('veh.transferNote')} value={f.note} onChange={set('note')} rows={2} />
       <Notice kind="info">{t('veh.transferExplain', { from: from?.display_name || '' })}</Notice>
     </Modal>
+    {confirmEl}
+    </>
   )
 }

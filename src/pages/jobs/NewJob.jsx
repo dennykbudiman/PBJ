@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Page } from '../../components/Layout'
-import { Button, Card, Empty, Input, Notice, PageHead, Select, Textarea, useToast } from '../../components/ui'
+import { Button, Card, Empty, Input, Notice, PageHead, Select, Textarea, useConfirm, useToast } from '../../components/ui'
+import { confirmKm } from '../../lib/mileage'
 import { useAuth } from '../../context/AuthContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
@@ -28,6 +29,7 @@ export default function NewJob() {
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [confirm, confirmEl] = useConfirm()
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? e.target.value : e }))
 
   useEffect(() => {
@@ -85,6 +87,7 @@ export default function NewJob() {
     if (Object.keys(e).length) return
     setBusy(true)
     setMsg(null)
+    if (!(await confirmKm({ value: odo, vehicleId: f.vehicle_id, confirm, t, fmt: km, jobNo }))) { setBusy(false); return }
     const { data, error } = await supabase.from('repair_orders').insert({
       customer_id: f.customer_id, vehicle_id: f.vehicle_id, odometer_in: odo, priority: f.priority, service_advisor_id: f.advisor || null,
     }).select().single()
@@ -94,7 +97,10 @@ export default function NewJob() {
       if (c.error) toast(errorText(c.error, t), 'err')
     }
     toast(t('job.created', { no: jobNo(data.job_number) }))
-    navigate(`/jobs/${data.id}`, { replace: true })
+    // From a service schedule ("Start job"): the job page adds that service.
+    // (only when the vehicle is still the one the schedule belongs to)
+    const sched = f.vehicle_id === params.get('vehicle') ? params.get('schedule') : null
+    navigate(sched ? `/jobs/${data.id}?addSchedule=${encodeURIComponent(sched)}` : `/jobs/${data.id}`, { replace: true })
   }
 
   const lowKm = vehicle?.mileage_km != null && f.odometer.trim() && Number(f.odometer.replace(/[.\s]/g, '')) < Number(vehicle.mileage_km)
@@ -147,6 +153,7 @@ export default function NewJob() {
           </>
         )}
       </div>
+      {confirmEl}
     </Page>
   )
 }

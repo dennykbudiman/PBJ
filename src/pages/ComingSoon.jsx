@@ -7,7 +7,8 @@ import { useT } from '../lib/i18n'
 
 // Build order agreed for step 3. Each placeholder says which stage brings it.
 export const STAGES = ['foundations', 'customers', 'catalog', 'jobs', 'print', 'board', 'inventory', 'schedules', 'reports']
-export const READY = 6 // stages built so far
+// Stages built so far (stage 8 was built before stage 7, at Denny's request).
+export const DONE = new Set(['foundations', 'customers', 'catalog', 'jobs', 'print', 'board', 'schedules'])
 
 export default function ComingSoon({ titleKey, stage, icon }) {
   const { t } = useT()
@@ -35,9 +36,9 @@ export function Dashboard() {
         <h2>{t('dash.buildTitle')}</h2>
         <p className="muted" style={{ marginTop: 0, lineHeight: 1.55 }}>{t('dash.buildText')}</p>
         <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 2 }}>
-          {STAGES.map((s, i) => (
-            <li key={s} style={{ color: i < READY ? 'var(--green)' : undefined, fontWeight: i < READY ? 700 : 500 }}>
-              {t(`stage.${s}`)}{i < READY ? ` — ${t('dash.ready')}` : ''}
+          {STAGES.map((s) => (
+            <li key={s} style={{ color: DONE.has(s) ? 'var(--green)' : undefined, fontWeight: DONE.has(s) ? 700 : 500 }}>
+              {t(`stage.${s}`)}{DONE.has(s) ? ` — ${t('dash.ready')}` : ''}
             </li>
           ))}
         </ol>

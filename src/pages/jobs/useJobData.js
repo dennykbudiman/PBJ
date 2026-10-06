@@ -16,7 +16,7 @@ export function useJobData(id) {
     if (ro.error) { setError(ro.error); return }
     if (!ro.data) { setMissing(true); setJob(null); return }
     const r = ro.data
-    const [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts] = await Promise.all([
+    const [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules] = await Promise.all([
       supabase.from('customers').select('*').eq('id', r.customer_id).maybeSingle(),
       supabase.from('vehicles').select('*').eq('id', r.vehicle_id).maybeSingle(),
       supabase.from('customer_contacts').select('*').eq('customer_id', r.customer_id).order('is_primary', { ascending: false }).order('name'),
@@ -31,6 +31,7 @@ export function useJobData(id) {
       supabase.from('ro_inspections').select('*').eq('ro_id', id).order('created_at').order('id'),
       supabase.from('invoice_voids').select('*').eq('ro_id', id).order('voided_at', { ascending: false }),
       supabase.from('appointments').select('*').eq('ro_id', id).order('start_time').order('id'),
+      supabase.from('service_schedules').select('*').eq('vehicle_id', r.vehicle_id).order('name').order('id'),
     ])
     const svcIds = (services.data || []).map((s) => s.id)
     const inspIds = (inspections.data || []).map((x) => x.id)
@@ -39,7 +40,7 @@ export function useJobData(id) {
       inspIds.length ? supabase.from('ro_inspection_results').select('*').in('inspection_id', inspIds).order('id') : { data: [] },
     ])
     if (n !== loads.current) return
-    const all = [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, items, results]
+    const all = [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, items, results]
     const firstError = all.find((x) => x.error)?.error
     setError(firstError || null)
     setMissing(false)
@@ -62,6 +63,7 @@ export function useJobData(id) {
       results: results.data || [],
       voids: voids.data || [],
       appointments: appts.data || [],
+      schedules: schedules.data || [],
       version: n,
     })
   }, [id])

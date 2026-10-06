@@ -157,14 +157,25 @@ export function Notice({ kind = 'info', children, style }) {
   return <div className={`notice ${kind}`} style={style}>{children}</div>
 }
 
+// Open modals, newest last: Escape closes only the one on top (e.g. a confirm over a form).
+const modalStack = []
 export function Modal({ open, title, onClose, children, footer, wide }) {
   const { t } = useT()
+  const me = useRef({})
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
   useEffect(() => {
     if (!open) return
-    const onKey = (e) => e.key === 'Escape' && onClose?.()
+    const token = me.current
+    modalStack.push(token)
+    const onKey = (e) => { if (e.key === 'Escape' && modalStack[modalStack.length - 1] === token) closeRef.current?.() }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      const i = modalStack.lastIndexOf(token)
+      if (i >= 0) modalStack.splice(i, 1)
+    }
+  }, [open])
   if (!open) return null
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
@@ -222,4 +233,22 @@ export function ToastProvider({ children }) {
 
 export function useToast() {
   return useContext(ToastContext)
+}
+
+// "Are you sure?" as a promise: const [confirm, confirmEl] = useConfirm(); if (await confirm({ title, text })) …
+// Render {confirmEl} once in the component.
+export function useConfirm() {
+  const { t } = useT()
+  const [ask, setAsk] = useState(null)
+  // Resolves true (yes), false (no) or null (closed with X / Escape). A second question answers the first with false.
+  const confirm = (opts) => new Promise((resolve) => setAsk((prev) => { prev?.resolve(false); return { ...opts, resolve } }))
+  const done = (v) => { ask?.resolve(v); setAsk(null) }
+  const el = (
+    <Modal open={!!ask} title={ask?.title || ''} onClose={() => done(null)}
+      footer={<><Button onClick={() => done(false)}>{ask?.no || t('common.cancel')}</Button>
+        <Button variant={ask?.danger ? 'danger' : 'primary'} className={ask?.danger ? 'solid' : ''} onClick={() => done(true)}>{ask?.yes || t('common.confirm')}</Button></>}>
+      <div style={{ lineHeight: 1.55 }}>{ask?.text}</div>
+    </Modal>
+  )
+  return [confirm, el]
 }

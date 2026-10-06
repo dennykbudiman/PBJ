@@ -10,6 +10,7 @@ import { shopToday, vehicleName } from '../../lib/customers'
 import { WORKFLOW_COLOR } from '../../lib/jobs'
 import { APPT_COLOR, APPT_STATUSES, addDays, daysBetween, hhmmToMinutes, isActiveAppt, isDate, minutesToHhmm, shopParts, shopTimeToIso } from '../../lib/calendar'
 import { selectAll } from '../customers/useCustomerData'
+import { bookingProblem, dayHours, hhmm24, hoursText } from '../../lib/hours'
 import { Picker } from '../jobs/common'
 import { useStaff } from '../jobs/useJobData'
 
@@ -22,7 +23,8 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
   const { t, lang } = useT()
   const toast = useToast()
   const { can, profile, roleName } = useAuth()
-  const { timezone } = useShop()
+  const { timezone, settings } = useShop()
+  const hours = settings?.opening_hours
   const staff = useStaff()
   const canEdit = can('edit_jobs')
   const [lists, setLists] = useState(null) // { customers, vehicles }
@@ -40,12 +42,12 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
     if (!open) return
     setErrors({}); setMsg(null); setConfirmDelete(false); setCreatedJob(null); setHistory(null)
     const a = appointment
-    const startIso = a?.start_time || defaults?.start || defaultStart(timezone)
+    const startIso = a?.start_time || defaults?.start || defaultStart(timezone, hours)
     const s = shopParts(startIso, timezone)
     const endIso = a?.end_time || defaults?.end || new Date(new Date(startIso).getTime() + 3600000).toISOString()
     const e = shopParts(endIso, timezone)
     setF({
-      title: a?.title || '',
+      title: a?.title || defaults?.title || '',
       startDate: s.date, startTime: minutesToHhmm(s.minutes),
       endDate: e.date, endTime: minutesToHhmm(e.minutes),
       customer_id: a?.customer_id || defaults?.customer_id || '',
@@ -118,7 +120,11 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
       const a = hhmmToMinutes(x.startTime); const b = hhmmToMinutes(val); const end = hhmmToMinutes(x.endTime)
       if (a == null || b == null || end == null || x.startDate !== x.endDate) return { ...x, startTime: val }
       const len = end > a ? end - a : 60 // an end before the start is treated as a one-hour booking
-      return b + len < 24 * 60 ? { ...x, startTime: val, endTime: minutesToHhmm(b + len) } : { ...x, startTime: val }
+      // Keep the length, but not past closing time.
+      const dh = isDate(x.startDate) ? dayHours(hours, x.startDate) : null
+      const close = Math.min(dh?.open ? dh.end : 1440, 24 * 60 - 15) // the form can't end at 24:00 on the same day
+      const newEnd = Math.min(b + len, close)
+      return newEnd > b ? { ...x, startTime: val, endTime: minutesToHhmm(newEnd) } : { ...x, startTime: val }
     })
   }
 
@@ -129,12 +135,20 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
   const clash = (others || []).find((o) => o.id !== appointment?.id && isActiveAppt(o) && f.technician_id && o.technician_id === f.technician_id
     && f.status !== 'cancelled' && f.status !== 'no_show' && startIso && endIso && Date.parse(o.start_time) < Date.parse(endIso) && Date.parse(o.end_time) > Date.parse(startIso))
 
+  // (Before the opening-hours setting exists, the default hours apply: Mon–Sat 08:00–17:00.)
+  const startDay = isDate(f.startDate) ? dayHours(hours, f.startDate) : null
+  const endDay = isDate(f.endDate) ? dayHours(hours, f.endDate) : null
+
   function validate() {
     const e = {}
     if (!startIso) e.start = t('appt.badTime')
     if (!endIso) e.end = t('appt.badTime')
     if (startIso && endIso && Date.parse(endIso) <= Date.parse(startIso)) e.end = t('appt.endAfterStart')
     if (startIso && endIso && new Date(endIso) - new Date(startIso) > MAX_DAYS * 86400000) e.end = t('appt.tooLong', { n: MAX_DAYS })
+    // Opening hours (Settings), the same rule the database applies. Only checked when the time changes.
+    const timeChanged = !appointment || Date.parse(startIso) !== Date.parse(appointment.start_time) || Date.parse(endIso) !== Date.parse(appointment.end_time)
+    const problem = !e.start && !e.end && timeChanged ? bookingProblem(hours, startIso, endIso, timezone) : null
+    if (problem) e[problem.key.startsWith('hours.end') || problem.key === 'hours.afterClose' ? 'end' : 'start'] = hoursText(problem, t, lang)
     if (!f.customer_id && !f.title.trim()) e.who = t('appt.needWho')
     if (f.ro === 'new' && !f.vehicle_id) e.vehicle = t('appt.needVehicle')
     if (f.title.length > 200) e.title = t('appt.tooLongText')
@@ -232,15 +246,19 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
           <label htmlFor="ap-sd">{t('appt.start')}</label>
           <div className="row" style={{ gap: 6 }}>
             <input id="ap-sd" type="date" className={`input ${errors.start ? 'invalid' : ''}`} value={f.startDate} onChange={setStartDate} disabled={readOnly} />
-            <TimeSelect value={f.startTime} onChange={setStartTime} disabled={readOnly} invalid={!!errors.start} label={t('appt.startTime')} lang={lang} />
+            <TimeSelect value={f.startTime} onChange={setStartTime} disabled={readOnly} invalid={!!errors.start} label={t('appt.startTime')} lang={lang}
+              range={!startDay ? undefined : startDay.open ? [startDay.start, startDay.end - 15] : null} />
           </div>
-          {errors.start && <div className="error">{errors.start}</div>}
+          {errors.start ? <div className="error">{errors.start}</div>
+            : startDay && !startDay.open ? <div className="error">{hoursText({ key: 'hours.closedDay', day: startDay.key }, t, lang)}</div>
+              : startDay && <div className="hint">{t('hours.openFromTo', { from: minutesToHhmm(startDay.start), to: hhmm24(startDay.end) })}</div>}
         </div>
         <div className="field">
           <label htmlFor="ap-ed">{t('appt.end')}</label>
           <div className="row" style={{ gap: 6 }}>
             <input id="ap-ed" type="date" className={`input ${errors.end ? 'invalid' : ''}`} value={f.endDate} onChange={set('endDate')} disabled={readOnly} />
-            <TimeSelect value={f.endTime} onChange={set('endTime')} disabled={readOnly} invalid={!!errors.end} label={t('appt.endTime')} lang={lang} />
+            <TimeSelect value={f.endTime} onChange={set('endTime')} disabled={readOnly} invalid={!!errors.end} label={t('appt.endTime')} lang={lang}
+              range={!endDay ? undefined : endDay.open ? [f.endDate === f.startDate && sMin != null ? Math.max(endDay.start, sMin) + 15 : endDay.start, Math.min(endDay.end, 24 * 60 - 15)] : null} />
           </div>
           {errors.end && <div className="error">{errors.end}</div>}
         </div>
@@ -317,20 +335,26 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
   )
 }
 
-// A new booking made "now": the next quarter hour on the shop clock, or 08:00 the next morning after hours.
-function defaultStart(tz) {
+// A new booking made "now": the next quarter hour the shop is open (or the next opening time).
+function defaultStart(tz, hours) {
   const today = shopToday(tz)
-  const p = shopParts(new Date(), tz)
-  const m = Math.ceil((p.minutes + 1) / 15) * 15
-  if (m < 8 * 60) return shopTimeToIso(today, 8 * 60, tz)
-  if (m > 17 * 60) return shopTimeToIso(addDays(today, 1), 8 * 60, tz)
-  return shopTimeToIso(today, m, tz)
+  const now = shopParts(new Date(), tz)
+  for (let i = 0; i < 14; i++) {
+    const d = addDays(today, i)
+    const dh = dayHours(hours, d)
+    if (!dh.open) continue
+    const m = i === 0 ? Math.max(dh.start, Math.ceil((now.minutes + 1) / 15) * 15) : dh.start
+    if (m + 15 <= dh.end) return shopTimeToIso(d, m, tz)
+  }
+  return shopTimeToIso(addDays(today, 1), 8 * 60, tz)
 }
 
 // 24-hour times in quarter hours (the browser's own time picker may show AM/PM).
 const QUARTERS = Array.from({ length: 96 }, (_, i) => minutesToHhmm(i * 15))
-function TimeSelect({ value, onChange, disabled, invalid, label, lang }) {
-  const list = QUARTERS.includes(value) || !value ? QUARTERS : [...QUARTERS, value].sort()
+// `range` [from, to] in minutes limits the choice to opening hours (null = closed: only the current value).
+function TimeSelect({ value, onChange, disabled, invalid, label, lang, range }) {
+  const within = range === undefined ? QUARTERS : range === null ? [] : QUARTERS.filter((q) => { const m = hhmmToMinutes(q); return m >= range[0] && m <= range[1] })
+  const list = !value || within.includes(value) ? within : [...within, value].sort()
   return (
     <select className={`select ${invalid ? 'invalid' : ''}`} style={{ maxWidth: 110 }} value={value} onChange={onChange} disabled={disabled} aria-label={label}>
       {list.map((q) => <option key={q} value={q}>{lang === 'id' ? q.replace(':', '.') : q}</option>)}

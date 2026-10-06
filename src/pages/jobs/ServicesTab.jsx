@@ -39,6 +39,28 @@ function buildFor(item, cat, opts = {}, flat = false) {
   return r
 }
 
+// Adds a service bundle (or, with no bundle, a plain named service) to a job with all its lines.
+// `scheduleId` links it to a service schedule. Returns the database results, for useRun.
+export async function addBundleService({ job, cat, tp, name, scheduleId }) {
+  const ro = job.ro
+  const { data: svc, error } = await supabase.from('ro_services').insert({
+    ro_id: ro.id, name: tp ? tp.name : name, template_id: tp?.id || null, checklist_id: tp?.checklist_id || null,
+    flat_price: tp?.flat_price ?? null, position: nextPos(job.services), service_schedule_id: scheduleId || null,
+  }).select().single()
+  if (error) return { error }
+  if (!tp) return { data: svc }
+  const built = { lines: [], jobFees: [] }
+  for (const ti of cat.templateItems.filter((x) => x.template_id === tp.id)) {
+    const item = cat.itemById[ti.catalog_item_id]
+    if (!item) continue
+    const q = Number(ti.qty)
+    const r = buildFor(item, cat, { qty: q, priceOverride: ti.price_override }, tp.flat_price != null)
+    built.lines.push(...r.lines)
+    built.jobFees.push(...r.jobFees)
+  }
+  return insertLines(svc.id, ro.id, 0, built, job.fees)
+}
+
 export default function ServicesTab({ job, cat, staff, editable, workEditable, showCost, run, busy, openApproval }) {
   const { t } = useT()
   const ro = job.ro
@@ -50,23 +72,7 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
   })), [cat.templates])
 
   async function addTemplate(tp) {
-    await run(async () => {
-      const { data: svc, error } = await supabase.from('ro_services').insert({
-        ro_id: ro.id, name: tp.name, template_id: tp.id, checklist_id: tp.checklist_id || null,
-        flat_price: tp.flat_price ?? null, position: nextPos(job.services),
-      }).select().single()
-      if (error) return { error }
-      const built = { lines: [], jobFees: [] }
-      for (const ti of cat.templateItems.filter((x) => x.template_id === tp.id)) {
-        const item = cat.itemById[ti.catalog_item_id]
-        if (!item) continue
-        const q = Number(ti.qty)
-        const r = buildFor(item, cat, { qty: q, priceOverride: ti.price_override }, tp.flat_price != null)
-        built.lines.push(...r.lines)
-        built.jobFees.push(...r.jobFees)
-      }
-      return insertLines(svc.id, ro.id, 0, built, job.fees)
-    }, t('job.serviceAdded', { name: tp.name }))
+    await run(() => addBundleService({ job, cat, tp }), t('job.serviceAdded', { name: tp.name }))
   }
 
   async function addBlank() {
@@ -122,6 +128,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   const checklist = s.checklist_id ? cat.checklists.find((c) => c.id === s.checklist_id) : null
   const inspection = job.inspections.find((x) => x.service_id === s.id)
   const template = s.template_id ? cat.templates.find((x) => x.id === s.template_id) : null
+  const schedule = s.service_schedule_id ? (job.schedules || []).find((x) => x.id === s.service_schedule_id) : null
   const tech = staff.find((p) => p.id === s.technician_id)
   const upd = (patch, okText) => run(() => supabase.from('ro_services').update(patch).eq('id', s.id), okText)
   const updLine = (id, patch) => run(() => supabase.from('ro_service_items').update(patch).eq('id', id))
@@ -220,8 +227,16 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
             <div>{t('job.checklist')}: <b>{checklist.name}</b> · <Badge color={inspection?.status === 'completed' ? 'green' : inspection?.status === 'in_progress' ? 'blue' : 'amber'}>
               {t(`job.work.${inspection?.status || 'todo'}`)}</Badge></div>
           )}
-          {template && (template.default_interval_km || template.default_interval_months) && (
+          {schedule ? (
+            <div className="small"><Icon name="clock" size={12} /> {t('job.countsTowards')} <b>{schedule.name}</b></div>
+          ) : template && (template.default_interval_km || template.default_interval_months) && (
             <div className="muted small">{t('job.nextDue', { when: [template.default_interval_km ? `+${num(template.default_interval_km)} km` : null, template.default_interval_months ? t('cat.monthsN', { n: template.default_interval_months }) : null].filter(Boolean).join(' / ') })}</div>
+          )}
+          {workEditable && (job.schedules || []).some((x) => x.active || x.id === s.service_schedule_id) && (
+            <select className="select bare small" value={s.service_schedule_id || ''} onChange={(e) => upd({ service_schedule_id: e.target.value || null })} aria-label={t('job.scheduleFor', { name: s.name })}>
+              <option value="">{t('job.noSchedule')}</option>
+              {(job.schedules || []).filter((x) => x.active || x.id === s.service_schedule_id).map((x) => <option key={x.id} value={x.id}>{t('job.countsTowardsX', { name: x.name })}</option>)}
+            </select>
           )}
           {(job.concerns.length > 0 && editable) ? (
             <select className="select bare small" value={s.concern_id || ''} onChange={(e) => upd({ concern_id: e.target.value || null })} aria-label={t('job.forConcern')}>

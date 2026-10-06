@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Badge, Button, Empty, Notice, PageHead, useToast } from '../../components/ui'
+import { Badge, Button, Empty, Notice, PageHead, useConfirm, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
@@ -31,7 +31,7 @@ function SearchBox({ value, onChange, placeholder }) {
 
 // Work board: every job still in the shop, as cards in workflow columns (Kanban) or as a table (List).
 export default function BoardPage() {
-  const { t } = useT()
+  const { t, lang } = useT()
   const navigate = useNavigate()
   const location = useLocation()
   const toast = useToast()
@@ -46,6 +46,7 @@ export default function BoardPage() {
   const [priority, setPriority] = useState('')
   const [moved, setMoved] = useState({}) // optimistic column changes while saving
   const [booking, setBooking] = useState(null)
+  const [confirm, confirmEl] = useConfirm()
   const canEdit = can('edit_jobs')
   const today = shopToday(timezone)
 
@@ -64,12 +65,31 @@ export default function BoardPage() {
     })
   }, [data, moved, tech, advisor, priority, needle])
 
+  // Moving a card keeps the calendar in step: Arrived or further marks the booking Arrived (the database does it),
+  // back to Estimate offers to cancel a booking still to come, and Scheduled without a booking opens the booking form.
   async function move(job, status) {
     if (job.workflow_status === status) return
+    const upcoming = job.upcoming // the next booking not yet arrived, cancelled or past
+    let cancelBooking = false
+    if (status === 'estimate' && upcoming) {
+      const answer = await confirm({
+        title: t('board.cancelBookingTitle'), yes: t('board.cancelBookingYes'), no: t('board.keepBooking'),
+        text: t('board.cancelBookingText', { no: jobNo(job.job_number), when: apptWhen(upcoming, today, timezone, lang, t) }),
+      })
+      if (answer === null) return // closed the question: don't move the job at all
+      cancelBooking = answer
+    }
     setMoved((m) => ({ ...m, [job.id]: status }))
     const { error: err } = await supabase.from('repair_orders').update({ workflow_status: status }).eq('id', job.id)
     if (err) toast(errorText(err, t), 'err')
-    else toast(t('board.moved', { no: jobNo(job.job_number), status: t(`job.wf.${status}`) }))
+    else {
+      if (cancelBooking) {
+        const c = await supabase.from('appointments').update({ status: 'cancelled' }).eq('id', upcoming.id)
+        if (c.error) toast(errorText(c.error, t), 'err')
+      }
+      toast(t('board.moved', { no: jobNo(job.job_number), status: t(`job.wf.${status}`) }))
+      if (status === 'scheduled' && !upcoming && canEdit) setBooking(job)
+    }
     await reload()
     setMoved((m) => { const x = { ...m }; delete x[job.id]; return x })
   }
@@ -121,6 +141,7 @@ export default function BoardPage() {
       ) : (
         <BoardList jobs={jobs} data={data} today={today} />
       )}
+      {confirmEl}
       <AppointmentModal open={!!booking} onClose={() => setBooking(null)} defaults={booking ? { ro_id: booking.id, customer_id: booking.customer_id, vehicle_id: booking.vehicle_id } : null}
         onSaved={() => { setBooking(null); reload() }} />
     </main>
@@ -223,7 +244,7 @@ function JobCard({ job, data, staff, today, canEdit, draggable, dragging, onDrag
           {(job.priority === 'high' || job.priority === 'urgent') && <Badge color={PRIORITY_COLOR[job.priority]}>{t(`job.pri.${job.priority}`)}</Badge>}
         </div>
         <div className="bcard-company">{c?.display_name || '—'}</div>
-        <div className="bcard-vehicle"><b>{v?.plate}</b> <span className="muted">{v ? vehicleName(v) : ''}</span></div>
+        <div className="bcard-vehicle"><Icon name="car" size={13} /><b>{v?.plate || '—'}</b>{v && vehicleName(v) && <span>{vehicleName(v)}</span>}</div>
         {phone && <div className="muted small"><Icon name="phone" size={11} /> {phone}{contact?.name ? ` · ${contact.name}` : ''}</div>}
       </button>
       <div className="bcard-people">

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Input, Modal, Notice, Select, Textarea } from '../../components/ui'
+import { Button, Input, Modal, Notice, Select, Textarea, useConfirm } from '../../components/ui'
+import { confirmKm } from '../../lib/mileage'
 import { supabase, errorText } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
-import { num, readAmount } from '../../lib/format'
+import { jobNo, km as kmText, num, readAmount } from '../../lib/format'
 import { FUEL_TYPES, VEHICLE_TYPES, formatPlate, normalizePlate, normalizeVin } from '../../lib/customers'
 
 const EMPTY = { customer_id: '', plate: '', year: '', make: '', model: '', vin: '', type: '', fuel_type: '', mileage_km: '', status: 'active', notes: '' }
@@ -16,6 +17,7 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const editing = Boolean(vehicle)
+  const [confirm, confirmEl] = useConfirm()
 
   useEffect(() => {
     if (!open) return
@@ -57,7 +59,11 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
       plate, year, make: f.make.trim() || null, model: f.model.trim() || null, vin: vin || null,
       type: f.type || null, fuel_type: f.fuel_type || null, mileage_km: km, status: f.status, notes: f.notes.trim() || null,
     }
+    // Lowering the odometer (below what's on file or on an earlier job) is checked first.
+    if (busy) return
     setBusy(true)
+    if (editing && km != null && km !== Number(vehicle.mileage_km ?? -1)
+      && !(await confirmKm({ value: km, vehicleId: vehicle.id, confirm, t, fmt: kmText, jobNo }))) { setBusy(false); return }
     setMsg(null)
     const res = editing
       ? await supabase.from('vehicles').update(row).eq('id', vehicle.id).select().single()
@@ -71,6 +77,7 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
   const activeCustomers = customers.filter((c) => c.active || c.id === f.customer_id)
 
   return (
+    <>
     <Modal open={open} onClose={onClose} wide title={editing ? t('veh.editTitle') : t('veh.newTitle')}
       footer={<>
         <Button onClick={onClose}>{t('common.cancel')}</Button>
@@ -111,5 +118,7 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
         <Textarea fieldClass={editing ? '' : 'span2'} label={t('veh.notes')} value={f.notes} onChange={set('notes')} rows={2} />
       </div>
     </Modal>
+    {confirmEl}
+    </>
   )
 }

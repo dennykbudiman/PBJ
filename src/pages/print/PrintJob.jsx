@@ -7,6 +7,7 @@ import { fmtDate, invoiceNo, jobNo, km, num, rp } from '../../lib/format'
 import { vehicleName } from '../../lib/customers'
 import { lineAmount, lineDiscount, lineNet } from '../../lib/jobs'
 import { useJobData, useStaff } from '../jobs/useJobData'
+import { nextDue } from '../../lib/schedules'
 
 // /print/jobs/<id>?doc=estimate|invoice&lang=id|en : a printable A4 estimate or invoice.
 // Labels follow the print language; names, notes and concerns print exactly as entered.
@@ -26,6 +27,8 @@ export default function PrintJob() {
 
   const ro = job.ro
   const invoiced = ro.order_status === 'invoice'
+  // The vehicle's next services (from its service schedules), printed on the invoice for the fleet.
+  const nextServices = (job.schedules || []).filter((x) => x.active).map((x) => ({ x, due: nextDue(x) })).filter(({ due }) => due.km != null || due.date)
   const doc = params.get('doc') === 'invoice' && invoiced ? 'invoice' : 'estimate'
   const lang = params.get('lang') || ro.print_language || settings.default_print_language || 'id'
   const t = (key, vars) => translate(lang, key, vars)
@@ -177,6 +180,16 @@ export default function PrintJob() {
                   </ul>
                 )}
                 {ro.recommendations && <div className="pre">{ro.recommendations}</div>}
+              </div>
+            )}
+            {doc === 'invoice' && nextServices.length > 0 && (
+              <div className="doc-block">
+                <div className="doc-label">{t('pr.nextService')}</div>
+                <ul className="doc-list">
+                  {nextServices.map(({ x, due }) => (
+                    <li key={x.id}>{x.name} — {[due.km != null ? km(due.km) : null, due.date ? fmtDate(due.date, lang) : null].filter(Boolean).join(t('sch.or'))}</li>
+                  ))}
+                </ul>
               </div>
             )}
             {shop.bank_details && (

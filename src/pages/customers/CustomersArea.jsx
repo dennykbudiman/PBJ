@@ -8,6 +8,7 @@ import CustomerForm from './CustomerForm'
 import VehiclePanel from './VehiclePanel'
 import VehicleForm from './VehicleForm'
 import JobLists from '../jobs/JobLists'
+import ServiceDueList from './ServiceDue'
 import { useCustomerData } from './useCustomerData'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
@@ -16,7 +17,7 @@ import { errorText } from '../../lib/supabase'
 import { jobNo, km, rp } from '../../lib/format'
 import { CUSTOMER_TYPES, TYPE_COLOR, VEHICLE_STATUS_COLOR, normalizePlate, npwpDigits, vehicleName } from '../../lib/customers'
 
-const TABS = ['customers', 'vehicles', 'repair-orders', 'invoices', 'payments', 'deferred']
+const TABS = ['customers', 'vehicles', 'service-due', 'repair-orders', 'invoices', 'payments', 'deferred']
 // /customers, /customers/<id>, /customers/vehicles, /customers/vehicles/<id>, /customers/<other tab>
 function parsePath(pathname) {
   const parts = pathname.split('/').filter(Boolean).slice(1).map(decodeURIComponent)
@@ -68,6 +69,7 @@ export default function CustomersArea() {
     />
   )
 
+  if (tab === 'service-due') return <Page tabs={tabs}><ServiceDueList /></Page>
   if (!['customers', 'vehicles'].includes(tab)) {
     return (
       <Page tabs={tabs}>

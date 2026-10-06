@@ -15,11 +15,10 @@ import {
 import { selectAll } from '../customers/useCustomerData'
 import { useStaff } from '../jobs/useJobData'
 import AppointmentModal from './AppointmentModal'
+import { bookingProblem, dayHours, hoursRange, hoursText } from '../../lib/hours'
 
 const HOUR_PX = 52
 const SLOT = 30 // minutes per clickable slot
-const DAY_START = 7 * 60
-const DAY_END = 18 * 60
 const MIN_EV = 30 // shortest drawn booking, in minutes, so short ones stay readable and never overlap
 const VIEWS = ['day', 'week', 'month']
 
@@ -49,7 +48,8 @@ export default function CalendarPage() {
   const location = useLocation()
   const toast = useToast()
   const { can } = useAuth()
-  const { timezone } = useShop()
+  const { timezone, settings } = useShop()
+  const hours = settings?.opening_hours
   const staff = useStaff()
   const canEdit = can('edit_jobs')
   const params = new URLSearchParams(location.search)
@@ -128,7 +128,13 @@ export default function CalendarPage() {
     const start = shopTimeToIso(dateStr, minutes, timezone)
     const patch = { start_time: start, end_time: new Date(new Date(start).getTime() + len).toISOString() }
     if (technicianId !== undefined) patch.technician_id = technicianId || null
-    if (Date.parse(patch.start_time) === Date.parse(a.start_time) && (technicianId === undefined || (technicianId || null) === a.technician_id)) return
+    const sameTime = Date.parse(patch.start_time) === Date.parse(a.start_time)
+    if (sameTime && (technicianId === undefined || (technicianId || null) === a.technician_id)) return
+    // Opening hours only matter when the time changes (a new technician alone is always fine).
+    if (sameTime) { delete patch.start_time; delete patch.end_time } else {
+      const problem = bookingProblem(hours, patch.start_time, patch.end_time, timezone)
+      if (problem) { toast(hoursText(problem, t, lang), 'err'); return }
+    }
     setAppts((list) => list.map((x) => (x.id === a.id ? { ...x, ...patch } : x)))
     const { error: err } = await supabase.from('appointments').update(patch).eq('id', a.id)
     if (err) toast(errorText(err, t), 'err')
@@ -137,8 +143,14 @@ export default function CalendarPage() {
   }
   const newAt = (dateStr, minutes, technicianId) => {
     if (!canEdit) return
-    const start = shopTimeToIso(dateStr, minutes, timezone)
-    setModal({ defaults: { start, end: new Date(new Date(start).getTime() + 3600000).toISOString(), technician_id: technicianId || '' } })
+    const d = dayHours(hours, dateStr)
+    if (!d.open) { toast(hoursText({ key: 'hours.closedDay', day: d.key }, t, lang), 'err'); return }
+    // A new booking is an hour long, or up to closing time.
+    const startMin = Math.max(minutes, d.start)
+    const endMin = Math.min(startMin + 60, d.end)
+    if (endMin <= startMin) return
+    const s0 = shopTimeToIso(dateStr, startMin, timezone)
+    setModal({ defaults: { start: s0, end: shopTimeToIso(dateStr, endMin, timezone), technician_id: technicianId || '' } })
   }
 
   const step = (dir) => {
@@ -151,7 +163,7 @@ export default function CalendarPage() {
       : monthLabel(date, lang)
 
   const techs = staff.filter((s) => s.roles?.name === 'Technician' || (appts || []).some((a) => a.technician_id === s.id))
-  const common = { appts: shown, label, staff, canEdit, today, allHours, onOpen: (a) => setModal({ appointment: a }), onNew: newAt, onMove: moveTo }
+  const common = { appts: shown, label, staff, canEdit, today, allHours, hours, onOpen: (a) => setModal({ appointment: a }), onNew: newAt, onMove: moveTo }
 
   return (
     <main className="content cal-page">
@@ -250,7 +262,7 @@ function spanText(p, lang, t) {
   return t('cal.allDay')
 }
 
-function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHours, onOpen, onNew, onMove }) {
+function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHours, hours, onOpen, onNew, onMove }) {
   const { t, lang } = useT()
   const { timezone } = useShop()
   const [drag, setDrag] = useState(null)
@@ -259,7 +271,7 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
   const pieces = columns.map((col) => appts.filter((a) => !byTech || (a.technician_id || '') === col.techId)
     .map((a) => ({ a, p: pieceOn(a, col.date, timezone) })).filter((x) => x.p))
   // Office hours, stretched to fit anything booked outside them.
-  let lo = DAY_START; let hi = DAY_END
+  let [lo, hi] = hoursRange(hours, [...new Set(columns.map((c) => c.date))])
   if (allHours) { lo = 0; hi = 24 * 60 } else {
     // Only real start and end times stretch the hours; the in-between days of a long booking don't.
     for (const list of pieces) for (const { p } of list) {
@@ -268,15 +280,15 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
     }
   }
   const px = (m) => ((m - lo) / 60) * HOUR_PX
-  const hours = []
-  for (let m = lo; m < hi; m += 60) hours.push(m)
+  const hourMarks = []
+  for (let m = lo; m < hi; m += 60) hourMarks.push(m)
   const slots = []
   for (let m = lo; m < hi; m += SLOT) slots.push(m)
   const now = shopParts(new Date(), timezone)
 
   // Start the view at the first booking (or office hours) rather than midnight.
   useEffect(() => {
-    if (scroller.current && allHours) scroller.current.scrollTop = px(Math.max(0, DAY_START - 60))
+    if (scroller.current && allHours) scroller.current.scrollTop = px(Math.max(0, hoursRange(hours, columns.map((c) => c.date))[0] - 60))
   }, [allHours]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const minutesAt = (e, el) => {
@@ -290,7 +302,7 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
       <div className="tgrid-head">
         <div className="tgrid-gutter" />
         {columns.map((c) => (
-          <div key={c.key} className={`tgrid-colhead ${c.date === today && !byTech ? 'today' : ''}`}>
+          <div key={c.key} className={`tgrid-colhead ${c.date === today && !byTech ? 'today' : ''} ${!byTech && !dayHours(hours, c.date).open ? 'closed' : ''}`}>
             {c.onHead ? <button type="button" className="linkbtn" onClick={c.onHead}><b>{c.label}</b> <span className="muted">{c.sub}</span></button>
               : <><b>{c.label}</b>{c.techId && <span className="avatar tiny">{initials(c.label)}</span>}</>}
           </div>
@@ -299,7 +311,7 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
       <div className="tgrid-scroll" ref={scroller}>
         <div className="tgrid-body" style={{ height: px(hi) }}>
           <div className="tgrid-gutter">
-            {hours.map((m) => <div key={m} className="tgrid-hour" style={{ top: px(m) }}>{clock(m, lang)}</div>)}
+            {hourMarks.map((m) => <div key={m} className="tgrid-hour" style={{ top: px(m) }}>{clock(m, lang)}</div>)}
           </div>
           {columns.map((c, ci) => (
             <div key={c.key} className={`tgrid-col ${over === c.key ? 'over' : ''}`}
@@ -312,11 +324,25 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
                 onMove(drag.a, c.date, Math.max(0, Math.round(m / 15) * 15), byTech ? c.techId : undefined)
                 setDrag(null)
               }}>
-              {slots.map((m) => (
-                <button key={m} type="button" tabIndex={-1} className={`tgrid-slot ${m % 60 === 0 ? 'hour' : ''}`} style={{ top: px(m), height: (SLOT / 60) * HOUR_PX }}
-                  disabled={!canEdit} aria-label={canEdit ? t('cal.newAt', { when: `${dayLabel(c.date, lang)} ${clock(m, lang)}`, who: byTech ? c.label : '' }) : undefined}
-                  onClick={() => onNew(c.date, m, byTech ? c.techId : '')} />
-              ))}
+              {(() => {
+                // Closed hours are shaded and can't be clicked.
+                const dh = dayHours(hours, c.date)
+                const isOpen = (m) => dh.open && m >= dh.start && m + SLOT <= dh.end
+                return (
+                  <>
+                    {slots.map((m) => (
+                      <button key={m} type="button" tabIndex={-1} className={`tgrid-slot ${m % 60 === 0 ? 'hour' : ''}`} style={{ top: px(m), height: (SLOT / 60) * HOUR_PX }}
+                        disabled={!canEdit || !isOpen(m)} aria-label={canEdit && isOpen(m) ? t('cal.newAt', { when: `${dayLabel(c.date, lang)} ${clock(m, lang)}`, who: byTech ? c.label : '' }) : undefined}
+                        onClick={() => onNew(c.date, m, byTech ? c.techId : '')} />
+                    ))}
+                    {!dh.open ? <div className="tgrid-closed" style={{ top: 0, height: px(hi) }} title={t('hours.closedAllDay')} />
+                      : <>
+                        {dh.start > lo && <div className="tgrid-closed" style={{ top: 0, height: px(Math.min(dh.start, hi)) }} />}
+                        {dh.end < hi && <div className="tgrid-closed" style={{ top: px(Math.max(dh.end, lo)), height: px(hi) - px(Math.max(dh.end, lo)) }} />}
+                      </>}
+                  </>
+                )
+              })()}
               {c.date === today && now.minutes >= lo && now.minutes <= hi && <div className="tgrid-now" style={{ top: px(now.minutes) }} aria-hidden="true" />}
               {layoutOverlaps(pieces[ci].map(({ a, p }) => ({ a, p, top: Math.max(p.start, lo), bottom: Math.max(Math.min(p.end, hi), Math.max(p.start, lo) + MIN_EV) }))).map((ev) => {
                 const l = label(ev.a)
@@ -333,11 +359,12 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
                     }}
                     onDragEnd={() => { setDrag(null); setOver(null) }}
                     onClick={() => onOpen(ev.a)}
-                    title={`${spanText(ev.p, lang, t)} · ${l.who}${l.plate ? ` · ${l.plate}` : ''} · ${t(`appt.st.${ev.a.status}`)}`}>
+                    title={`${spanText(ev.p, lang, t)} · ${l.who}${l.plate ? ` · ${l.plate} ${l.vehicle}` : ''} · ${t(`appt.st.${ev.a.status}`)}`}>
                     <span className="ev-time">{spanText(ev.p, lang, t)}{tech && !byTech && <span className="ev-tech">{initials(tech.name)}</span>}</span>
                     <span className="ev-who">{l.who}</span>
-                    {height >= 56 && l.plate && <span className="ev-sub">{l.plate}{l.job ? ` · #${jobNo(l.job.job_number)}` : ''}</span>}
-                    {height >= 74 && l.title && <span className="ev-sub">{l.title}</span>}
+                    {height >= 56 && l.plate && <span className="ev-sub">{l.plate}{l.vehicle ? ` · ${l.vehicle}` : ''}</span>}
+                    {height >= 74 && l.job && <span className="ev-sub">#{jobNo(l.job.job_number)}</span>}
+                    {height >= 92 && l.title && <span className="ev-sub">{l.title}</span>}
                   </button>
                 )
               })}
@@ -349,7 +376,7 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
   )
 }
 
-function MonthView({ appts, label, date, first, staff, canEdit, today, onOpen, onNew, onMove, onDay }) {
+function MonthView({ appts, label, date, first, staff, canEdit, today, hours, onOpen, onNew, onMove, onDay }) {
   const { t, lang } = useT()
   const { timezone } = useShop()
   const [drag, setDrag] = useState(null)
@@ -363,7 +390,7 @@ function MonthView({ appts, label, date, first, staff, canEdit, today, onOpen, o
       {days.map((d) => {
         const list = appts.map((a) => ({ a, p: pieceOn(a, d, timezone) })).filter((x) => x.p).sort((x, y) => x.p.start - y.p.start)
         return (
-          <div key={d} className={`mcell ${d.slice(0, 7) !== month ? 'other' : ''} ${d === today ? 'today' : ''} ${over === d ? 'over' : ''}`}
+          <div key={d} className={`mcell ${d.slice(0, 7) !== month ? 'other' : ''} ${d === today ? 'today' : ''} ${over === d ? 'over' : ''} ${dayHours(hours, d).open ? '' : 'closedday'}`}
             onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(d) } }}
             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver((o) => (o === d ? null : o)) }}
             onDrop={(e) => {
@@ -376,7 +403,7 @@ function MonthView({ appts, label, date, first, staff, canEdit, today, onOpen, o
             }}>
             <div className="mcell-head">
               <button type="button" className="mcell-day" onClick={() => onDay(d)} aria-label={dayLabel(d, lang, { weekday: 'long', day: 'numeric', month: 'long' })}>{Number(d.slice(8))}</button>
-              {canEdit && <button type="button" className="mcell-add" onClick={() => onNew(d, 8 * 60, '')} aria-label={t('cal.newOn', { day: dayLabel(d, lang) })}><Icon name="plus" size={12} /></button>}
+              {canEdit && dayHours(hours, d).open && <button type="button" className="mcell-add" onClick={() => onNew(d, dayHours(hours, d).start, '')} aria-label={t('cal.newOn', { day: dayLabel(d, lang) })}><Icon name="plus" size={12} /></button>}
             </div>
             {list.slice(0, 3).map(({ a, p }) => {
               const l = label(a)
@@ -397,4 +424,5 @@ function MonthView({ appts, label, date, first, staff, canEdit, today, onOpen, o
     </div>
   )
 }
+
 

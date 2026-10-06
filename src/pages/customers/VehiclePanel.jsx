@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Empty, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import TransferForm from './TransferForm'
+import ScheduleSection from './ScheduleSection'
 import { JobsFor, VehicleInspections } from '../jobs/JobLists'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -103,8 +104,7 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
             </div>
             {vehicle.notes && <div className="hint" style={{ whiteSpace: 'pre-line', marginTop: 10 }}><b>{t('veh.notes')}:</b> {vehicle.notes}</div>}
 
-            <div className="sectionlabel">{t('veh.schedule')}</div>
-            <div className="muted small" style={{ padding: '4px 0 6px' }}>{t('soon.text', { stage: 8, name: t('stage.schedules') })}</div>
+            <ScheduleSection vehicle={vehicle} />
 
             <div className="row" style={{ marginTop: 14 }}>
               <div className="sectionlabel" style={{ margin: 0 }}>{t('veh.history')}</div>

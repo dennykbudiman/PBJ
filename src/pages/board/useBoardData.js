@@ -66,6 +66,7 @@ export function useBoardData() {
         const ap = apptBy[j.id] || []
         // The booking that matters: the next one still to come, otherwise the latest one.
         const next = ap.find((a) => new Date(a.end_time).getTime() >= now) || ap[ap.length - 1] || null
+        const upcoming = ap.find((a) => ['requested', 'scheduled', 'confirmed'].includes(a.status) && new Date(a.end_time).getTime() > now) || null
         const techs = [...new Set([...svcs.map((s) => s.technician_id), ...(inspBy[j.id] || []).map((x) => x.technician_id), next?.technician_id].filter(Boolean))]
         return {
           ...j,
@@ -77,6 +78,7 @@ export function useBoardData() {
           hours: Math.round((hours[j.id] || 0) * 100) / 100,
           techs,
           appt: next,
+          upcoming,
         }
       }),
       customer: Object.fromEntries((customers.data || []).map((c) => [c.id, c])),

@@ -5,6 +5,8 @@ import Icon from '../../components/Icon'
 import LaborRates from './LaborRates'
 import Users from './Users'
 import Appearance, { themeError } from './Appearance'
+import OpeningHours, { hoursError } from './OpeningHours'
+import { normHours } from '../../lib/hours'
 import { applyTheme, DEFAULT_THEME, normTheme } from '../../lib/theme'
 import { useScrollSpy } from '../../lib/useScrollSpy'
 import { supabase, errorText, LOGO_BUCKET } from '../../lib/supabase'
@@ -13,7 +15,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { initials, invoiceNo, jobNo, stockPoNo, readAmount, parseDecimal, rp, num } from '../../lib/format'
 
-const ALL_SECTIONS = ['shop', 'appearance', 'language', 'numbering', 'fees', 'labor', 'users']
+const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'fees', 'labor', 'users']
 
 // shop_settings columns edited on this page, with how each is read from the form.
 const TEXT = ['shop_name', 'legal_name', 'npwp', 'address', 'phone', 'email', 'bank_details', 'terms_id', 'terms_en', 'tax_name']
@@ -36,6 +38,7 @@ function toForm(s) {
   const r = s?.shop_supplies_rate
   f.shop_supplies_rate = r == null ? '' : s.shop_supplies_type === 'fixed' ? num(r) : String(Number(r)).replace('.', ',')
   f.theme = normTheme(s?.theme)
+  f.opening_hours = normHours(s?.opening_hours)
   return f
 }
 
@@ -76,6 +79,9 @@ function fromForm(f, s, t) {
   const mx = readAmount(f.shop_supplies_max)
   if (mn !== null && mx !== null && !Number.isNaN(mn) && !Number.isNaN(mx) && mn > mx) errors.shop_supplies_max = t('settings.minMax')
   if (f.email.trim() && !/^\S+@\S+\.\S+$/.test(f.email.trim())) errors.email = t('settings.badEmail')
+  const he = hoursError(f.opening_hours, t)
+  if (he) errors.opening_hours = he
+  else if (JSON.stringify(f.opening_hours) !== JSON.stringify(normHours(s.opening_hours))) patch.opening_hours = f.opening_hours
   const te = themeError(f.theme, t)
   if (te) errors.theme = te
   else if (JSON.stringify(normTheme(f.theme)) !== JSON.stringify(normTheme(s.theme))) patch.theme = normTheme(f.theme)
@@ -295,6 +301,9 @@ export default function Settings() {
               <Textarea label="English" value={form.terms_en} onChange={set('terms_en')} disabled={dis} rows={3} />
             </div>
           </Card>
+
+          <OpeningHours id="set-hours" value={form.opening_hours} disabled={dis} error={errors.opening_hours}
+            onChange={(opening_hours) => { setForm((f) => ({ ...f, opening_hours })); setErrors((e) => ({ ...e, opening_hours: null })) }} />
 
           <Card title={t('settings.nav.numbering')} id="set-numbering">
             <div className="grid3">

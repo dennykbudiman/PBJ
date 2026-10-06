@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Page } from '../../components/Layout'
-import { Badge, Button, Card, Empty, Modal, Notice, SubTabs, usePopover } from '../../components/ui'
+import { Badge, Button, Card, Empty, Modal, Notice, SubTabs, useConfirm, usePopover } from '../../components/ui'
+import { confirmKm } from '../../lib/mileage'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
@@ -18,6 +19,8 @@ import JobInspections from './JobInspections'
 import JobActivity from './JobActivity'
 import { AppointmentsCard, ApprovalsCard, ProfitCard, StatusCard, TotalsCard } from './JobSide'
 import { DeferredBanner } from './Deferred'
+import DueBanner from './DueWork'
+import { addBundleService } from './ServicesTab'
 import AppointmentModal from '../calendar/AppointmentModal'
 import { ApprovalModal, CreditModal, DiscountModal, FeeModal, InvoiceModal, PaymentModal, ReasonModal } from './JobModals'
 
@@ -36,6 +39,20 @@ export default function JobPage({ id }) {
   const runStock = async (fn, okText) => { const ok = await run(fn, okText); reloadCat(); return ok }
   const [tab, setTab] = useState('services')
   const [modal, setModal] = useState(null) // { kind, ...}
+  // "Start job" from a service schedule arrives as ?addSchedule=<id>: add that service once, then tidy the address.
+  const location = useLocation()
+  const addSched = new URLSearchParams(location.search).get('addSchedule')
+  const addedSched = useRef(false)
+  useEffect(() => {
+    if (!addSched || !job || !cat || addedSched.current) return
+    addedSched.current = true
+    navigate(`/jobs/${id}`, { replace: true })
+    const x = (job.schedules || []).find((sc) => sc.id === addSched)
+    if (!x || !can('edit_jobs') || job.ro.order_status === 'invoice' || job.ro.closed_at || job.services.some((sv) => sv.service_schedule_id === x.id && sv.approval_status !== 'declined' && sv.approval_status !== 'deferred')) return
+    const tp = x.template_id ? cat.templates.find((tt) => tt.id === x.template_id) : null
+    run(() => addBundleService({ job, cat, tp, name: x.name, scheduleId: x.id }), t('job.serviceAdded', { name: tp ? tp.name : x.name }))
+  }, [addSched, job, cat]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [confirm, confirmEl] = useConfirm()
 
   if (missing) return <Page><Card><Empty icon="info" title={t('job.notFound')} action={<Link className="btn" to="/customers/repair-orders">{t('job.backToList')}</Link>} /></Card></Page>
   if (!job || !cat) return <Page><div className="muted">{error ? errorText(error, t) : t('common.loading')}</div></Page>
@@ -64,6 +81,19 @@ export default function JobPage({ id }) {
       && { label: t('job.deleteEstimate'), icon: 'trash', danger: true, onClick: () => open('delete') },
   ]
 
+  // Odometer readings: a reading lower than anything known for this vehicle (or out below in) is checked first.
+  async function saveOdo(field, val, reset) {
+    const n = String(val).trim() ? Number(String(val).replace(/[.\s]/g, '')) : null
+    if (n !== null && (!Number.isInteger(n) || n < 0 || n > 9999999)) { reset(); return false }
+    if (n !== null) {
+      if (field === 'odometer_out' && ro.odometer_in != null && n < ro.odometer_in) {
+        const sure = await confirm({ title: t('km.lowerTitle'), yes: t('km.yes'), no: t('km.no'), text: t('km.outBelowIn', { out: km(n), in: km(ro.odometer_in) }) })
+        if (sure !== true) { reset(); return false }
+      } else if (!(await confirmKm({ value: n, vehicleId: ro.vehicle_id, excludeRo: ro.id, ownKm: [ro.odometer_in, ro.odometer_out], confirm, t, fmt: km, jobNo }))) { reset(); return false }
+    }
+    return run(() => supabase.from('repair_orders').update({ [field]: n }).eq('id', ro.id))
+  }
+
   const tabs = <SubTabs tabs={TABS.map((x) => ({ value: x, label: t(`job.tab.${x}`) + (x === 'concerns' && job.concerns.length ? ` (${job.concerns.length})` : '') }))} active={tab} onChange={setTab} />
 
   return (
@@ -86,7 +116,6 @@ export default function JobPage({ id }) {
               </div>
               <div className="row" style={{ gap: 8 }}>
                 <PrintButton invoiced={invoiced} onPrint={(doc) => navigate(`/print/jobs/${ro.id}?doc=${doc}`)} />
-                {editable && job.services.length > 0 && <Button onClick={() => open('approval')}>{t('job.recordApproval')}</Button>}
                 <MoreMenu label={t('job.more')} items={menu} />
               </div>
             </div>
@@ -101,11 +130,11 @@ export default function JobPage({ id }) {
                 <div className="row" style={{ gap: 8, marginTop: 8 }}>
                   <label className="mini">{t('job.odoIn')}
                     <BlurInput className="input cell num" style={{ width: 110 }} disabled={!editable} value={ro.odometer_in != null ? num(ro.odometer_in) : ''} placeholder="km" aria-label={t('job.odometerIn')}
-                      onCommit={(val, reset) => { const n = String(val).trim() ? Number(String(val).replace(/[.\s]/g, '')) : null; if (n !== null && (!Number.isInteger(n) || n < 0 || n > 9999999)) { reset(); return } run(() => supabase.from('repair_orders').update({ odometer_in: n }).eq('id', ro.id)) }} />
+                      onCommit={(val, reset) => saveOdo('odometer_in', val, reset)} />
                   </label>
                   <label className="mini">{t('job.odoOut')}
                     <BlurInput className="input cell num" style={{ width: 110 }} disabled={!editable} value={ro.odometer_out != null ? num(ro.odometer_out) : ''} placeholder="km" aria-label={t('job.odometerOut')}
-                      onCommit={(val, reset) => { const n = String(val).trim() ? Number(String(val).replace(/[.\s]/g, '')) : null; if (n !== null && (!Number.isInteger(n) || n < 0 || n > 9999999)) { reset(); return } run(() => supabase.from('repair_orders').update({ odometer_out: n }).eq('id', ro.id)) }} />
+                      onCommit={(val, reset) => saveOdo('odometer_out', val, reset)} />
                   </label>
                 </div>
               </div>
@@ -124,6 +153,7 @@ export default function JobPage({ id }) {
             </div>
           </section>
 
+          <DueBanner job={job} cat={cat} editable={editable} run={run} busy={busy} />
           <DeferredBanner job={job} editable={editable} onCarried={reload} />
 
           <div className="card tabcard">{tabs}</div>
@@ -156,6 +186,7 @@ export default function JobPage({ id }) {
         </aside>
       </div>
 
+      {confirmEl}
       <AppointmentModal open={modal?.kind === 'appt'} onClose={close} appointment={modal?.appointment}
         defaults={{ ro_id: ro.id, customer_id: ro.customer_id, vehicle_id: ro.vehicle_id }}
         onSaved={() => { close(); reload() }} onDeleted={() => { close(); reload() }} />

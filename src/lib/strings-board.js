@@ -20,6 +20,28 @@ export const boardEn = {
   'board.col.invoice': 'Invoice', 'board.col.approval': 'Approval', 'board.col.appt': 'Appointment', 'board.col.hours': 'Hours',
   'board.listTotal': '{n} jobs · {amount}',
 
+  // Opening hours
+  'settings.nav.hours': 'Opening hours',
+  'hours.hint': 'Bookings can only be made while the shop is open, and the calendar shows these hours. Bookings already made keep their times if you change this.',
+  'hours.open': 'Open', 'hours.closed': 'Closed', 'hours.closedAllDay': 'Closed all day', 'hours.copyMon': 'Copy Monday to Tuesday–Friday',
+  'hours.opensOn': '{day} opens', 'hours.closesOn': '{day} closes', 'hours.badDay': '{day}: closing time must be after opening time', 'hours.noOpenDay': 'Open at least one day of the week.', 'hours.startAfterClose': 'That is after the shop closes ({time}).',
+  'hours.day.mon': 'Monday', 'hours.day.tue': 'Tuesday', 'hours.day.wed': 'Wednesday', 'hours.day.thu': 'Thursday', 'hours.day.fri': 'Friday', 'hours.day.sat': 'Saturday', 'hours.day.sun': 'Sunday',
+  'hours.closedDay': 'The shop is closed on {day}', 'hours.beforeOpen': 'The shop opens at {time}', 'hours.afterClose': 'The shop closes at {time}',
+  'hours.endClosedDay': 'The shop is closed on {day}, when this booking ends', 'hours.endOutside': 'On the last day the shop is open {from}–{to}',
+  'hours.openFromTo': 'Open {from}–{to}',
+  'board.cancelBookingTitle': 'Cancel the booking too?', 'board.cancelBookingYes': 'Cancel the booking', 'board.keepBooking': 'Keep the booking',
+  'board.cancelBookingText': 'Job #{no} is booked for {when}. Moving it back to Estimate: should that booking be cancelled as well?',
+  'db:The shop is closed on that day': 'The shop is closed on that day (see Settings → Opening hours).',
+  'db:That is before the shop opens': 'That is before the shop opens (see Settings → Opening hours).',
+  'db:That is after the shop closes': 'That is after the shop closes (see Settings → Opening hours).',
+  'db:The shop is closed on the day the booking ends': 'The shop is closed on the day the booking ends.',
+
+  // Mileage check
+  'common.confirm': 'Confirm',
+  'km.lowerTitle': 'Lower mileage than before', 'km.yes': 'Yes, it is correct', 'km.no': 'Let me fix it',
+  'km.lowerText': 'You entered {km}, but this vehicle already had {last} recorded{where}. Odometers don\u2019t go back, so please check the number. Is {km} correct?',
+  'km.onJob': ' on job #{no}', 'km.outBelowIn': 'Odometer out ({out}) is lower than odometer in ({in}). Is it correct?',
+
   // Calendar
   'cal.sub': 'Bookings on the shop clock. Click an empty slot to book; drag a booking to move it.',
   'cal.newAppt': 'Appointment', 'cal.prev': 'Previous', 'cal.next': 'Next', 'cal.today': 'Today', 'cal.view': 'Calendar view',
@@ -99,6 +121,38 @@ export const boardId = {
   'board.servicesTitle': 'Servis disetujui yang selesai / semua servis', 'board.inspTitle': 'Inspeksi', 'board.hoursTitle': 'Jam kerja di pekerjaan ini', 'board.h': 'jam',
   'board.col.invoice': 'Invoice', 'board.col.approval': 'Persetujuan', 'board.col.appt': 'Janji', 'board.col.hours': 'Jam',
   'board.listTotal': '{n} pekerjaan · {amount}',
+
+  // Jam buka
+  'settings.nav.hours': 'Jam buka',
+  'hours.hint': 'Janji hanya bisa dibuat saat bengkel buka, dan kalender menampilkan jam ini. Janji yang sudah dibuat tetap pada jamnya jika ini diubah.',
+  'hours.open': 'Buka', 'hours.closed': 'Tutup', 'hours.closedAllDay': 'Tutup seharian', 'hours.copyMon': 'Salin Senin ke Selasa–Jumat',
+  'hours.opensOn': '{day} buka', 'hours.closesOn': '{day} tutup', 'hours.badDay': '{day}: jam tutup harus setelah jam buka', 'hours.noOpenDay': 'Buka minimal satu hari dalam seminggu.', 'hours.startAfterClose': 'Itu setelah bengkel tutup ({time}).',
+  'hours.day.mon': 'Senin', 'hours.day.tue': 'Selasa', 'hours.day.wed': 'Rabu', 'hours.day.thu': 'Kamis', 'hours.day.fri': 'Jumat', 'hours.day.sat': 'Sabtu', 'hours.day.sun': 'Minggu',
+  'hours.closedDay': 'Bengkel tutup pada hari {day}', 'hours.beforeOpen': 'Bengkel buka pukul {time}', 'hours.afterClose': 'Bengkel tutup pukul {time}',
+  'hours.endClosedDay': 'Bengkel tutup pada hari {day}, saat janji ini berakhir', 'hours.endOutside': 'Di hari terakhir bengkel buka {from}–{to}',
+  'hours.openFromTo': 'Buka {from}–{to}',
+  'board.cancelBookingTitle': 'Batalkan janjinya juga?', 'board.cancelBookingYes': 'Batalkan janji', 'board.keepBooking': 'Biarkan janji',
+  'board.cancelBookingText': 'Pekerjaan #{no} punya janji pada {when}. Pekerjaan dikembalikan ke Estimasi: apakah janji itu juga dibatalkan?',
+  'db:The shop is closed on that day': 'Bengkel tutup pada hari itu (lihat Pengaturan → Jam buka).',
+  'db:That is before the shop opens': 'Itu sebelum bengkel buka (lihat Pengaturan → Jam buka).',
+  'db:That is after the shop closes': 'Itu setelah bengkel tutup (lihat Pengaturan → Jam buka).',
+  'db:The shop is closed on the day the booking ends': 'Bengkel tutup pada hari janji ini berakhir.',
+  'db:Only an open estimate can be booked': 'Hanya estimasi yang masih terbuka yang bisa dibuatkan janji.',
+  'db:The appointment must have the same vehicle and company as its job': 'Janji harus memakai kendaraan dan perusahaan yang sama dengan pekerjaannya.',
+  'db:That vehicle belongs to another company': 'Kendaraan itu milik perusahaan lain.',
+  'db:Deferred work can only go into an open estimate': 'Servis tertunda hanya bisa dimasukkan ke estimasi yang masih terbuka.',
+  'db:Only deferred work from an invoiced or closed job can be carried over': 'Hanya servis tertunda dari pekerjaan yang sudah di-invoice atau ditutup yang bisa dipindahkan.',
+  'db:Only deferred work from an invoiced or closed job can be dismissed': 'Hanya servis tertunda dari pekerjaan yang sudah di-invoice atau ditutup yang bisa diabaikan.',
+  'db:That deferred work is for another vehicle': 'Servis tertunda itu untuk kendaraan lain.',
+  'db:That deferred work has already been carried over': 'Servis tertunda itu sudah dipindahkan.',
+  'db:That deferred work was dismissed': 'Servis tertunda itu sudah diabaikan.',
+  'db:That work is already on this job': 'Servis itu sudah ada di pekerjaan ini.',
+
+  // Cek kilometer
+  'common.confirm': 'Konfirmasi',
+  'km.lowerTitle': 'Kilometer lebih rendah dari sebelumnya', 'km.yes': 'Ya, sudah benar', 'km.no': 'Perbaiki dulu',
+  'km.lowerText': 'Anda mengisi {km}, padahal kendaraan ini sudah tercatat {last}{where}. Odometer tidak bisa mundur, jadi periksa lagi angkanya. Apakah {km} sudah benar?',
+  'km.onJob': ' di pekerjaan #{no}', 'km.outBelowIn': 'Odometer keluar ({out}) lebih rendah dari odometer masuk ({in}). Apakah sudah benar?',
 
   // Kalender
   'cal.sub': 'Janji servis menurut jam bengkel. Klik slot kosong untuk membuat janji; seret janji untuk memindahkannya.',
