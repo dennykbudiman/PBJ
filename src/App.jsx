@@ -15,6 +15,8 @@ import JobsArea from './pages/jobs/JobsArea'
 import PrintJob from './pages/print/PrintJob'
 import BoardPage from './pages/board/BoardPage'
 import CalendarPage from './pages/calendar/CalendarPage'
+import InventoryArea from './pages/inventory/InventoryArea'
+import PrintPo from './pages/print/PrintPo'
 
 // Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
 function VehiclesRedirect() {
@@ -32,6 +34,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="print/po/*" element={<PrintPo />} />
       <Route path="print/*" element={<PrintJob />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
@@ -41,7 +44,7 @@ export default function App() {
         <Route path="vehicles/*" element={<VehiclesRedirect />} />
         <Route path="catalog/*" element={<CatalogArea />} />
         <Route path="jobs/*" element={<JobsArea />} />
-        <Route path="inventory/*" element={<ComingSoon titleKey="nav.inventory" stage="inventory" icon="packages" />} />
+        <Route path="inventory/*" element={<InventoryArea />} />
         <Route path="reports/*" element={<ComingSoon titleKey="nav.reports" stage="reports" icon="chart-bar" />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<Settings />} />

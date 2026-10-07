@@ -26,7 +26,7 @@ const CREATE = [
   { key: 'create.vehicle', icon: 'car', to: '/customers/vehicles?new=1', perm: 'edit_customers' },
   { key: 'create.part', icon: 'book', to: '/catalog/parts/new', perm: 'edit_catalog' },
   { key: 'create.appointment', icon: 'calendar', to: '/calendar?new=1', perm: 'edit_jobs' },
-  { key: 'create.po', icon: 'packages' },
+  { key: 'create.po', icon: 'packages', to: '/inventory/purchase-orders?new=1', perm: 'manage_inventory' },
 ]
 
 function Brand() {

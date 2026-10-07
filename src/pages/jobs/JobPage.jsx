@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Page } from '../../components/Layout'
-import { Badge, Button, Card, Empty, Modal, Notice, SubTabs, useConfirm, usePopover } from '../../components/ui'
+import { Badge, Button, Card, Empty, Modal, Notice, SubTabs, useConfirm, usePopover, useToast } from '../../components/ui'
 import { confirmKm } from '../../lib/mileage'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
@@ -22,6 +22,8 @@ import { DeferredBanner } from './Deferred'
 import DueBanner from './DueWork'
 import { addBundleService } from './ServicesTab'
 import AppointmentModal from '../calendar/AppointmentModal'
+import OrderModal from '../inventory/OrderModal'
+import { PartsOrdersCard, partCandidates } from './JobParts'
 import { ApprovalModal, CreditModal, DiscountModal, FeeModal, InvoiceModal, PaymentModal, ReasonModal } from './JobModals'
 
 const TABS = ['services', 'concerns', 'inspections', 'activity']
@@ -53,6 +55,7 @@ export default function JobPage({ id }) {
     run(() => addBundleService({ job, cat, tp, name: x.name, scheduleId: x.id }), t('job.serviceAdded', { name: tp ? tp.name : x.name }))
   }, [addSched, job, cat]) // eslint-disable-line react-hooks/exhaustive-deps
   const [confirm, confirmEl] = useConfirm()
+  const toast = useToast()
 
   if (missing) return <Page><Card><Empty icon="info" title={t('job.notFound')} action={<Link className="btn" to="/customers/repair-orders">{t('job.backToList')}</Link>} /></Card></Page>
   if (!job || !cat) return <Page><div className="muted">{error ? errorText(error, t) : t('common.loading')}</div></Page>
@@ -67,6 +70,9 @@ export default function JobPage({ id }) {
   const canPay = can('record_payments')
   const canVoid = can('void_invoices')
   const canIssue = can('issue_credits')
+  // Parts are ordered from an open estimate by whoever manages inventory; deliveries land on the shelf.
+  const canOrder = can('manage_inventory') && !invoiced && !closed
+  const candidates = canOrder ? partCandidates(job, cat, t) : []
   const open = (kind, extra = {}) => setModal({ kind, ...extra })
   const close = () => setModal(null)
   const v = job.vehicle
@@ -178,6 +184,7 @@ export default function JobPage({ id }) {
         <aside className="jobside">
           <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')} />
           <AppointmentsCard job={job} staff={staff} canBook={editable} onOpen={(a) => open('appt', { appointment: a })} onNew={() => open('appt', {})} />
+          <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')} />
           <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} editable={editable} canVoid={canVoid && invoiced}
             run={run} onInvoice={() => open('invoice')} onVoid={() => open('void')} />
           <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canVoid} canCredit={canPay || canIssue}
@@ -190,6 +197,13 @@ export default function JobPage({ id }) {
       <AppointmentModal open={modal?.kind === 'appt'} onClose={close} appointment={modal?.appointment}
         defaults={{ ro_id: ro.id, customer_id: ro.customer_id, vehicle_id: ro.vehicle_id }}
         onSaved={() => { close(); reload() }} onDeleted={() => { close(); reload() }} />
+      <OrderModal open={modal?.kind === 'order'} onClose={close} title={t('job.po.orderTitle', { no: jobNo(ro.job_number) })} intro={t('job.po.orderIntro')}
+        candidates={candidates} suppliers={cat.suppliers} roId={ro.id} taxRate={settings?.tax_rate} showCost={showCost}
+        onDone={(made, partial) => {
+          close(); reload(); reloadCat()
+          if (partial) toast(partial, 'err')
+          else toast(made.length === 1 ? t('inv.order.madeOne', { no: made[0].po_number || '' }) : t('inv.order.madeMany', { n: made.length }))
+        }} />
       <ApprovalModal open={modal?.kind === 'approval'} onClose={close} job={job} preselect={modal?.preselect} run={run} busy={busy} />
       <InvoiceModal open={modal?.kind === 'invoice'} onClose={close} job={job} settings={settings} run={runStock} busy={busy} />
       <PaymentModal open={modal?.kind === 'payment'} onClose={close} job={job} canRefund={!invoiced || canVoid} run={run} busy={busy} />

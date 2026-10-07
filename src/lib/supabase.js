@@ -27,6 +27,10 @@ export function errorText(error, t) {
   if (t) {
     const exact = t(`db:${msg}`)
     if (exact !== `db:${msg}`) return exact
+    for (const [re, key] of DB_PATTERNS) {
+      const m = msg.match(re)
+      if (m) { const tr = t(key, { n: m[1] }); if (tr !== key) return tr }
+    }
     const prefix = DB_PREFIXES.find((x) => msg.startsWith(x))
     if (prefix) {
       const tr = t(`db:${prefix}`)
@@ -35,6 +39,13 @@ export function errorText(error, t) {
   }
   return msg
 }
+
+// Messages with a number or name in the middle; the captured part is passed on as {n}.
+const DB_PATTERNS = [
+  [/^Only ([\d.,]+) delivered on this line can still be returned$/, 'db:returnLeft'],
+  [/^Only ([\d.,]+) in stock; you can't send back more than you have$/, 'db:returnStock'],
+  [/^This part is already on PO (.+)$/, 'db:alreadyOnPo'],
+]
 
 // Messages that end with an amount or number; matched by their start.
 const DB_PREFIXES = ['That is more than the balance due on this invoice', 'Payments received (Rp', 'This credit (Rp', 'Invoice number']

@@ -652,3 +652,26 @@ span.seg-btn { cursor: default; }
 .schrow.s-never, .schrow.s-off { border-left-color: #9aa1aa; }
 .schrow.s-off { opacity: .7; }
 .schrow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.45; }
+
+/* ---------- Stage 7: inventory & purchase orders ---------- */
+.tick { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
+.chipbtn { background: none; border: none; padding: 0; cursor: pointer; }
+.table tr.clickrow { cursor: pointer; }
+.table tr.clickrow:hover td { background: #fafcfb; }
+.table tr.dim td { color: var(--faint); }
+.table tr.dim td b { font-weight: 600; }
+.table.compact table { min-width: 0; }
+.table.compact th { padding: 8px 10px; }
+.table.compact td { padding: 8px 10px; }
+.table.flush { border-radius: 10px; }
+.table tfoot td { border-top: 1px solid var(--line); background: var(--head-bg); }
+.select.cell { min-height: 30px; padding: 4px 26px 4px 8px; font-size: 12.5px; width: auto; max-width: 220px; }
+.input.cell.invalid, .select.cell.invalid { border-color: var(--red); background: #fff; }
+.formgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 14px; }
+.sep { border-top: 1px solid var(--line-soft); margin: 8px 0; }
+.bulkbar { background: var(--accent-soft); border-radius: 9px; padding: 4px 8px; }
+.posum { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; }
+.partsorders { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.porow { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 9px; color: var(--ink); }
+.porow:hover { background: var(--bg); color: var(--ink); }
+@media (max-width: 600px) { .kpis.inv { grid-template-columns: 1fr; } .select.cell { max-width: 150px; } }

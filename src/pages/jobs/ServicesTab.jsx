@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Avatar, Badge, Button, Empty, Modal, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
@@ -8,6 +9,7 @@ import { APPROVAL_COLOR, LINE_TYPES, WORK_STATUS, autoFeesFor, linesFromCatalogI
 import { discountState } from '../catalog/DiscountsTab'
 import { useShop } from '../../context/ShopContext'
 import { shopToday } from '../../lib/customers'
+import { LINE_COLOR, lineState } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, discountText, parseDiscount } from './common'
 
 const nextPos = (rows) => rows.reduce((m, r) => Math.max(m, Number(r.position) || 0), -1) + 1
@@ -300,7 +302,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
                   <td>
                     <input type="checkbox" checked={l.taxable} disabled={!editable} aria-label={t('cat.tax')} onChange={(e) => updLine(l.id, { taxable: e.target.checked })} />
                   </td>
-                  <td><LineStatus l={l} item={item} cat={cat} workEditable={workEditable} commitHours={commitHours(l.id)} /></td>
+                  <td><LineStatus l={l} item={item} cat={cat} job={job} workEditable={workEditable} commitHours={commitHours(l.id)} /></td>
                   {editable && (
                     <td><button type="button" className="btn ghost sm" onClick={() => run(() => supabase.from('ro_service_items').delete().eq('id', l.id))} aria-label={t('job.removeLine', { name: l.name })}><Icon name="x" size={14} /></button></td>
                   )}
@@ -351,8 +353,8 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   )
 }
 
-// Stock badge for parts, hours worked for labor.
-function LineStatus({ l, item, cat, workEditable, commitHours }) {
+// Stock or purchase-order badge for parts, hours worked for labor.
+function LineStatus({ l, item, cat, job, workEditable, commitHours }) {
   const { t } = useT()
   if (l.item_type === 'labor') {
     return (
@@ -363,8 +365,17 @@ function LineStatus({ l, item, cat, workEditable, commitHours }) {
       </span>
     )
   }
-  if (l.item_type !== 'part' || !item?.track_inventory) return null
+  if (l.item_type !== 'part') return null
   if (l.stock_deducted) return <Badge color="gray">{t('job.stock.taken')}</Badge>
+  // Ordered on a purchase order for this job: On order → Part delivered → Delivered.
+  const pl = l.po_item_id && (job?.poLines || []).find((x) => x.id === l.po_item_id)
+  const po = pl && job.pos.find((x) => x.id === pl.po_id)
+  if (pl && po && lineState(pl) !== 'cancelled') {
+    const st = lineState(pl)
+    const label = st === 'waiting' ? (po.status === 'draft' ? t('job.po.draft') : t('job.po.onOrder')) : st === 'partial' ? t('job.po.partial', { n: num(pl.qty_delivered, 2), of: num(Number(pl.qty_ordered) - Number(pl.qty_cancelled), 2) }) : t('job.po.delivered')
+    return <Link to={`/inventory/purchase-orders/${po.id}`} className="plainlink" title={t('job.po.title', { no: po.po_number })}><Badge color={st === 'waiting' ? (po.status === 'draft' ? 'gray' : 'blue') : LINE_COLOR[st]}>{label}</Badge></Link>
+  }
+  if (!item?.track_inventory) return null
   const onHand = Number(cat.stockById[item.id]?.qty_on_hand ?? item.qty_on_hand ?? 0)
   if (onHand >= Number(l.qty)) return <Badge color="green">{t('job.stock.in')}</Badge>
   if (onHand > 0) return <Badge color="amber">{t('job.stock.only', { n: num(onHand, 2) })}</Badge>
