@@ -5,6 +5,7 @@ import { jobsEn, jobsId } from './strings-jobs.js'
 import { boardEn, boardId } from './strings-board.js'
 import { schedulesEn, schedulesId } from './strings-schedules.js'
 import { inventoryEn, inventoryId } from './strings-inventory.js'
+import { reportsEn, reportsId } from './strings-reports.js'
 
 const base = {
   en: {
@@ -256,6 +257,6 @@ const base = {
 }
 
 export const dict = {
-  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn },
-  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId },
+  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn },
+  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId },
 }

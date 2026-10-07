@@ -689,3 +689,58 @@ span.seg-btn { cursor: default; }
 .input.cell.boxed.invalid, .select.cell.boxed.invalid { border-color: var(--red); }
 /* Update 8: in a tall enough booking the plate · company line may wrap to two lines rather than cut the company off. */
 .ev:not(.short) .ev-who { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+
+/* ---------- Stage 9a: dashboard and reports ---------- */
+.dash-h { font-size: 12px; font-weight: 800; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; margin: 18px 0 8px; }
+.dashgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.dashtile { display: block; color: var(--ink); padding: 14px 16px; border-left: 4px solid transparent; transition: box-shadow .12s; min-width: 0; }
+.dashtile:hover { color: var(--ink); box-shadow: 0 2px 10px rgba(20,24,28,.08); }
+.dashtile.warn { border-left-color: #e2a400; }
+.dashtile.danger { border-left-color: var(--red); }
+.dashtile-head { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.dashtile-value { font-size: 24px; font-weight: 800; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.dashtile.danger .dashtile-value { color: var(--red); }
+.dashtile-note { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+.attn { padding: 4px 0; }
+.attn-row { display: grid; grid-template-columns: 22px 190px minmax(0, 1fr) auto 16px; align-items: center; gap: 10px; padding: 10px 16px; color: var(--ink); border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.attn-row:last-child { border-bottom: none; }
+.attn-row:hover { background: var(--bg); color: var(--ink); }
+.attn-label { font-weight: 700; }
+.attn-detail { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attn-count { font-weight: 800; font-variant-numeric: tabular-nums; }
+.attn-row.danger .attn-count, .attn-row.danger > svg:first-child { color: var(--red); }
+.attn-row.idle { color: var(--faint); }
+.attn-row.idle .attn-label { font-weight: 600; }
+.chartcard { margin-top: 12px; }
+.legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--muted); }
+.legend span, .charttip div { display: inline-flex; align-items: center; gap: 6px; }
+.legend i, .charttip i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.chartwrap { position: relative; }
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--line-soft); stroke-width: 1; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .tick { font-size: 11px; fill: var(--muted); font-family: inherit; }
+.chart .hoverband { fill: rgba(20,24,28,.04); }
+.chart rect[tabindex]:focus { outline: none; }
+.charttip { position: absolute; top: 4px; transform: translateX(-50%); background: #fff; border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 4px 14px rgba(20,24,28,.12);
+  padding: 8px 10px; font-size: 12px; pointer-events: none; display: flex; flex-direction: column; gap: 3px; white-space: nowrap; z-index: 3; }
+.charttip-head { font-weight: 800; }
+.kpis.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.repbar .datein { width: auto; min-height: 34px; padding: 5px 10px; }
+.table tr.subrow td { background: #fafbfb; font-size: 12px; padding-top: 7px; padding-bottom: 7px; }
+.table td.ind { padding-left: 38px; }
+.ink { color: var(--ink); }
+.table.stale { opacity: .6; transition: opacity .15s; }
+@media (max-width: 1100px) { .dashgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpis.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .dashgrid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .dashtile { padding: 10px 12px; }
+  .dashtile-value { font-size: 19px; }
+  .attn-row { grid-template-columns: 20px minmax(0, 1fr) auto 14px; padding: 10px 12px; }
+  .attn-detail { display: none; }
+  .kpis.four { grid-template-columns: 1fr; }
+}
+.kpis > .card, .dashgrid > .card { margin-top: 0; }
+@media (max-width: 600px) { .dashgrid.money { grid-template-columns: 1fr; } }
+.kpis.stale { opacity: .6; transition: opacity .15s; }
+.voidlist { margin: 8px 0 0; padding-left: 18px; line-height: 1.7; }

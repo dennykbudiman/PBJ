@@ -6,7 +6,9 @@ import { useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import AccountPending from './pages/AccountPending'
-import ComingSoon, { Dashboard, NotFound } from './pages/ComingSoon'
+import { NotFound } from './pages/ComingSoon'
+import Dashboard from './pages/Dashboard'
+import ReportsArea from './pages/reports/ReportsArea'
 import Settings from './pages/settings/Settings'
 import CustomersArea from './pages/customers/CustomersArea'
 import SearchPage from './pages/SearchPage'
@@ -45,7 +47,7 @@ export default function App() {
         <Route path="catalog/*" element={<CatalogArea />} />
         <Route path="jobs/*" element={<JobsArea />} />
         <Route path="inventory/*" element={<InventoryArea />} />
-        <Route path="reports/*" element={<ComingSoon titleKey="nav.reports" stage="reports" icon="chart-bar" />} />
+        <Route path="reports/*" element={<ReportsArea />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="settings" element={<Settings />} />
         <Route path="set-password" element={<Navigate to="/" replace />} />
