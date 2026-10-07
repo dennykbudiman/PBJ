@@ -21,6 +21,8 @@ import ServiceReport from './ServiceReport'
 export const REPORT_TABS = ['sales', 'aging', 'payments', 'profit', 'technicians', 'fleet', 'inventory', 'service']
 // Reports that show cost prices also need the view_costs permission.
 const NEEDS_COSTS = ['profit', 'inventory']
+// The workshop's own reports need view_ops_reports (Owner, Admin, Service advisor); a Cashier doesn't see them.
+const NEEDS_OPS = ['technicians', 'fleet', 'service']
 
 // /reports → Sales, /reports/<tab>
 export default function ReportsArea() {
@@ -30,7 +32,9 @@ export default function ReportsArea() {
   const { can } = useAuth()
   const part = location.pathname.split('/').filter(Boolean)[1]
   const tab = REPORT_TABS.includes(part) ? part : 'sales'
-  const tabs = <SubTabs tabs={REPORT_TABS.map((x) => ({ value: x, label: t(`rep.tab.${x}`) }))} active={tab} onChange={(x) => navigate(`/reports/${x}`)} />
+  // Tabs the role can't open are left out (a link straight to one still explains why).
+  const shown = REPORT_TABS.filter((x) => (!NEEDS_OPS.includes(x) || can('view_ops_reports')) && (!NEEDS_COSTS.includes(x) || can('view_costs')))
+  const tabs = <SubTabs tabs={shown.map((x) => ({ value: x, label: t(`rep.tab.${x}`) }))} active={tab} onChange={(x) => navigate(`/reports/${x}`)} />
   if (!can('view_reports')) {
     return <Page><Card><Empty icon="chart-bar" title={t('rep.noAccessTitle')}>{t('rep.noAccessText')}</Empty></Card></Page>
   }
@@ -39,7 +43,9 @@ export default function ReportsArea() {
       {tab === 'sales' && <SalesReport />}
       {tab === 'aging' && <AgingReport />}
       {tab === 'payments' && <PaymentsReport />}
-      {NEEDS_COSTS.includes(tab) && !can('view_costs') ? (
+      {NEEDS_OPS.includes(tab) && !can('view_ops_reports') ? (
+        <Card><Empty icon="lock" title={t('rep.opsTitle')}>{t('rep.opsText')}</Empty></Card>
+      ) : NEEDS_COSTS.includes(tab) && !can('view_costs') ? (
         <Card><Empty icon="lock" title={t('rep.costsTitle')}>{t('rep.costsText')}</Empty></Card>
       ) : (
         <>

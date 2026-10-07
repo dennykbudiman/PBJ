@@ -78,6 +78,10 @@ export function useJobData(id) {
   return { job, error, missing, reload: load }
 }
 
+// Who is offered where: Cashiers and Viewers don't work on cars; only Owners, Admins and Service advisors run a job.
+export const worksOnJobs = (p) => !['Cashier', 'Viewer'].includes(p.roles?.name)
+export const runsJobs = (p) => ['Owner', 'Admin', 'Service advisor'].includes(p.roles?.name)
+
 // Active staff who can be picked as technician or service advisor.
 export function useStaff() {
   const [staff, setStaff] = useState([])

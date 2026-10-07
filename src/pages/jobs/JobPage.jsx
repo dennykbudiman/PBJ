@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
-import { invoiceNo, jobNo, km, num } from '../../lib/format'
+import { invoiceNo, jobNo, km, num, rp } from '../../lib/format'
 import { vehicleName } from '../../lib/customers'
 import { PRIORITY_COLOR, WORKFLOW_COLOR } from '../../lib/jobs'
 import { useCatalogData } from '../catalog/useCatalogData'
@@ -24,7 +24,7 @@ import { addBundleService } from './ServicesTab'
 import AppointmentModal from '../calendar/AppointmentModal'
 import OrderModal from '../inventory/OrderModal'
 import { PartsOrdersCard, partCandidates } from './JobParts'
-import { ApprovalModal, CreditModal, DiscountModal, FeeModal, InvoiceModal, PaymentModal, ReasonModal } from './JobModals'
+import { ApprovalModal, CreditModal, DiscountModal, FeeModal, InvoiceModal, PayBackCreditModal, PaymentModal, ReasonModal } from './JobModals'
 
 const TABS = ['services', 'concerns', 'inspections', 'activity']
 
@@ -70,6 +70,7 @@ export default function JobPage({ id }) {
   const canPay = can('record_payments')
   const canVoid = can('void_invoices')
   const canIssue = can('issue_credits')
+  const canRefund = can('refund_payments')
   // Parts are ordered from an open estimate by whoever manages inventory; deliveries land on the shelf.
   const canOrder = can('manage_inventory') && !invoiced && !closed
   const candidates = canOrder ? partCandidates(job, cat, t) : []
@@ -79,8 +80,10 @@ export default function JobPage({ id }) {
   const c = job.customer
   const primary = job.contacts.find((x) => x.is_primary) || job.contacts[0]
 
+  const moneyOnJob = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0) !== 0 || job.appliedCredits.length > 0
   const menu = [
-    editable && { label: t('job.closeNoInvoice'), icon: 'lock', onClick: () => open('close') },
+    // close_job refuses a job with money on it; say so (and who can refund) instead of opening the form.
+    editable && { label: t('job.closeNoInvoice'), icon: 'lock', onClick: () => (moneyOnJob ? toast(t('job.closeHasMoney'), 'err') : open('close')) },
     closed && canEdit && { label: t('job.reopen'), icon: 'edit', onClick: () => run(() => supabase.rpc('reopen_job', { p_ro: ro.id }), t('job.reopened')) },
     // Jobs with money or invoice history are kept (the database refuses to delete them).
     !invoiced && can('delete_jobs') && !job.payments.length && !job.voids.length && !job.appliedCredits.length
@@ -187,7 +190,7 @@ export default function JobPage({ id }) {
           <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')} />
           <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} editable={editable} canVoid={canVoid && invoiced}
             run={run} onInvoice={() => open('invoice')} onVoid={() => open('void')} />
-          <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canVoid} canCredit={canPay || canIssue}
+          <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canRefund} canFixPaid={canVoid} canCredit={canPay || canIssue || canRefund}
             run={run} onPayment={() => open('payment')} onCredit={() => open('credit')} onFee={() => open('fee')} onDiscount={() => open('discount')} />
           {showCost && <ProfitCard job={job} />}
         </aside>
@@ -206,8 +209,10 @@ export default function JobPage({ id }) {
         }} />
       <ApprovalModal open={modal?.kind === 'approval'} onClose={close} job={job} preselect={modal?.preselect} run={run} busy={busy} />
       <InvoiceModal open={modal?.kind === 'invoice'} onClose={close} job={job} settings={settings} staff={staff} run={runStock} busy={busy} />
-      <PaymentModal open={modal?.kind === 'payment'} onClose={close} job={job} canRefund={!invoiced || canVoid} run={run} busy={busy} />
-      <CreditModal open={modal?.kind === 'credit'} onClose={close} job={job} canApply={canPay} canIssue={canIssue} canUnapplyInvoiced={canVoid} run={run} busy={busy} />
+      <PaymentModal open={modal?.kind === 'payment'} onClose={close} job={job} canRefund={!invoiced || canRefund} run={run} busy={busy} />
+      <CreditModal open={modal?.kind === 'credit'} onClose={close} job={job} canApply={canPay} canIssue={canIssue} canUnapplyInvoiced={canVoid}
+        canPayBack={canRefund} onPayBack={() => open('payback')} run={run} busy={busy} />
+      <PayBackCreditModal open={modal?.kind === 'payback'} customer={c} onClose={close} onDone={(amount) => { close(); toast(t('credit.paidBack', { amount: rp(amount) })); reload() }} />
       <FeeModal open={modal?.kind === 'fee'} onClose={close} job={job} cat={cat} run={run} busy={busy} />
       <DiscountModal open={modal?.kind === 'discount'} onClose={close} job={job} cat={cat} run={run} busy={busy} />
       <ReasonModal open={modal?.kind === 'close'} onClose={close} title={t('job.closeNoInvoice')} text={t('job.closeText')} label={t('job.reason')}

@@ -21,6 +21,14 @@
   VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"
   VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2FiaHd2bnpobGNjdHh3cGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODI0MTAsImV4cCI6MjEwNjc1ODQxMH0.cXKhovsB-JYtO5ubGi3Nxnp8WMuCYXkqalzdChcnK7g"
 
+# The same safety headers as the self-hosted setup (deploy/self-host/web/Caddyfile).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "SAMEORIGIN"
+
 # Built files have a fingerprint in their name, so browsers can keep them for a year.
 # Repeat visits then download almost nothing, which keeps Netlify bandwidth use low.
 [[headers]]

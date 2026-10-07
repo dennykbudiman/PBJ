@@ -199,10 +199,14 @@ function PaymentsList() {
     Promise.all([
       selectAll(() => supabase.from('payments').select('*').order('paid_at', { ascending: false }).order('id')),
       selectAll(() => supabase.from('repair_orders').select('id, job_number, invoice_number, vehicle_id').order('id')),
-    ]).then(([p, j]) => {
-      setRows(p.data || [])
+      // Company credit paid back as money is money out too, so it is listed with the refunds.
+      selectAll(() => supabase.from('credit_memos').select('id, customer_id, amount, refunded_at, refund_method, refund_reference').not('refunded_at', 'is', null).order('id')),
+    ]).then(([p, j, cm]) => {
+      const paidBack = (cm.data || []).map((c) => ({ id: `cm-${c.id}`, payback: true, ro_id: null, customer_id: c.customer_id, kind: 'refund', source: 'manual',
+        method: c.refund_method, amount: c.amount, paid_at: c.refunded_at, reference: c.refund_reference, receipt_number: null }))
+      setRows([...(p.data || []), ...paidBack].sort((a, b) => (a.paid_at < b.paid_at ? 1 : a.paid_at > b.paid_at ? -1 : 0)))
       setJobs(Object.fromEntries((j.data || []).map((x) => [x.id, x])))
-      setError(p.error || j.error || null)
+      setError(p.error || j.error || cm.error || null)
     })
   }, [])
   const needle = q.trim().toLowerCase()
@@ -226,12 +230,13 @@ function PaymentsList() {
             <tbody>
               {shown.map((p) => {
                 const j = jobs[p.ro_id]
+                const to = p.payback ? `/customers/${p.customer_id}` : `/jobs/${p.ro_id}`
                 return (
-                  <tr key={p.id} className="click" onClick={() => navigate(`/jobs/${p.ro_id}`)}>
+                  <tr key={p.id} className="click" onClick={() => navigate(to)}>
                     <td className="muted">{fmtDate(p.paid_at, lang, timezone)}</td>
                     <td>{names.customer[p.customer_id]?.display_name || '—'}</td>
-                    <td><Link className="rowlink" to={`/jobs/${p.ro_id}`} onClick={(e) => e.stopPropagation()}>{j?.invoice_number ? invoiceNo(j.invoice_number) : j ? `#${jobNo(j.job_number)}` : '—'}</Link></td>
-                    <td>{t(`job.pay.${p.method}`)}{p.source === 'void_credit' ? <> <Badge color="gray">{t('jobs.movedToCredit')}</Badge></> : p.kind === 'refund' && <> <Badge color="red">{t('job.kind.refund')}</Badge></>}</td>
+                    <td>{p.payback ? <Badge color="gray">{t('jobs.creditPaidBack')}</Badge> : <Link className="rowlink" to={to} onClick={(e) => e.stopPropagation()}>{j?.invoice_number ? invoiceNo(j.invoice_number) : j ? `#${jobNo(j.job_number)}` : '—'}</Link>}</td>
+                    <td>{p.method ? t(`job.pay.${p.method}`) : '—'}{p.payback ? null : p.source === 'void_credit' ? <> <Badge color="gray">{t('jobs.movedToCredit')}</Badge></> : p.kind === 'refund' && <> <Badge color="red">{t('job.kind.refund')}</Badge></>}</td>
                     <td className="wide-only muted">{[p.reference, p.receipt_number].filter(Boolean).join(' · ') || '—'}</td>
                     <td className="num" style={{ color: p.kind === 'refund' ? 'var(--red)' : undefined }}><b>{p.kind === 'refund' ? '-' : ''}{rp(p.amount)}</b></td>
                   </tr>

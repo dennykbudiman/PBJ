@@ -10,7 +10,7 @@ import { selectAll } from '../customers/useCustomerData'
 import { jobNo, km } from '../../lib/format'
 import { vehicleName } from '../../lib/customers'
 import { PRIORITIES } from '../../lib/jobs'
-import { useStaff } from './useJobData'
+import { runsJobs, useStaff } from './useJobData'
 
 // New job: pick the company and vehicle, the odometer reading and what the driver reported.
 export default function NewJob() {
@@ -142,7 +142,7 @@ export default function NewJob() {
                 hint={vehicle?.mileage_km != null ? (lowKm ? t('job.lowerThanLast', { km: km(vehicle.mileage_km) }) : t('job.lastKnown', { km: km(vehicle.mileage_km) })) : null} />
               <Select label={t('job.priority')} value={f.priority} onChange={set('priority')} options={PRIORITIES.map((p) => ({ value: p, label: t(`job.pri.${p}`) }))} />
               <Select fieldClass="span2" label={t('job.advisor')} value={f.advisor} onChange={set('advisor')}
-                options={[{ value: '', label: '—' }, ...staff.filter((s) => s.roles?.name !== 'Technician').map((s) => ({ value: s.id, label: s.name }))]} />
+                options={[{ value: '', label: '—' }, ...staff.filter(runsJobs).map((s) => ({ value: s.id, label: s.name }))]} />
               <Textarea fieldClass="span2" label={t('job.concern')} value={f.concern} onChange={set('concern')} rows={3} placeholder={t('job.concernExample')} hint={t('job.concernHint')} />
             </div>
             <div className="row" style={{ marginTop: 16 }}>

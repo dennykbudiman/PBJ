@@ -26,7 +26,7 @@ const base = {
 
     'notif.title': 'Notifications', 'notif.markAll': 'Mark all as read', 'notif.empty': 'You are all caught up.',
 
-    'role.Owner': 'Owner', 'role.Admin': 'Admin', 'role.Service advisor': 'Service advisor', 'role.Technician': 'Technician',
+    'role.Owner': 'Owner', 'role.Admin': 'Admin', 'role.Service advisor': 'Service advisor', 'role.Cashier': 'Cashier', 'role.Technician': 'Technician',
     'role.Viewer': 'Viewer', 'role.Fleet manager': 'Fleet manager',
 
     'auth.signInTitle': 'Sign in', 'auth.username': 'Username or email', 'auth.password': 'Password', 'auth.signIn': 'Sign in',
@@ -107,9 +107,10 @@ const base = {
     'users.status.active': 'Active', 'users.status.invited': 'Waiting', 'users.status.disabled': 'Disabled',
     'users.activate': 'Activate', 'users.disable': 'Disable', 'users.you': 'you', 'users.updated': '{name} updated',
     'users.rolesTitle': 'What each role can do',
-    'users.desc.owner': 'Everything, including settings, users, voiding invoices, issuing and refunding credits, changing payments on issued invoices, and making or removing Owners',
+    'users.desc.owner': 'Everything, including settings, users, voiding invoices, issuing credits, changing payments on issued invoices, and making or removing Owners',
     'users.desc.admin': 'The same as an Owner, except they can\'t change, disable or remove an Owner, or make someone an Owner',
-    'users.desc.advisor': 'Jobs, invoices, payments, customers, catalog and inventory',
+    'users.desc.advisor': 'Jobs from booking to invoice, customers, catalog and inventory. No payments',
+    'users.desc.cashier': 'Payments, deposits, refunds and company credit; sales, aging and payments reports. Can\'t change jobs',
     'users.desc.technician': 'View only (assigned on jobs and the calendar)',
     'users.desc.viewer': 'View only',
     'users.desc.fleet': 'No access yet (planned: approve their own company\'s work)',
@@ -150,7 +151,7 @@ const base = {
 
     'notif.title': 'Notifikasi', 'notif.markAll': 'Tandai semua sudah dibaca', 'notif.empty': 'Tidak ada notifikasi baru.',
 
-    'role.Owner': 'Pemilik', 'role.Admin': 'Admin', 'role.Service advisor': 'Service advisor', 'role.Technician': 'Teknisi',
+    'role.Owner': 'Pemilik', 'role.Admin': 'Admin', 'role.Service advisor': 'Service advisor', 'role.Cashier': 'Kasir', 'role.Technician': 'Teknisi',
     'role.Viewer': 'Hanya lihat', 'role.Fleet manager': 'Fleet manager',
 
     'auth.signInTitle': 'Masuk', 'auth.username': 'Username atau email', 'auth.password': 'Kata sandi', 'auth.signIn': 'Masuk',
@@ -230,9 +231,10 @@ const base = {
     'users.status.active': 'Aktif', 'users.status.invited': 'Menunggu', 'users.status.disabled': 'Nonaktif',
     'users.activate': 'Aktifkan', 'users.disable': 'Nonaktifkan', 'users.you': 'Anda', 'users.updated': '{name} diperbarui',
     'users.rolesTitle': 'Hak setiap peran',
-    'users.desc.owner': 'Semuanya, termasuk pengaturan, pengguna, membatalkan invoice, menerbitkan dan mengembalikan kredit, mengubah pembayaran pada invoice terbit, serta menambah atau menghapus Pemilik',
+    'users.desc.owner': 'Semuanya, termasuk pengaturan, pengguna, membatalkan invoice, menerbitkan kredit, mengubah pembayaran pada invoice terbit, serta menambah atau menghapus Pemilik',
     'users.desc.admin': 'Sama seperti Pemilik, kecuali tidak bisa mengubah, menonaktifkan atau menghapus Pemilik, atau menjadikan seseorang Pemilik',
-    'users.desc.advisor': 'Pekerjaan, invoice, pembayaran, pelanggan, katalog dan inventaris',
+    'users.desc.advisor': 'Pekerjaan dari booking sampai invoice, pelanggan, katalog dan inventaris. Tanpa pembayaran',
+    'users.desc.cashier': 'Pembayaran, uang muka, pengembalian dana dan kredit perusahaan; laporan penjualan, umur piutang dan pembayaran. Tidak bisa mengubah pekerjaan',
     'users.desc.technician': 'Hanya lihat (ditugaskan di pekerjaan dan kalender)',
     'users.desc.viewer': 'Hanya lihat',
     'users.desc.fleet': 'Belum ada akses (rencana: menyetujui pekerjaan perusahaannya sendiri)',

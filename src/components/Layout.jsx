@@ -16,7 +16,7 @@ export const NAV = [
   { to: '/customers', key: 'nav.customers', icon: 'users' },
   { to: '/catalog', key: 'nav.catalog', icon: 'book' },
   { to: '/inventory', key: 'nav.inventory', icon: 'packages' },
-  { to: '/reports', key: 'nav.reports', icon: 'chart-bar' },
+  { to: '/reports', key: 'nav.reports', icon: 'chart-bar', perm: 'view_reports' },
 ]
 
 // The "+" quick-create menu. Each entry switches on as its screen is built.
@@ -56,6 +56,8 @@ function CreateMenu() {
   const { can } = useAuth()
   const navigate = useNavigate()
   const pop = usePopover()
+  // Nothing to create for this role (Cashier, Technician, Viewer): no "+" at all.
+  if (!CREATE.some((c) => c.to && can(c.perm))) return null
   return (
     <div className="popwrap" ref={pop.ref}>
       <button className="plusbtn" onClick={pop.toggle} aria-label={t('create.title')} title={t('create.title')}>
@@ -125,12 +127,13 @@ function UserMenu() {
 
 export default function Layout() {
   const { t } = useT()
+  const { can } = useAuth()
   return (
     <div className="app">
       <header className="topnav">
         <Brand />
         <nav className="mainnav" aria-label={t('nav.main')}>
-          {NAV.map((n) => (
+          {NAV.filter((n) => !n.perm || can(n.perm)).map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `navlink ${isActive ? 'active' : ''}`}>
               <Icon name={n.icon} size={19} color="#fff" stroke={1.9} />
               {t(n.key)}

@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useT } from '../../lib/i18n'
 
 // Role order and descriptions shown in Settings (decided Oct 5; technicians view-only Oct 5).
-const ROLE_ORDER = ['Owner', 'Admin', 'Service advisor', 'Technician', 'Viewer', 'Fleet manager']
+const ROLE_ORDER = ['Owner', 'Admin', 'Service advisor', 'Cashier', 'Technician', 'Viewer', 'Fleet manager']
 const STATUS_COLOR = { active: 'green', invited: 'amber', disabled: 'gray' }
 
 const BLANK = { name: '', email: '', username: '', phone: '', role_id: '' }
@@ -172,6 +172,7 @@ export default function Users({ id }) {
         <b>{t('role.Owner')}</b><span>{t('users.desc.owner')}</span>
         <b>{t('role.Admin')}</b><span>{t('users.desc.admin')}</span>
         <b>{t('role.Service advisor')}</b><span>{t('users.desc.advisor')}</span>
+        <b>{t('role.Cashier')}</b><span>{t('users.desc.cashier')}</span>
         <b>{t('role.Technician')}</b><span>{t('users.desc.technician')}</span>
         <b>{t('role.Viewer')}</b><span>{t('users.desc.viewer')}</span>
         <b>{t('role.Fleet manager')}</b><span>{t('users.desc.fleet')}</span>

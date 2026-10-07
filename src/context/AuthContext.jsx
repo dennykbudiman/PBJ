@@ -43,7 +43,7 @@ export function AuthProvider({ children }) {
 
   const userId = session?.user?.id
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = useCallback(async (refresh = false) => {
     if (!userId) {
       setLoaded({ userId: null, profile: null, permissions: [], staff: false })
       return
@@ -54,6 +54,7 @@ export function AuthProvider({ children }) {
       supabase.rpc('is_staff'),
     ])
     if (error) console.error('profile load failed', error)
+    if (refresh && (error || !p || typeof staff !== 'boolean')) return // a failed background refresh keeps what we had
     let permissions = []
     if (p?.role_id && staff) {
       const { data: perms } = await supabase.from('role_permissions').select('permission_key').eq('role_id', p.role_id)
@@ -66,6 +67,15 @@ export function AuthProvider({ children }) {
     if (session === undefined) return
     loadProfile()
   }, [session === undefined, loadProfile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A role or permission change (or a new migration) reaches open tabs when the window is used again, at most once a minute.
+  useEffect(() => {
+    if (!userId) return
+    let last = Date.now()
+    const onFocus = () => { if (Date.now() - last > 60000) { last = Date.now(); loadProfile(true) } }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [userId, loadProfile])
 
   const value = useMemo(() => {
     const profile = loaded.userId === (userId ?? null) ? loaded.profile : undefined

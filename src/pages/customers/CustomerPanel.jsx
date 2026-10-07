@@ -3,7 +3,7 @@ import { Badge, Button, Empty, Notice, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import ContactForm from './ContactForm'
 import { DeferredList, JobsFor } from '../jobs/JobLists'
-import { IssueCreditModal } from '../jobs/JobModals'
+import { IssueCreditModal, PayBackCreditModal } from '../jobs/JobModals'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase, errorText } from '../../lib/supabase'
@@ -37,6 +37,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
   const navigate = useNavigate()
   const { can } = useAuth()
   const [creditOpen, setCreditOpen] = useState(false)
+  const [payBackOpen, setPayBackOpen] = useState(false)
   const { t, lang } = useT()
   const toast = useToast()
   const { settings } = useShop()
@@ -140,6 +141,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
               <Button disabled title={t('cust.calendarSoon')}>{t('cust.appointment')}</Button>
               {canEdit && <Button onClick={onAddVehicle}>{t('cust.addVehicle')}</Button>}
               {can('issue_credits') && <Button onClick={() => setCreditOpen(true)}>{t('cust.creditMemo')}</Button>}
+              {can('refund_payments') && Number(s.credit) > 0 && <Button onClick={() => setPayBackOpen(true)}>{t('credit.payBack')}</Button>}
             </div>
             <div className="hint">{t('cust.availableCredit', { amount: rp(s.credit) })}</div>
           </>
@@ -218,6 +220,8 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
         onSaved={() => { setContact(undefined); onReload() }}
       />
       <IssueCreditModal open={creditOpen} customer={customer} onClose={() => setCreditOpen(false)} onDone={() => { setCreditOpen(false); onReload?.() }} />
+      <PayBackCreditModal open={payBackOpen} customer={customer} onClose={() => setPayBackOpen(false)}
+        onDone={(amount) => { setPayBackOpen(false); toast(t('credit.paidBack', { amount: rp(amount) })); onReload?.() }} />
     </aside>
   )
 }

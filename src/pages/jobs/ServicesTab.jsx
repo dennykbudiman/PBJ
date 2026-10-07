@@ -11,6 +11,7 @@ import { useShop } from '../../context/ShopContext'
 import { shopToday } from '../../lib/customers'
 import { LINE_COLOR, lineState } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, discountText, parseDiscount } from './common'
+import { worksOnJobs } from './useJobData'
 
 const nextPos = (rows) => rows.reduce((m, r) => Math.max(m, Number(r.position) || 0), -1) + 1
 
@@ -201,7 +202,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
             onChange={(e) => upd({ technician_id: e.target.value || null })}>
             {/* An invoiced job keeps a technician on approved work, so "No technician" isn't offered there. */}
             <option value="" disabled={job.ro.order_status === 'invoice' && s.approval_status === 'approved' && !!s.technician_id}>{t('job.noTechnician')}</option>
-            {staff.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {staff.filter((p) => worksOnJobs(p) || p.id === s.technician_id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </label>
         <select className="select bare work" value={s.work_status} disabled={!workEditable} aria-label={t('job.workStatus')}

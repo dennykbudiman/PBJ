@@ -7,6 +7,7 @@ import { supabase, errorText } from '../lib/supabase'
 import { useT } from '../lib/i18n'
 import { fmtDate, invoiceNo, jobNo, km, rp } from '../lib/format'
 import { useShop } from '../context/ShopContext'
+import { selectAll } from './customers/useCustomerData'
 import { STATE_COLOR, jobState } from '../lib/jobs'
 import { shopToday } from '../lib/customers'
 import { TYPE_COLOR, normalizePlate, normalizeVin, npwpDigits, vehicleName } from '../lib/customers'
@@ -16,7 +17,7 @@ const MAX = 25
 // Global search: companies (by name, NPWP or a contact's name, phone or email) and
 // vehicles (by plate, VIN, make or model) and jobs (by job or invoice number, or the vehicles found).
 export default function SearchPage() {
-  const { t } = useT()
+  const { t, lang } = useT()
   const navigate = useNavigate()
   const q = new URLSearchParams(useLocation().search).get('q') || ''
   const [typed, setTyped] = useState(q)
@@ -29,9 +30,10 @@ export default function SearchPage() {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      supabase.from('customers').select('id, display_name, legal_name, npwp, phone, email, type, active').order('display_name'),
-      supabase.from('customer_contacts').select('customer_id, name, phone, email'),
-      supabase.from('vehicles').select('id, plate, year, make, model, vin, customer_id, mileage_km, status').order('plate'),
+      // Every row, past the server's 1,000-row page (a big fleet has more vehicles than that).
+      selectAll(() => supabase.from('customers').select('id, display_name, legal_name, npwp, phone, email, type, active').order('display_name').order('id')),
+      selectAll(() => supabase.from('customer_contacts').select('id, customer_id, name, phone, email').order('id')),
+      selectAll(() => supabase.from('vehicles').select('id, plate, year, make, model, vin, customer_id, mileage_km, status').order('plate').order('id')),
     ]).then(([c, ct, v]) => {
       if (cancelled) return
       setError(c.error || ct.error || v.error || null)
@@ -143,7 +145,7 @@ export default function SearchPage() {
                   return (
                     <Link key={j.id} className="resultrow" to={`/jobs/${j.id}`}>
                       <div className="row" style={{ gap: 6 }}><b>{j.invoice_number ? invoiceNo(j.invoice_number) : `#${jobNo(j.job_number)}`}</b><Badge color={STATE_COLOR[st]}>{t(`job.state.${st}`)}</Badge></div>
-                      <div className="muted small">{[results.byId[j.customer_id]?.display_name, v?.plate, rp(j.total), fmtDate(j.created_at)].filter(Boolean).join(' · ')}</div>
+                      <div className="muted small">{[results.byId[j.customer_id]?.display_name, v?.plate, rp(j.total), fmtDate(j.created_at, lang, timezone)].filter(Boolean).join(' · ')}</div>
                     </Link>
                   )
                 })}

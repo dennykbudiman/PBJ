@@ -65,7 +65,10 @@ export function initials(name) {
 // Parses a typed decimal such as a rate ("2", "2.5", "2,5") into a number, or null when empty.
 export function parseDecimal(text) {
   if (text === null || text === undefined) return null
-  const clean = String(text).trim().replace(/[^0-9.,-]/g, '').replace(',', '.')
+  let clean = String(text).trim().replace(/[^0-9.,-]/g, '')
+  // Indonesian grouping as num() writes it: "1.500" is 1500 and "2.500,5" is 2500.5 (but "0.500" and "1.5" stay decimals).
+  if (/^-?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/.test(clean)) clean = clean.replace(/\./g, '')
+  clean = clean.replace(',', '.')
   if (clean === '' || clean === '-' || clean === '.') return null
   const v = Number(clean)
   return Number.isNaN(v) ? null : v

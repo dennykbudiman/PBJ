@@ -60,7 +60,8 @@ export const reportsEn = {
   'rep.kind.payment': 'Payment', 'rep.kind.refund': 'Refund', 'rep.kind.credit_refund': 'Credit paid back',
   // ===== stage 9b
   'rep.tab.profit': 'Profit', 'rep.tab.technicians': 'Technicians', 'rep.tab.fleet': 'Fleet spend', 'rep.tab.inventory': 'Inventory', 'rep.tab.service': 'Service compliance',
-  'rep.costsTitle': 'This report shows cost prices', 'rep.costsText': 'Your role can see reports but not cost prices. An Owner or Admin can add "View costs" in Settings → Users & access.',
+  'rep.opsTitle': 'This report is for the service team', 'rep.opsText': 'Your role sees the money reports (sales, aging and payments) but not the workshop\'s technician, fleet and service reports.',
+  'rep.costsTitle': 'This report shows cost prices', 'rep.costsText': 'Your role can see reports but not cost prices. Ask an Owner or Admin if your role should change (Settings → Users & access).',
   'rep.m.cost': 'Parts & sublet cost', 'rep.m.gross': 'Gross profit', 'rep.m.margin': 'Margin', 'rep.m.sales': 'Sales before tax',
   // Profit
   'rep.profit.title': 'Profit', 'rep.profit.sub': 'What the invoices in the period earned after the cost of their parts and sublet work.',
@@ -179,7 +180,8 @@ export const reportsId = {
   'db:Choose a period of at most 5 years': 'Pilih periode paling lama 5 tahun.',
   // ===== tahap 9b
   'rep.tab.profit': 'Laba', 'rep.tab.technicians': 'Teknisi', 'rep.tab.fleet': 'Biaya armada', 'rep.tab.inventory': 'Inventaris', 'rep.tab.service': 'Kepatuhan servis',
-  'rep.costsTitle': 'Laporan ini menampilkan harga pokok', 'rep.costsText': 'Peran Anda bisa melihat laporan tetapi tidak harga pokok. Pemilik atau Admin bisa menambahkan "Lihat harga pokok" di Pengaturan → Pengguna & akses.',
+  'rep.opsTitle': 'Laporan ini untuk tim servis', 'rep.opsText': 'Peran Anda melihat laporan keuangan (penjualan, umur piutang dan pembayaran), tetapi tidak laporan teknisi, armada dan servis bengkel.',
+  'rep.costsTitle': 'Laporan ini menampilkan harga pokok', 'rep.costsText': 'Peran Anda bisa melihat laporan tetapi tidak harga pokok. Tanyakan ke Pemilik atau Admin bila peran Anda perlu diubah (Pengaturan → Pengguna & akses).',
   'rep.m.cost': 'Harga pokok part & sublet', 'rep.m.gross': 'Laba kotor', 'rep.m.margin': 'Margin', 'rep.m.sales': 'Penjualan sebelum pajak',
   'rep.profit.title': 'Laba', 'rep.profit.sub': 'Hasil invoice di periode ini setelah dikurangi harga pokok part dan pekerjaan sublet.',
   'rep.profit.salesNote': '{n} invoice', 'rep.profit.costNote': 'Harga pokok di baris invoice',

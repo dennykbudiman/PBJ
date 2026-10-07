@@ -26,7 +26,7 @@ function linkFor(n) {
     case 'repair_order': return n.entity_id ? `/jobs/${n.entity_id}` : null
     case 'vehicle': return n.entity_id ? `/vehicles/${n.entity_id}` : null
     case 'customer': return n.entity_id ? `/customers/${n.entity_id}` : null
-    case 'purchase_order': return n.entity_id ? `/inventory/po/${n.entity_id}` : null
+    case 'purchase_order': return n.entity_id ? `/inventory/purchase-orders/${n.entity_id}` : null
     default: return null
   }
 }

@@ -37,7 +37,7 @@ npm run dev
 - `src/components` — app layout (top bar), shared UI pieces
 - `src/pages` — screens; `pages/settings` is the Settings page
 - `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs`, `src/pages/board`, `src/pages/calendar`, `src/pages/inventory`, `src/pages/reports` — Customers & vehicles, Catalog, Jobs, Work board, Calendar, Inventory, Reports
-- `supabase/migrations` — database migrations 100–127 (100–126 applied to staging; 127 adds the stage 9b reports `report_profit`, `report_technicians`, `report_fleet`, `report_inventory`, `report_service_status`, `report_service_done`, the one-call wrapper `report_rows`, and `service_schedule_log`, which records whether scheduled services were done on time)
+- `supabase/migrations` — database migrations 100–128 (100–127 applied to staging; 128 adds the Cashier role — payments, deposits, refunds and paying company credit back, while the Service advisor works a job up to the invoice — plus fixes from the October full review: `customer_balances` respects row security again, profiles and role permissions can't be changed around the Owner, payments on closed jobs and future-dated payments are refused, an issued invoice's due date is Owner/Admin only)
 - `supabase/functions/invite-user` — invites a person (deployed to staging); `supabase/functions/delete-user` removes a login
 - `deploy/self-host` — kit for running Axle on your own Linux server (self-hosted Supabase + the app + HTTPS, backups, moving data from supabase.co). Start with `deploy/self-host/README.md`. Netlify ignores this folder.
 

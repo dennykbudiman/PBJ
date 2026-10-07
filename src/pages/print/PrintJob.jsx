@@ -34,8 +34,9 @@ export default function PrintJob() {
   const t = (key, vars) => translate(lang, key, vars)
   const setParam = (k, v) => { const p = new URLSearchParams(location.search); p.set(k, v); navigate(`${location.pathname}?${p.toString()}`, { replace: true }) }
 
-  // An issued invoice prints what was frozen at invoicing: the shop details and the bill-to.
-  const shop = doc === 'invoice' && ro.shop_snapshot ? { ...settings, ...ro.shop_snapshot } : settings
+  // An issued invoice prints what was frozen at invoicing: the shop details (incl. the tax rate, also on an estimate
+  // printed from it, whose amounts are the invoiced ones) and the bill-to.
+  const shop = invoiced && ro.shop_snapshot ? { ...settings, ...ro.shop_snapshot } : settings
   const snap = doc === 'invoice' ? ro.bill_to_snapshot : null
   const bill = snap || {
     display_name: job.customer?.display_name, legal_name: job.customer?.legal_name, npwp: job.customer?.npwp,

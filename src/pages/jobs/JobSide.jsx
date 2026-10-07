@@ -9,6 +9,7 @@ import { shopToday } from '../../lib/customers'
 import { APPT_COLOR, clock, dayLabel, isActiveAppt, shopParts } from '../../lib/calendar'
 import { APPROVALS, APPROVAL_COLOR, PAYMENT_COLOR, PRIORITIES, WORKFLOW_COLOR, WORKFLOW_MANUAL, jobState, STATE_COLOR, lineNet } from '../../lib/jobs'
 import { BlurInput, TotalRow } from './common'
+import { runsJobs } from './useJobData'
 
 export function ApprovalsCard({ job, editable, onRecord }) {
   const { t, lang } = useT()
@@ -89,7 +90,7 @@ export function StatusCard({ job, staff, settings, canEdit, editable, canVoid, r
         <div>
           <div className="sectionlabel">{t('job.advisor')}</div>
           <Select value={ro.service_advisor_id || ''} disabled={!canEdit || !!ro.closed_at} onChange={(e) => upd({ service_advisor_id: e.target.value || null })} aria-label={t('job.advisor')}
-            options={[{ value: '', label: '—' }, ...staff.filter((s) => s.roles?.name !== 'Technician' || s.id === ro.service_advisor_id).map((s) => ({ value: s.id, label: s.name }))]} />
+            options={[{ value: '', label: '—' }, ...staff.filter((s) => runsJobs(s) || s.id === ro.service_advisor_id).map((s) => ({ value: s.id, label: s.name }))]} />
         </div>
         <div>
           <div className="sectionlabel">{t('job.priority')}</div>
@@ -107,10 +108,12 @@ export function StatusCard({ job, staff, settings, canEdit, editable, canVoid, r
   )
 }
 
-export function TotalsCard({ job, settings, editable, canPay, canRefund, canCredit, run, onPayment, onCredit, onFee, onDiscount }) {
+export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixPaid, canCredit, run, onPayment, onCredit, onFee, onDiscount }) {
   const { t, lang } = useT()
   const { timezone } = useShop()
   const [delPay, setDelPay] = React.useState(null)
+  // Money actually received (payments minus refunds); credits are taken off, not refunded.
+  const cashIn = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
   const ro = job.ro
   // An issued invoice keeps the tax settings it was issued with.
   const tax = ro.order_status === 'invoice' && ro.shop_snapshot ? ro.shop_snapshot : settings
@@ -166,14 +169,14 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canCred
       {credits > 0 && <div className="trow muted small"><span>{t('job.ofWhichCredit')}</span><span className="trow-val">{rp(credits)}</span></div>}
       <TotalRow label={t('job.balance')} value={ro.balance} strong />
       <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
-        {canPay && !ro.closed_at && (Number(ro.balance) > 0 || ro.order_status !== 'invoice' || (canRefund && Number(ro.paid_total) > 0)) && <Button icon="plus" onClick={onPayment}>{t('job.payment')}</Button>}
+        {canPay && !ro.closed_at && (Number(ro.balance) > 0 || ro.order_status !== 'invoice' || (canRefund && cashIn > 0)) && <Button icon="plus" onClick={onPayment}>{t('job.payment')}</Button>}
         {canCredit && <Button icon="plus" onClick={onCredit}>{t('job.credit')}</Button>}
       </div>
       {job.payments.length > 0 && (
         <div className="paylist">
           {job.payments.map((p) => {
             const voided = job.voids.some((v) => v.voided_at >= p.created_at)
-            const canDelete = canPay && p.source === 'manual' && !voided && (ro.order_status !== 'invoice' || canRefund)
+            const canDelete = canPay && p.source === 'manual' && !voided && (ro.order_status !== 'invoice' || canFixPaid)
             return (
               <div key={p.id} className="payrow">
                 <div>

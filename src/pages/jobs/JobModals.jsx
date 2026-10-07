@@ -86,7 +86,10 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const kmBelow = !noKmOut && ro.odometer_in != null && Number(ro.odometer_out) < Number(ro.odometer_in)
   // A technician who has since been disabled doesn't count.
   const noTech = approved.filter((s) => !s.technician_id || (staff?.length > 0 && !staff.some((p) => p.id === s.technician_id)))
-  const blocked = pending.length > 0 || approved.length === 0 || noKmOut || kmBelow || noTech.length > 0
+  // More money taken than the invoice total: the database refuses until the difference is refunded.
+  const cash = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
+  const overpaid = Math.max(0, cash - Number(ro.total))
+  const blocked = pending.length > 0 || approved.length === 0 || noKmOut || kmBelow || noTech.length > 0 || overpaid > 0
   async function go() {
     let no = null
     const ok = await run(async () => {
@@ -104,6 +107,7 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
       {noKmOut && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needKmOut')}</Notice>}
       {kmBelow && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.kmOutBelow')}</Notice>}
       {noTech.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needTech', { names: noTech.map((s) => s.name).join(', ') })}</Notice>}
+      {overpaid > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overpaidFirst', { amount: rp(overpaid) })}</Notice>}
       <div className="kvlist">
         <div><span>{t('job.billTo')}</span><b>{job.customer?.legal_name || job.customer?.display_name}</b></div>
         <div><span>{t('job.approvedServices')}</span><b>{approved.length}</b></div>
@@ -115,22 +119,24 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   )
 }
 
-// A payment (or, for Owners and Admins on an invoice, a refund).
+// A payment (or a refund: on an issued invoice only for a Cashier, Owner or Admin).
 export function PaymentModal({ open, onClose, job, canRefund, run, busy }) {
   const { t } = useT()
   const { timezone } = useShop()
   const ro = job.ro
+  // Only money actually received can be refunded (credits are taken off instead).
+  const cash = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
   const [f, setF] = useState({})
   const [errors, setErrors] = useState({})
   useEffect(() => {
     if (!open) return
-    setF({ kind: 'payment', amount: Number(ro.balance) > 0 ? num(ro.balance) : '', method: 'transfer', date: shopToday(timezone), reference: '', receipt: '' })
+    // Nothing left to pay on an issued invoice: the only thing to record is a refund.
+    const refundOnly = canRefund && ro.order_status === 'invoice' && Number(ro.balance) <= 0 && cash > 0
+    setF({ kind: refundOnly ? 'refund' : 'payment', amount: Number(ro.balance) > 0 ? num(ro.balance) : '', method: 'transfer', date: shopToday(timezone), reference: '', receipt: '' })
     setErrors({})
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
   const isInvoice = ro.order_status === 'invoice'
-  // Only money actually received can be refunded (credits are taken off instead).
-  const cash = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
   async function save() {
     const e = {}
     const amount = readAmount(f.amount)
@@ -141,7 +147,7 @@ export function PaymentModal({ open, onClose, job, canRefund, run, busy }) {
     setErrors(e)
     if (Object.keys(e).length) return
     const ok = await run(() => supabase.from('payments').insert({
-      ro_id: ro.id, kind: f.kind, method: f.method, amount, paid_at: shopDateToTimestamp(f.date, timezone),
+      ro_id: ro.id, kind: f.kind, method: f.method, amount, paid_at: f.date === shopToday(timezone) ? new Date().toISOString() : shopDateToTimestamp(f.date, timezone),
       reference: f.reference.trim() || null, receipt_number: f.receipt.trim() || null,
     }), f.kind === 'refund' ? t('job.refundSaved', { amount: rp(amount) }) : t('job.paymentSaved', { amount: rp(amount) }))
     if (ok) onClose()
@@ -167,7 +173,7 @@ export function PaymentModal({ open, onClose, job, canRefund, run, busy }) {
 }
 
 // Apply the company's unused credits to this job, take them off again, or issue a new credit.
-export function CreditModal({ open, onClose, job, canApply, canIssue, canUnapplyInvoiced, run, busy }) {
+export function CreditModal({ open, onClose, job, canApply, canIssue, canUnapplyInvoiced, canPayBack, onPayBack, run, busy }) {
   const { t, lang } = useT()
   const { timezone } = useShop()
   const ro = job.ro
@@ -232,6 +238,9 @@ export function CreditModal({ open, onClose, job, canApply, canIssue, canUnapply
         </div>
       )}
       <div className="hint">{t('job.creditHint', { amount: rp(open_) })}</div>
+      {canPayBack && job.availableCredits.length > 0 && (
+        <div className="row" style={{ marginTop: 8 }}><div className="spacer" /><Button onClick={onPayBack}>{t('credit.payBack')}</Button></div>
+      )}
       {canIssue && (
         <>
           <div className="sectionlabel">{t('job.issueCredit')}</div>
@@ -379,6 +388,76 @@ export function IssueCreditModal({ open, customer, onClose, onDone }) {
         <Input label={t('job.reason')} value={f.reason} onChange={(e) => setF((x) => ({ ...x, reason: e.target.value }))} error={err.reason} placeholder={t('job.creditReasonExample')} />
       </div>
       <div className="hint">{t('job.issueHint', { name: customer?.display_name })}</div>
+    </Modal>
+  )
+}
+
+// Pay a company's unused credit back as money (Cashier, Owner, Admin: refund_payments). A part pay-back leaves the rest as credit.
+export function PayBackCreditModal({ open, customer, onClose, onDone }) {
+  const { t, lang } = useT()
+  const { timezone } = useShop()
+  const [credits, setCredits] = useState(null)
+  const [f, setF] = useState({ credit: '', amount: '', method: 'transfer', reference: '' })
+  const [err, setErr] = useState({})
+  const [busy, setBusy] = useState(false)
+  const live = React.useRef(false)
+  // Loads the company's unused credits; after a refused pay-back it runs again (the credit may have just been used).
+  async function load(keepError) {
+    const { data, error } = await supabase.from('credit_memos').select('id, amount, reason, created_at').eq('customer_id', customer.id)
+      .is('applied_ro_id', null).is('refunded_at', null).order('created_at')
+    if (!live.current) return
+    if (error) return setErr({ load: errorText(error, t) })
+    setCredits(data || [])
+    setF((x) => {
+      const still = (data || []).find((c) => c.id === x.credit) || data?.[0]
+      return still ? { ...x, credit: still.id, amount: still.id === x.credit && keepError ? x.amount : num(still.amount) } : { ...x, credit: '', amount: '' }
+    })
+  }
+  useEffect(() => {
+    if (!open || !customer?.id) return
+    live.current = true
+    setCredits(null); setErr({}); setF({ credit: '', amount: '', method: 'transfer', reference: '' })
+    load(false)
+    return () => { live.current = false }
+  }, [open, customer?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const picked = (credits || []).find((c) => c.id === f.credit)
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
+  function pick(e) {
+    const c = (credits || []).find((x) => x.id === e.target.value)
+    setF((x) => ({ ...x, credit: e.target.value, amount: c ? num(c.amount) : '' }))
+  }
+  async function save() {
+    const amount = readAmount(f.amount)
+    const e = {}
+    if (!picked) e.credit = t('settings.required')
+    else if (!amount || Number.isNaN(amount)) e.amount = t('job.amountRule')
+    else if (amount > Number(picked.amount)) e.amount = t('credit.overCredit', { amount: rp(picked.amount) })
+    setErr(e)
+    if (Object.keys(e).length) return
+    setBusy(true)
+    const { error } = await supabase.rpc('refund_credit', { p_credit: picked.id, p_amount: amount, p_method: f.method, p_reference: f.reference.trim() || null })
+    setBusy(false)
+    if (error) { setErr({ amount: errorText(error, t) }); return load(true) }
+    onDone(amount)
+  }
+  const none = credits && credits.length === 0
+  return (
+    <Modal open={open} title={t('credit.payBackFor', { name: customer?.display_name })} onClose={onClose}
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button>
+        <Button variant="primary" onClick={save} loading={busy} disabled={!credits || none}>{t('credit.payBackYes')}</Button></>}>
+      {err.load && <Notice kind="err">{err.load}</Notice>}
+      {!credits && !err.load && <div className="muted">{t('common.loading')}</div>}
+      {none && <div className="muted">{t('job.noAvailableCredits')}</div>}
+      {credits && credits.length > 0 && (
+        <div className="grid2">
+          <Select fieldClass="span2" label={t('job.credit')} value={f.credit} onChange={pick} error={err.credit}
+            options={credits.map((c) => ({ value: c.id, label: `${c.reason || t('job.credit')} · ${fmtDate(c.created_at, lang, timezone)} · ${rp(c.amount)}` }))} />
+          <Input label={t('cat.amount')} value={f.amount} onChange={set('amount')} inputMode="numeric" prefix="Rp" error={err.amount} />
+          <Select label={t('job.payMethod')} value={f.method} onChange={set('method')} options={PAY_METHODS.map((m) => ({ value: m, label: t(`job.pay.${m}`) }))} />
+          <Input fieldClass="span2" label={t('job.reference')} value={f.reference} onChange={set('reference')} placeholder={t('job.referenceExample')} />
+        </div>
+      )}
+      <div className="hint">{t('credit.payBackHint')}</div>
     </Modal>
   )
 }

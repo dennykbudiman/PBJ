@@ -72,7 +72,9 @@ export function rpShort(n, lang = 'en') {
   const abs = Math.abs(v)
   const sign = v < 0 ? '-' : ''
   const fmt = (x) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(x)
-  if (abs >= 1e9) return `${sign}Rp ${fmt(abs / 1e9)} M`
-  if (abs >= 1e6) return `${sign}Rp ${fmt(abs / 1e6)} jt`
+  // Indonesian: jt (juta) and M (miliar); English: M (million) and B (billion), so "M" never means two things on one screen.
+  const en = lang === 'en'
+  if (abs >= 1e9) return `${sign}Rp ${fmt(abs / 1e9)} ${en ? 'B' : 'M'}`
+  if (abs >= 1e6) return `${sign}Rp ${fmt(abs / 1e6)} ${en ? 'M' : 'jt'}`
   return `${sign}Rp ${new Intl.NumberFormat('id-ID').format(abs)}`
 }

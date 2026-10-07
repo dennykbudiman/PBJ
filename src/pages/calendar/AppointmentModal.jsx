@@ -160,6 +160,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
     if (!validate()) return
     setBusy(true); setMsg(null)
     let roId = f.ro && f.ro !== 'new' ? f.ro : null
+    let jobMade = createdJob // the state only updates after this save, so the message below reads this
     if (f.ro === 'new') {
       if (createdJob && createdJob.vehicle_id === f.vehicle_id) roId = createdJob.id
       else {
@@ -167,6 +168,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
         const { data: ro, error } = await supabase.from('repair_orders').insert({ customer_id: f.customer_id, vehicle_id: f.vehicle_id, priority: 'medium', service_advisor_id: advisor }).select().single()
         if (error) { setBusy(false); return setMsg(errorText(error, t)) }
         roId = ro.id
+        jobMade = ro
         setCreatedJob(ro)
         const lines = f.concerns.split('\n').map((x) => x.trim()).filter(Boolean)
         if (lines.length) {
@@ -185,7 +187,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
       : await supabase.from('appointments').insert(row).select().single()
     setBusy(false)
     if (res.error) {
-      setMsg(errorText(res.error, t) + (f.ro === 'new' && !appointment ? ` ${t('appt.jobKept', { no: jobNo(createdJob?.job_number) })}` : ''))
+      setMsg(errorText(res.error, t) + (f.ro === 'new' && !appointment ? ` ${t('appt.jobKept', { no: jobNo(jobMade?.job_number) })}` : ''))
       return
     }
     toast(appointment ? t('appt.saved') : t('appt.booked'))
