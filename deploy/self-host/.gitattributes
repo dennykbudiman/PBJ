@@ -1,0 +1,9 @@
+# Keep line endings Unix-style even when the repo passes through Windows (bash fails on CRLF).
+*.sh text eol=lf
+*.sql text eol=lf
+*.mjs text eol=lf
+*.yml text eol=lf
+Caddyfile text eol=lf
+Dockerfile text eol=lf
+*.dockerignore text eol=lf
+axle.conf.example text eol=lf

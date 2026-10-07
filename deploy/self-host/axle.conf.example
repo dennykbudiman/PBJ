@@ -1,0 +1,42 @@
+# Axle on your own server: settings.
+# Copy this file to axle.conf (same folder), fill it in, then run:  sudo ./axle.sh install
+# Lines starting with # are notes. Don't put spaces around "=".
+
+# ----- Address -------------------------------------------------------------
+# The address people type to open Axle. One of:
+#   a domain name pointing at this server, e.g.  axle.yourcompany.co.id   (best: real HTTPS certificate)
+#   a name on your office network, e.g.          axle.lan
+#   the server's IP address, e.g.                192.168.1.20
+AXLE_DOMAIN=
+
+# How the padlock (HTTPS) works:
+#   auto      a free Let's Encrypt certificate. Needs a real domain name, and ports 80 and 443
+#             open to the internet. Fill in AXLE_ACME_EMAIL (certificate expiry notices go there).
+#   internal  the server makes its own certificate. For an office network where the server can't be
+#             reached from the internet (the server itself still needs to go online for installs,
+#             updates, email and staff invites). Each computer/phone shows a warning until you
+#             install the server's certificate once (see the guide, "Office network certificates").
+#   off       plain http, no padlock. Only for a closed test network: passwords travel unencrypted.
+AXLE_TLS=auto
+AXLE_ACME_EMAIL=
+
+# ----- Email (for inviting staff and "forgot password") ----------------------
+# Any SMTP account works: your company mail server, Google Workspace, Zoho, Brevo, Mailgun...
+# For Gmail/Google Workspace: host smtp.gmail.com, port 587, your address as user, and an
+# "app password" (Google account → Security → App passwords) as the password.
+# Leave SMTP_HOST empty to skip email for now: the Owner can still sign in and use Axle, but
+# inviting staff and password-reset emails won't work until this is filled in.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_ADMIN_EMAIL=
+SMTP_SENDER_NAME=Axle
+
+# ----- Folders (usually leave as they are) ----------------------------------
+# Where the database, uploaded files and settings live. Default: the folder that holds the app folder.
+#AXLE_HOME=/opt/axle
+# Where backups go. Default: $AXLE_HOME/backups
+#AXLE_BACKUP_DIR=/opt/axle/backups
+# How many nightly backups to keep.
+AXLE_BACKUP_KEEP=14

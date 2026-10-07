@@ -1,0 +1,50 @@
+# Axle's additions to the official Supabase docker-compose.yml.
+# axle.sh copies this file next to docker-compose.yml and lists it in COMPOSE_FILE in .env,
+# so plain `docker compose ...` commands in the stack folder include it automatically.
+
+services:
+
+  # The Supabase gateway (APIs + Studio) only listens on the server itself.
+  # People reach the APIs through the web server below; Studio through an SSH tunnel (see the guide).
+  api-gw:
+    ports: !override
+      - "127.0.0.1:${API_GW_HTTP_PORT:-8000}:8000/tcp"
+
+  # The database pooler only listens on the server itself (it is reachable from the whole
+  # network in the stock setup).
+  supavisor:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543"
+
+  # The Axle app + HTTPS. Serves the app and forwards /auth, /rest, /storage, /functions... to the gateway.
+  web:
+    container_name: axle-web
+    image: axle-web:local
+    build:
+      context: ${AXLE_APP_DIR}
+      dockerfile: deploy/self-host/web/Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${SUPABASE_PUBLIC_URL}
+        VITE_SUPABASE_ANON_KEY: ${ANON_KEY}
+    restart: unless-stopped
+    depends_on:
+      api-gw:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      AXLE_SITE_ADDRESS: ${AXLE_SITE_ADDRESS}
+      AXLE_TLS_MODE: ${AXLE_TLS_MODE}
+      AXLE_ACME_EMAIL: ${AXLE_ACME_EMAIL:-}
+      AXLE_DEFAULT_SNI: ${AXLE_DEFAULT_SNI}
+    volumes:
+      # Certificates live here; keep this volume (deleting it means new certificates).
+      - axle-caddy-data:/data
+      - axle-caddy-config:/config
+
+volumes:
+  axle-caddy-data:
+  axle-caddy-config:

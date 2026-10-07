@@ -119,8 +119,17 @@ export function Toggle({ checked, onChange, label, disabled }) {
 }
 
 export function SubTabs({ tabs, active, onChange }) {
+  // On a narrow screen the row scrolls sideways: keep the chosen tab in view.
+  const ref = React.useRef(null)
+  React.useEffect(() => {
+    const el = ref.current?.querySelector('.subtab.on')
+    const box = ref.current
+    if (!el || !box || box.scrollWidth <= box.clientWidth) return
+    const left = el.getBoundingClientRect().left - box.getBoundingClientRect().left + box.scrollLeft
+    box.scrollLeft = Math.max(0, left - (box.clientWidth - el.offsetWidth) / 2)
+  }, [active])
   return (
-    <div className="subtabs">
+    <div className="subtabs" ref={ref}>
       {tabs.map((t) => (
         <button key={t.value} className={`subtab ${active === t.value ? 'on' : ''}`} onClick={() => onChange(t.value)}>
           {t.label}

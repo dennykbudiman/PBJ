@@ -8,11 +8,19 @@ import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { shopToday } from '../../lib/customers'
 import { PERIODS, periodRange } from '../../lib/reports'
+import { num } from '../../lib/format'
 import SalesReport from './SalesReport'
 import AgingReport from './AgingReport'
 import PaymentsReport from './PaymentsReport'
+import ProfitReport from './ProfitReport'
+import TechniciansReport from './TechniciansReport'
+import FleetReport from './FleetReport'
+import InventoryReport from './InventoryReport'
+import ServiceReport from './ServiceReport'
 
-export const REPORT_TABS = ['sales', 'aging', 'payments']
+export const REPORT_TABS = ['sales', 'aging', 'payments', 'profit', 'technicians', 'fleet', 'inventory', 'service']
+// Reports that show cost prices also need the view_costs permission.
+const NEEDS_COSTS = ['profit', 'inventory']
 
 // /reports → Sales, /reports/<tab>
 export default function ReportsArea() {
@@ -31,7 +39,17 @@ export default function ReportsArea() {
       {tab === 'sales' && <SalesReport />}
       {tab === 'aging' && <AgingReport />}
       {tab === 'payments' && <PaymentsReport />}
-      <div className="hint" style={{ marginTop: 16 }}>{t('rep.moreSoon')}</div>
+      {NEEDS_COSTS.includes(tab) && !can('view_costs') ? (
+        <Card><Empty icon="lock" title={t('rep.costsTitle')}>{t('rep.costsText')}</Empty></Card>
+      ) : (
+        <>
+          {tab === 'profit' && <ProfitReport />}
+          {tab === 'technicians' && <TechniciansReport />}
+          {tab === 'fleet' && <FleetReport />}
+          {tab === 'inventory' && <InventoryReport />}
+          {tab === 'service' && <ServiceReport />}
+        </>
+      )}
     </Page>
   )
 }
@@ -48,6 +66,13 @@ export function usePeriod(initial = 'this_month') {
   return { preset, setPreset, custom, setCustom, today, valid, ...range }
 }
 
+// The API hands back at most 1.000 rows per request (Supabase's "Max rows"), so every report is fetched through
+// report_rows, which returns the whole report as one JSON list in a single call.
+export async function fetchAllRows(fn, args) {
+  const { data, error } = await supabase.rpc('report_rows', { p_report: fn, ...args })
+  return { data: error ? null : data || [], error }
+}
+
 // Calls a report function again whenever its arguments change; a slower earlier answer never overwrites a newer one.
 export function useReport(fn, args, deps, enabled = true) {
   const [state, setState] = useState({ rows: null, error: null })
@@ -56,7 +81,7 @@ export function useReport(fn, args, deps, enabled = true) {
     if (!enabled) return
     const n = ++seq.current
     setState((s) => ({ rows: s.rows, error: null, loading: true }))
-    supabase.rpc(fn, args).then(({ data, error }) => {
+    fetchAllRows(fn, args).then(({ data, error }) => {
       if (n !== seq.current) return
       setState({ rows: error ? null : data || [], error, loading: false })
     })
@@ -121,6 +146,19 @@ export function ReportError({ error }) {
   const { t } = useT()
   if (!error) return null
   return <Notice kind="err" style={{ marginBottom: 12 }}>{errorText(error, t)}</Notice>
+}
+
+// A share as a whole percentage ("—" when there's nothing to divide by).
+export function pct(part, whole, digits = 0) {
+  if (!whole) return '—'
+  return `${num((part / whole) * 100, digits)}%`
+}
+
+// Rows can open to show more; remembers which are open.
+export function useOpenRows() {
+  const [open, setOpen] = useState(() => new Set())
+  const toggle = (id) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  return [open, toggle]
 }
 
 // One KPI tile.

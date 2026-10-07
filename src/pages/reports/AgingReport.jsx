@@ -61,7 +61,7 @@ export default function AgingReport() {
         <Kpi label={t('rep.b.d90')} value={rp(tot.d90)} tone={tot.d90 ? 'red' : undefined} />
         <Kpi label={t('rep.aging.credit')} value={rp(credit)} note={t('rep.aging.creditNote')} />
       </div>
-      {aging.rows === null && !aging.error ? <div className="muted">{t('common.loading')}</div> : companies.length === 0 ? (
+      {aging.error || credits.error ? null : aging.rows === null ? <div className="muted">{t('common.loading')}</div> : companies.length === 0 ? (
         <div className="card"><Empty icon="chart-bar" title={t('rep.aging.noneTitle')}>{t('rep.aging.noneText')}</Empty></div>
       ) : (
         <div className="table">

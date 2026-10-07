@@ -1,0 +1,9 @@
+# Only what the web image needs goes into the build.
+**
+!package.json
+!package-lock.json
+!index.html
+!vite.config.js
+!public/**
+!src/**
+!deploy/self-host/web/Caddyfile

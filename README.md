@@ -18,7 +18,7 @@ address for every Netlify context of this branch, so a preview can never reach l
 6. **Work board & calendar** ✓: Kanban / list board by workflow (`/board`), calendar by day (per technician) / week / month with appointments (`/calendar`), bookings on the job page, deferred work carried into new estimates or dismissed
 7. **Inventory & purchase orders** ✓ (update 8: returns per PO, received quantities can be corrected): Inventory → Stock (on hand / on estimates / available / on order, order low parts), Purchase orders (stock and job POs, receive with supplier invoice, cancel, print `/print/po/<id>`), Returns to suppliers, Cores, Supplier bills (pay delivered parts, undo); "Order parts" and On order / Arrived badges on the job page
 8. **Service schedules** ✓ (built before stage 7): schedules per vehicle by km and/or months, Customers → Service due, due work on open estimates, bundles that start their own schedule on completion, service-due and overdue-invoice reminders in the bell, next service on the invoice
-9. **Dashboard & reports**, 9a ✓ (this delivery): dashboard (today's work, money, needs attention, 6-month chart) and Reports → Sales, Receivables aging, Payments received, each with CSV download. 9b (profit, technicians, fleet spend, inventory, service compliance) next
+9. **Dashboard & reports** ✓: 9a dashboard (today's work, money, needs attention, 6-month chart) and Reports → Sales, Receivables aging, Payments received; 9b (this delivery) Profit, Technicians, Fleet spend, Inventory, Service compliance. Every report has CSV download
 
 ## Run locally
 
@@ -37,8 +37,9 @@ npm run dev
 - `src/components` — app layout (top bar), shared UI pieces
 - `src/pages` — screens; `pages/settings` is the Settings page
 - `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs`, `src/pages/board`, `src/pages/calendar`, `src/pages/inventory`, `src/pages/reports` — Customers & vehicles, Catalog, Jobs, Work board, Calendar, Inventory, Reports
-- `supabase/migrations` — database migrations 100–126 (100–125 applied to staging; 126 adds the read-only report functions `report_sales`, `report_voids`, `report_aging`, `report_open_credits`, `report_payments` and `dashboard_summary`)
-- `supabase/functions/invite-user` — invites a person (deployed to staging)
+- `supabase/migrations` — database migrations 100–127 (100–126 applied to staging; 127 adds the stage 9b reports `report_profit`, `report_technicians`, `report_fleet`, `report_inventory`, `report_service_status`, `report_service_done`, the one-call wrapper `report_rows`, and `service_schedule_log`, which records whether scheduled services were done on time)
+- `supabase/functions/invite-user` — invites a person (deployed to staging); `supabase/functions/delete-user` removes a login
+- `deploy/self-host` — kit for running Axle on your own Linux server (self-hosted Supabase + the app + HTTPS, backups, moving data from supabase.co). Start with `deploy/self-host/README.md`. Netlify ignores this folder.
 
 ## Rules the screens rely on
 

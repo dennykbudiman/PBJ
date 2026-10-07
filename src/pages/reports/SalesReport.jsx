@@ -77,7 +77,7 @@ export default function SalesReport() {
         {['parts', 'labor', 'sublet', 'fees'].map((m) => <span key={m}>{t(`rep.m.${m}`)} <b className="ink">{rp(tot[m])}</b></span>)}
         <span>{t('rep.m.discounts')} <b className="ink">{tot.discounts ? `-${rp(tot.discounts)}` : rp(0)}</b></span>
       </div>
-      {rows === null && !error ? <div className="muted">{t('common.loading')}</div> : list.length === 0 ? (
+      {error ? null : rows === null ? <div className="muted">{t('common.loading')}</div> : list.length === 0 ? (
         <div className="card"><Empty icon="chart-bar" title={t('rep.empty')}>{t('rep.sales.emptyText')}</Empty></div>
       ) : (
         <div className={`table ${loading ? 'stale' : ''}`}>

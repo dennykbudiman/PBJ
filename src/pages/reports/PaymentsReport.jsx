@@ -66,7 +66,7 @@ export default function PaymentsReport() {
         <Kpi label={t('rep.pay.in')} value={rp(inn)} />
         <Kpi label={t('rep.pay.out')} value={out ? `-${rp(out)}` : rp(0)} note={t('rep.pay.outNote')} />
       </div>
-      {rows === null && !error ? <div className="muted">{t('common.loading')}</div> : list.length === 0 ? (
+      {error ? null : rows === null ? <div className="muted">{t('common.loading')}</div> : list.length === 0 ? (
         <div className="card"><Empty icon="chart-bar" title={t('rep.empty')}>{t('rep.pay.emptyText')}</Empty></div>
       ) : (
         <div className={`table ${loading ? 'stale' : ''}`}>
