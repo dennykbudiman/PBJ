@@ -361,10 +361,11 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
                     onClick={() => onOpen(ev.a)}
                     title={`${spanText(ev.p, lang, t)} · ${l.who}${l.plate ? ` · ${l.plate} ${l.vehicle}` : ''} · ${t(`appt.st.${ev.a.status}`)}`}>
                     <span className="ev-time">{spanText(ev.p, lang, t)}{tech && !byTech && <span className="ev-tech">{initials(tech.name)}</span>}</span>
-                    <span className="ev-who">{l.who}</span>
-                    {height >= 56 && l.plate && <span className="ev-sub">{l.plate}{l.vehicle ? ` · ${l.vehicle}` : ''}</span>}
-                    {height >= 74 && l.job && <span className="ev-sub">#{jobNo(l.job.job_number)}</span>}
-                    {height >= 92 && l.title && <span className="ev-sub">{l.title}</span>}
+                    {/* Plate and company on the first line, so even a short booking shows both; the model goes under them when there is room. */}
+                    <span className="ev-who">{l.plate ? `${l.plate} · ${l.who}` : l.who}</span>
+                    {height >= 64 && l.plate && l.vehicle && <span className="ev-sub ev-veh">{l.vehicle}</span>}
+                    {height >= 88 && l.job && <span className="ev-sub">#{jobNo(l.job.job_number)}</span>}
+                    {height >= 104 && l.title && <span className="ev-sub">{l.title}</span>}
                   </button>
                 )
               })}
@@ -411,8 +412,8 @@ function MonthView({ appts, label, date, first, staff, canEdit, today, hours, on
               return (
                 <button key={a.id} type="button" draggable={canEdit} className={`mev s-${a.status}`} onClick={() => onOpen(a)}
                   onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', a.id); setDrag({ a, day: d }) }} onDragEnd={() => { setDrag(null); setOver(null) }}
-                  title={`${l.who}${l.plate ? ` · ${l.plate}` : ''} · ${t(`appt.st.${a.status}`)}`}>
-                  <span className="mev-time">{p.first ? clock(p.start, lang) : '→'}</span> <span className="mev-who">{l.who}</span>
+                  title={`${l.plate ? `${l.plate} ${l.vehicle} · ` : ''}${l.who} · ${t(`appt.st.${a.status}`)}`}>
+                  <span className="mev-time">{p.first ? clock(p.start, lang) : '→'}</span> <span className="mev-who">{l.plate ? `${l.plate} · ${l.who}` : l.who}</span>
                   {tech && <span className="ev-tech">{initials(tech.name)}</span>}
                 </button>
               )

@@ -16,7 +16,7 @@ address for every Netlify context of this branch, so a preview can never reach l
 4. **Jobs, estimates, invoices & payments** ✓: job page, approvals, invoicing and voiding, payments and credits, inspections, activity, job lists
 5. **Printed invoices & estimates** ✓: A4 estimate and invoice in Indonesian or English (`/print/jobs/<id>`)
 6. **Work board & calendar** ✓: Kanban / list board by workflow (`/board`), calendar by day (per technician) / week / month with appointments (`/calendar`), bookings on the job page, deferred work carried into new estimates or dismissed
-7. **Inventory & purchase orders** ✓ (this delivery): Inventory → Stock (on hand / on estimates / available / on order, order low parts), Purchase orders (stock and job POs, receive with supplier invoice, cancel, print `/print/po/<id>`), Returns to suppliers, Cores, Supplier bills (pay delivered parts, undo); "Order parts" and On order / Arrived badges on the job page
+7. **Inventory & purchase orders** ✓ (update 8: returns per PO, received quantities can be corrected): Inventory → Stock (on hand / on estimates / available / on order, order low parts), Purchase orders (stock and job POs, receive with supplier invoice, cancel, print `/print/po/<id>`), Returns to suppliers, Cores, Supplier bills (pay delivered parts, undo); "Order parts" and On order / Arrived badges on the job page
 8. **Service schedules** ✓ (built before stage 7): schedules per vehicle by km and/or months, Customers → Service due, due work on open estimates, bundles that start their own schedule on completion, service-due and overdue-invoice reminders in the bell, next service on the invoice
 9. Dashboard & reports
 
@@ -37,7 +37,7 @@ npm run dev
 - `src/components` — app layout (top bar), shared UI pieces
 - `src/pages` — screens; `pages/settings` is the Settings page
 - `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs`, `src/pages/board`, `src/pages/calendar`, `src/pages/inventory` — Customers & vehicles, Catalog, Jobs, Work board, Calendar, Inventory
-- `supabase/migrations` — database migrations 100–124 (100–123 applied to staging; 124 adds inventory: PO tax snapshot, supplier payments through `pay_po_items`, returns and cores rules)
+- `supabase/migrations` — database migrations 100–125 (100–124 applied to staging; 125 is update 8: invoicing needs km out and technicians, returns per PO with `advance_returns`, `unreceive_po_item`)
 - `supabase/functions/invite-user` — invites a person (deployed to staging)
 
 ## Rules the screens rely on

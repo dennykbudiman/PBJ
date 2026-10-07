@@ -101,7 +101,7 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
                     <td><Tick checked={!!r.checked} onChange={(v) => set(r.key, { checked: v })} label={t('inv.order.pick', { name: r.name })} /></td>
                     <td><b>{r.name}</b>{r.part_number && <span className="muted small"> · {r.part_number}</span>}{r.note && <div className="small muted">{r.note}</div>}</td>
                     <td>
-                      <select className={`select cell ${errors[`${r.key}.s`] ? 'invalid' : ''}`} value={r.supplier_id} disabled={!r.checked}
+                      <select className={`select cell boxed ${errors[`${r.key}.s`] ? 'invalid' : ''}`} value={r.supplier_id} disabled={!r.checked}
                         onChange={(e) => set(r.key, { supplier_id: e.target.value })} aria-label={t('inv.order.supplierFor', { name: r.name })}>
                         <option value="">{t('inv.order.chooseSupplier')}</option>
                         {active.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -109,13 +109,13 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
                       {errors[`${r.key}.s`] && <div className="error small">{errors[`${r.key}.s`]}</div>}
                     </td>
                     <td className="num">
-                      <input className={`input cell num narrow ${errors[`${r.key}.q`] ? 'invalid' : ''}`} value={r.qtyText} disabled={!r.checked} inputMode="decimal"
+                      <input className={`input cell num narrow boxed ${errors[`${r.key}.q`] ? 'invalid' : ''}`} value={r.qtyText} disabled={!r.checked} inputMode="decimal"
                         onChange={(e) => set(r.key, { qtyText: e.target.value })} aria-label={t('inv.order.qtyFor', { name: r.name })} />
                       {errors[`${r.key}.q`] && <div className="error small">{errors[`${r.key}.q`]}</div>}
                     </td>
                     {showCost && (
                       <td className="num">
-                        <input className={`input cell num ${errors[`${r.key}.c`] ? 'invalid' : ''}`} value={r.costText} disabled={!r.checked} inputMode="numeric"
+                        <input className={`input cell num boxed ${errors[`${r.key}.c`] ? 'invalid' : ''}`} value={r.costText} disabled={!r.checked} inputMode="numeric"
                           onChange={(e) => set(r.key, { costText: e.target.value })} aria-label={t('inv.order.costFor', { name: r.name })} />
                         {errors[`${r.key}.c`] && <div className="error small">{errors[`${r.key}.c`]}</div>}
                       </td>

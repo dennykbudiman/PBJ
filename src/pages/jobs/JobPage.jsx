@@ -92,9 +92,9 @@ export default function JobPage({ id }) {
     const n = String(val).trim() ? Number(String(val).replace(/[.\s]/g, '')) : null
     if (n !== null && (!Number.isInteger(n) || n < 0 || n > 9999999)) { reset(); return false }
     if (n !== null) {
+      // km out below km in can't be invoiced, so it isn't saved (fix the km in first if that one is wrong).
       if (field === 'odometer_out' && ro.odometer_in != null && n < ro.odometer_in) {
-        const sure = await confirm({ title: t('km.lowerTitle'), yes: t('km.yes'), no: t('km.no'), text: t('km.outBelowIn', { out: km(n), in: km(ro.odometer_in) }) })
-        if (sure !== true) { reset(); return false }
+        toast(t('km.outBelowInNo', { out: km(n), in: km(ro.odometer_in) }), 'err'); reset(); return false
       } else if (!(await confirmKm({ value: n, vehicleId: ro.vehicle_id, excludeRo: ro.id, ownKm: [ro.odometer_in, ro.odometer_out], confirm, t, fmt: km, jobNo }))) { reset(); return false }
     }
     return run(() => supabase.from('repair_orders').update({ [field]: n }).eq('id', ro.id))
@@ -205,7 +205,7 @@ export default function JobPage({ id }) {
           else toast(made.length === 1 ? t('inv.order.madeOne', { no: made[0].po_number || '' }) : t('inv.order.madeMany', { n: made.length }))
         }} />
       <ApprovalModal open={modal?.kind === 'approval'} onClose={close} job={job} preselect={modal?.preselect} run={run} busy={busy} />
-      <InvoiceModal open={modal?.kind === 'invoice'} onClose={close} job={job} settings={settings} run={runStock} busy={busy} />
+      <InvoiceModal open={modal?.kind === 'invoice'} onClose={close} job={job} settings={settings} staff={staff} run={runStock} busy={busy} />
       <PaymentModal open={modal?.kind === 'payment'} onClose={close} job={job} canRefund={!invoiced || canVoid} run={run} busy={busy} />
       <CreditModal open={modal?.kind === 'credit'} onClose={close} job={job} canApply={canPay} canIssue={canIssue} canUnapplyInvoiced={canVoid} run={run} busy={busy} />
       <FeeModal open={modal?.kind === 'fee'} onClose={close} job={job} cat={cat} run={run} busy={busy} />

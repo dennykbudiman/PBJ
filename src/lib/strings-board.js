@@ -40,6 +40,7 @@ export const boardEn = {
   'common.confirm': 'Confirm',
   'km.lowerTitle': 'Lower mileage than before', 'km.yes': 'Yes, it is correct', 'km.no': 'Let me fix it',
   'km.lowerText': 'You entered {km}, but this vehicle already had {last} recorded{where}. Odometers don\u2019t go back, so please check the number. Is {km} correct?',
+  'km.outBelowInNo': 'Km out ({out}) can\'t be lower than km in ({in}). If the km in is wrong, correct it first.',
   'km.onJob': ' on job #{no}', 'km.outBelowIn': 'Odometer out ({out}) is lower than odometer in ({in}). Is it correct?',
 
   // Calendar
@@ -152,6 +153,7 @@ export const boardId = {
   'common.confirm': 'Konfirmasi',
   'km.lowerTitle': 'Kilometer lebih rendah dari sebelumnya', 'km.yes': 'Ya, sudah benar', 'km.no': 'Perbaiki dulu',
   'km.lowerText': 'Anda mengisi {km}, padahal kendaraan ini sudah tercatat {last}{where}. Odometer tidak bisa mundur, jadi periksa lagi angkanya. Apakah {km} sudah benar?',
+  'km.outBelowInNo': 'Km keluar ({out}) tidak boleh lebih rendah dari km masuk ({in}). Jika km masuk yang salah, perbaiki dulu.',
   'km.onJob': ' di pekerjaan #{no}', 'km.outBelowIn': 'Odometer keluar ({out}) lebih rendah dari odometer masuk ({in}). Apakah sudah benar?',
 
   // Kalender

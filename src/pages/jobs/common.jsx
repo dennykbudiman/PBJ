@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useToast, usePopover } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
@@ -57,18 +57,47 @@ export function useRun(reload) {
   return { run, busy }
 }
 
-// A "…" menu.
+// A "…" menu. The list floats over the page (fixed position), so a table that scrolls sideways doesn't cut it off,
+// opens upwards when there isn't room below, and closes when the page scrolls.
 export function MoreMenu({ items, label, icon = 'more' }) {
   const pop = usePopover()
+  const btn = useRef(null)
+  const list = useRef(null)
+  const [pos, setPos] = useState(null)
   const shown = items.filter(Boolean)
+  useLayoutEffect(() => {
+    if (!pop.open || !btn.current || !list.current) { setPos(null); return }
+    const place = () => {
+      const r = btn.current.getBoundingClientRect()
+      const h = list.current.offsetHeight
+      const w = list.current.offsetWidth
+      const below = window.innerHeight - r.bottom
+      const top = below < h + 8 && r.top > below ? Math.max(8, r.top - h - 4) : Math.min(r.bottom + 4, window.innerHeight - h - 8)
+      const left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8)
+      setPos({ top, left })
+    }
+    place()
+    // Once the button actually moves (the page or table scrolls) or the window resizes, it closes, so it never floats
+    // away from its button. Scroll events that arrive late from before it opened don't count: the button hasn't moved.
+    const at = btn.current.getBoundingClientRect()
+    const close = (e) => {
+      if (list.current && e?.target instanceof Node && list.current.contains(e.target)) return
+      const now = btn.current?.getBoundingClientRect()
+      if (e?.type === 'scroll' && now && Math.abs(now.top - at.top) < 2 && Math.abs(now.left - at.left) < 2) return
+      pop.setOpen(false)
+    }
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close) }
+  }, [pop.open]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!shown.length) return null
   return (
     <div style={{ position: 'relative' }} ref={pop.ref}>
-      <button type="button" className="btn sm" onClick={pop.toggle} aria-label={label} aria-expanded={pop.open} title={label}>
+      <button type="button" ref={btn} className="btn sm" onClick={pop.toggle} aria-label={label} aria-expanded={pop.open} title={label}>
         <Icon name={icon} size={15} />
       </button>
       {pop.open && (
-        <div className="popover" style={{ minWidth: 200 }}>
+        <div ref={list} className="popover floating" style={{ minWidth: 200, position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, right: 'auto', visibility: pos ? 'visible' : 'hidden' }}>
           {shown.map((it) => (
             <button key={it.label} type="button" className="menuitem" disabled={it.disabled} title={it.title}
               style={it.danger ? { color: 'var(--red)' } : undefined} onClick={() => { pop.setOpen(false); it.onClick() }}>

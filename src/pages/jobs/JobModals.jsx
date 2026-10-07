@@ -71,7 +71,7 @@ export function ApprovalModal({ open, onClose, job, preselect, run, busy }) {
 }
 
 // Turn the estimate into an invoice. The database refuses if any service is still undecided.
-export function InvoiceModal({ open, onClose, job, settings, run, busy, onDone }) {
+export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, onDone }) {
   const { t, lang } = useT()
   const { timezone } = useShop()
   const ro = job.ro
@@ -81,7 +81,12 @@ export function InvoiceModal({ open, onClose, job, settings, run, busy, onDone }
   const today = shopToday(timezone)
   const due = new Date(`${today}T00:00:00Z`)
   due.setUTCDate(due.getUTCDate() + Number(terms))
-  const blocked = pending.length > 0 || approved.length === 0
+  // Denny, Oct 7: an invoice needs the km out and a technician on every approved service.
+  const noKmOut = ro.odometer_out == null
+  const kmBelow = !noKmOut && ro.odometer_in != null && Number(ro.odometer_out) < Number(ro.odometer_in)
+  // A technician who has since been disabled doesn't count.
+  const noTech = approved.filter((s) => !s.technician_id || (staff?.length > 0 && !staff.some((p) => p.id === s.technician_id)))
+  const blocked = pending.length > 0 || approved.length === 0 || noKmOut || kmBelow || noTech.length > 0
   async function go() {
     let no = null
     const ok = await run(async () => {
@@ -96,6 +101,9 @@ export function InvoiceModal({ open, onClose, job, settings, run, busy, onDone }
       footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" onClick={go} loading={busy} disabled={blocked}>{t('job.createInvoiceYes')}</Button></>}>
       {pending.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.stillPending', { n: pending.length, names: pending.map((s) => s.name).join(', ') })}</Notice>}
       {pending.length === 0 && approved.length === 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.noneApproved')}</Notice>}
+      {noKmOut && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needKmOut')}</Notice>}
+      {kmBelow && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.kmOutBelow')}</Notice>}
+      {noTech.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needTech', { names: noTech.map((s) => s.name).join(', ') })}</Notice>}
       <div className="kvlist">
         <div><span>{t('job.billTo')}</span><b>{job.customer?.legal_name || job.customer?.display_name}</b></div>
         <div><span>{t('job.approvedServices')}</span><b>{approved.length}</b></div>

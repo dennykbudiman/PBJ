@@ -133,6 +133,12 @@ export function ReceiveModal({ open, onClose, po, supplier, lines, onDone }) {
       footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('inv.receive.save')}</Button></>}>
       {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
       {err.none && <Notice kind="err" style={{ marginBottom: 10 }}>{err.none}</Notice>}
+      <div className="row" style={{ gap: 10, marginBottom: 8 }}>
+        <span className="small muted">{t('inv.receive.partialHint')}</span>
+        <div className="spacer" />
+        <button type="button" className="linkbtn small" onClick={() => setQty(Object.fromEntries(lines.map((l) => [l.id, qtyText(openQty(l))])))}>{t('inv.receive.allArrived')}</button>
+        <button type="button" className="linkbtn small" onClick={() => setQty(Object.fromEntries(lines.map((l) => [l.id, ''])))}>{t('inv.receive.clear')}</button>
+      </div>
       <div className="table compact">
         <table>
           <thead><tr><th>{t('inv.col.part')}</th><th className="num">{t('inv.col.ordered')}</th><th className="num">{t('inv.col.received')}</th><th className="num">{t('inv.receive.now')}</th></tr></thead>
@@ -143,8 +149,12 @@ export function ReceiveModal({ open, onClose, po, supplier, lines, onDone }) {
                 <td className="num">{num(Number(l.qty_ordered) - Number(l.qty_cancelled), 2)}</td>
                 <td className="num">{num(l.qty_delivered, 2)}</td>
                 <td className="num">
-                  <input className={`input cell num narrow ${err[l.id] ? 'invalid' : ''}`} value={qty[l.id] ?? ''} inputMode="decimal"
-                    onChange={(e) => setQty((x) => ({ ...x, [l.id]: e.target.value }))} aria-label={t('inv.receive.qtyFor', { name: l.name })} />
+                  <span className="rcv-qty">
+                    <input className={`input cell num narrow boxed ${err[l.id] ? 'invalid' : ''}`} value={qty[l.id] ?? ''} inputMode="decimal" placeholder="0"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setQty((x) => ({ ...x, [l.id]: e.target.value }))} aria-label={t('inv.receive.qtyFor', { name: l.name })} />
+                    <span className="muted small nowrap">{t('inv.receive.ofN', { n: num(openQty(l), 2) })}</span>
+                  </span>
                   {err[l.id] && <div className="error small">{err[l.id]}</div>}
                 </td>
               </tr>
@@ -225,78 +235,200 @@ export function PayModal({ open, onClose, supplier, items, onDone }) {
   )
 }
 
-// Send parts back to the supplier, from a PO line (stock or job) or straight from stock.
-// return_cost is per unit; return_tax is the tax on the whole return.
-export function ReturnModal({ open, onClose, data, line, po, showCost, onDone }) {
+// Tax on a return follows what the order was charged (the database works it out the same way):
+// a PO line's own tax, or for stock the last delivery of that part from that supplier.
+export function returnTaxSource(data, { line, po, item, supplier }) {
+  if (line) return { taxable: !!line.taxable, rate: Number(po?.tax_rate) || 0 }
+  if (!item || !supplier) return { taxable: false, rate: 0 }
+  const last = data.lines.filter((l) => l.catalog_item_id === item && Number(l.qty_delivered) > 0 && data.poById[l.po_id]?.supplier_id === supplier)
+    .sort((a, b) => String(b.delivered_at || '').localeCompare(String(a.delivered_at || '')) || String(b.created_at).localeCompare(String(a.created_at)))[0]
+  return last ? { taxable: !!last.taxable, rate: Number(data.poById[last.po_id].tax_rate) || 0, line: last } : { taxable: false, rate: 0 }
+}
+const returnedOn = (data, line) => data.returns.filter((r) => r.po_item_id === line.id).reduce((a, r) => a + Number(r.qty), 0)
+
+// Return parts of one PO to its supplier: how many of each received part go back, with one reason.
+// The lines are saved together (one batch) and move through the return steps together.
+export function PoReturnModal({ open, onClose, data, po, lines, showCost, onDone }) {
   const { t } = useT()
-  const { settings } = useShop()
+  const once = useOnce()
+  const [qty, setQty] = useState({})
+  const [note, setNote] = useState('')
+  const [err, setErr] = useState({})
+  const [fail, setFail] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const rows = lines.map((l) => ({ l, left: Number(l.qty_delivered) - returnedOn(data, l) })).filter((x) => x.left > 0)
+  useEffect(() => { if (open) { setQty({}); setNote(''); setErr({}); setFail(null) } }, [open])
+  const amountOf = (l, q) => lineAmount(l.cost, 0, q, l.taxable, po.tax_rate)
+  const picked = rows.map(({ l, left }) => ({ l, left, q: String(qty[l.id] ?? '').trim() === '' ? 0 : parseDecimal(qty[l.id]) }))
+  const total = picked.reduce((a, x) => a + (x.q > 0 ? amountOf(x.l, x.q) : 0), 0)
+  const save = () => once(async () => {
+    const e = {}
+    for (const x of picked) if (x.q == null || x.q < 0 || x.q > x.left) e[x.l.id] = t('inv.err.receiveMax', { n: num(x.left, 2) })
+    const go = picked.filter((x) => x.q > 0)
+    if (!go.length && !Object.keys(e).length) e.none = t('inv.ret.none')
+    setErr(e)
+    if (Object.keys(e).length) return
+    setBusy(true)
+    // crypto.randomUUID needs a secure page; fall back to a random v4 id elsewhere.
+    const batch = globalThis.crypto?.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16) })
+    const { error } = await supabase.from('returns').insert(go.map(({ l, q }) => ({
+      kind: po.ro_id ? 'ro' : 'inventory', po_item_id: l.id, ro_id: po.ro_id, supplier_id: po.supplier_id, catalog_item_id: l.catalog_item_id,
+      item_name: l.name, qty: q, return_cost: Number(l.cost) || 0, note: note.trim() || null, batch_id: batch,
+    })))
+    setBusy(false)
+    if (error) return setFail(errorText(error, t))
+    onDone(go.length)
+  })
+  return (
+    <Modal open={open} title={t('inv.ret.poTitle', { no: po.po_number })} onClose={onClose} wide
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('inv.ret.save')}</Button></>}>
+      {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
+      {err.none && <Notice kind="err" style={{ marginBottom: 10 }}>{err.none}</Notice>}
+      <div className="hint" style={{ marginTop: 0, marginBottom: 10 }}>{t('inv.ret.poHint')}</div>
+      {rows.length === 0 ? <div className="muted">{t('inv.ret.nothingToReturn')}</div> : (
+        <div className="table compact">
+          <table>
+            <thead><tr>
+              <th>{t('inv.col.part')}</th><th className="num">{t('inv.col.received')}</th><th className="num">{t('inv.ret.canReturn')}</th>
+              {showCost && <th className="num wide-only">{t('inv.ret.unitCost')}</th>}<th className="num">{t('inv.ret.sendBack')}</th>{showCost && <th className="num">{t('inv.col.value')}</th>}
+            </tr></thead>
+            <tbody>
+              {picked.map(({ l, left, q }) => {
+                const item = l.catalog_item_id && data.itemById[l.catalog_item_id]
+                const st = item?.track_inventory ? stockState(item, data.stockById[item.id]) : null
+                return (
+                  <tr key={l.id}>
+                    <td><b>{l.name}</b>{l.part_number && <span className="muted small"> · {l.part_number}</span>}
+                      {st && q > st.onHand && <div className="small text-red">{t('inv.ret.notEnough', { n: num(st.onHand, 2) })}</div>}</td>
+                    <td className="num">{num(l.qty_delivered, 2)}</td>
+                    <td className="num">{num(left, 2)}</td>
+                    {showCost && <td className="num wide-only nowrap">{rp(l.cost)}{l.taxable && <div className="small muted">{t('inv.ret.plusTax', { rate: num(po.tax_rate, 2) })}</div>}</td>}
+                    <td className="num">
+                      <span className="rcv-qty">
+                        <input className={`input cell num narrow boxed ${err[l.id] ? 'invalid' : ''}`} value={qty[l.id] ?? ''} placeholder="0" inputMode="decimal"
+                          onChange={(e) => setQty((x) => ({ ...x, [l.id]: e.target.value }))} aria-label={t('inv.ret.qtyFor', { name: l.name })} />
+                        <button type="button" className="linkbtn small" onClick={() => setQty((x) => ({ ...x, [l.id]: qtyText(left) }))}>{t('inv.all')}</button>
+                      </span>
+                      {err[l.id] && <div className="error small">{err[l.id]}</div>}
+                    </td>
+                    {showCost && <td className="num nowrap">{q > 0 ? rp(amountOf(l, q)) : <span className="muted">—</span>}</td>}
+                  </tr>
+                )
+              })}
+            </tbody>
+            {showCost && <tfoot><tr><td colSpan={5} className="num"><b>{t('inv.ret.total')}</b></td><td className="num nowrap"><b>{rp(total)}</b></td></tr></tfoot>}
+          </table>
+        </div>
+      )}
+      <Textarea label={t('inv.ret.note')} value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} placeholder={t('inv.ret.noteEx')} />
+      <div className="hint">{t('inv.ret.hint')}</div>
+    </Modal>
+  )
+}
+
+// Send parts back to the supplier straight from stock (not tied to a PO).
+export function ReturnModal({ open, onClose, data, showCost, onDone }) {
+  const { t } = useT()
   const once = useOnce()
   const [f, setF] = useState({})
   const [err, setErr] = useState({})
   const [fail, setFail] = useState(null)
   const [busy, setBusy] = useState(false)
-  const returned = line ? data.returns.filter((r) => r.po_item_id === line.id).reduce((a, r) => a + Number(r.qty), 0) : 0
-  const left = line ? Number(line.qty_delivered) - returned : null
   useEffect(() => {
     if (!open) return
-    setF(line
-      ? { item: line.catalog_item_id || '', supplier: po.supplier_id, name: line.name, qty: qtyText(left), cost: num(line.cost), taxable: !!line.taxable, note: '' }
-      : { item: '', supplier: '', name: '', qty: '1', cost: '', taxable: false, note: '' })
+    setF({ item: '', supplier: '', name: '', qty: '1', cost: '', note: '' })
     setErr({}); setFail(null)
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open])
   const item = f.item ? data.itemById[f.item] : null
-  const rate = po?.tax_rate ?? settings?.tax_rate ?? 0
+  const src = returnTaxSource(data, { item: f.item, supplier: f.supplier })
   const q = parseDecimal(f.qty) || 0
   const c = readAmount(f.cost) || 0
-  const tax = f.taxable ? taxOf(c, q, rate) : 0
+  const tax = src.taxable ? taxOf(c, q, src.rate) : 0
   const st = item?.track_inventory ? stockState(item, data.stockById[item.id]) : null
+  // A part's cost comes from its last delivery from that supplier when there is one, else the catalog.
+  const costFor = (itemId, supplier) => {
+    const s2 = returnTaxSource(data, { item: itemId, supplier })
+    return s2.line ? num(s2.line.cost) : data.itemById[itemId] ? num(data.itemById[itemId].cost) : ''
+  }
   const pickItem = (id) => {
     const it = data.itemById[id]
-    setF((x) => ({ ...x, item: id, name: it ? it.name : x.name, supplier: it?.supplier_id || x.supplier, cost: it ? num(it.cost) : x.cost }))
+    const sup = it?.supplier_id || f.supplier
+    setF((x) => ({ ...x, item: id, name: it ? it.name : x.name, supplier: sup, cost: it ? costFor(id, sup) : x.cost }))
   }
+  const pickSupplier = (sup) => setF((x) => ({ ...x, supplier: sup, cost: x.item ? costFor(x.item, sup) : x.cost }))
   const save = () => once(async () => {
     const e = {}
     const qty = parseDecimal(f.qty)
     const cost = f.cost.trim() === '' ? 0 : readAmount(f.cost)
-    if (!line && !f.supplier) e.supplier = t('inv.err.supplier')
+    if (!f.supplier) e.supplier = t('inv.err.supplier')
     if (!f.name.trim()) e.name = t('inv.err.name')
     if (qty == null || !(qty > 0)) e.qty = t('inv.err.qty')
-    else if (line && qty > left) e.qty = t('inv.err.returnMax', { n: num(left, 2) })
     if (cost == null || Number.isNaN(cost)) e.cost = t('inv.err.cost')
     setErr(e)
     if (Object.keys(e).length) return
     setBusy(true)
-    const row = line
-      ? { kind: po.ro_id ? 'ro' : 'inventory', po_item_id: line.id, ro_id: po.ro_id, supplier_id: po.supplier_id, catalog_item_id: line.catalog_item_id, item_name: f.name.trim() }
-      : { kind: 'inventory', supplier_id: f.supplier, catalog_item_id: f.item || null, item_name: f.name.trim() }
-    const { error } = await supabase.from('returns').insert({ ...row, qty, return_cost: cost, return_tax: f.taxable ? taxOf(cost, qty, rate) : 0, note: f.note.trim() || null })
+    const { error } = await supabase.from('returns').insert({ kind: 'inventory', supplier_id: f.supplier, catalog_item_id: f.item || null, item_name: f.name.trim(), qty, return_cost: cost, note: f.note.trim() || null })
     setBusy(false)
     if (error) return setFail(errorText(error, t))
     onDone()
   })
   const parts = data.items.filter((x) => x.active || x.id === f.item)
   return (
-    <Modal open={open} title={line ? t('inv.ret.fromLineTitle', { name: line.name }) : t('inv.ret.newTitle')} onClose={onClose}
+    <Modal open={open} title={t('inv.ret.newTitle')} onClose={onClose}
       footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('inv.ret.save')}</Button></>}>
       {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
-      {line ? <div className="hint" style={{ marginTop: 0 }}>{t('inv.ret.fromLineHint', { no: po.po_number, n: num(left, 2) })}</div> : (
-        <>
-          <Select label={t('inv.ret.part')} value={f.item || ''} onChange={(e) => pickItem(e.target.value)}
-            options={[{ value: '', label: t('inv.ret.notInCatalog') }, ...parts.map((x) => ({ value: x.id, label: `${x.name}${x.code ? ` · ${x.code}` : ''}` }))]} />
-          {!f.item && <Input label={t('inv.line.name')} value={f.name || ''} onChange={(e) => setF({ ...f, name: e.target.value })} error={err.name} maxLength={200} />}
-          <Select label={t('inv.col.supplier')} value={f.supplier || ''} onChange={(e) => setF({ ...f, supplier: e.target.value })} error={err.supplier}
-            options={[{ value: '', label: t('inv.order.chooseSupplier') }, ...data.suppliers.filter((s) => s.active !== false && s.type !== 'sublet').map((s) => ({ value: s.id, label: s.name }))]} />
-        </>
-      )}
+      <Select label={t('inv.ret.part')} value={f.item || ''} onChange={(e) => pickItem(e.target.value)}
+        options={[{ value: '', label: t('inv.ret.notInCatalog') }, ...parts.map((x) => ({ value: x.id, label: `${x.name}${x.code ? ` · ${x.code}` : ''}` }))]} />
+      {!f.item && <Input label={t('inv.line.name')} value={f.name || ''} onChange={(e) => setF({ ...f, name: e.target.value })} error={err.name} maxLength={200} />}
+      <Select label={t('inv.col.supplier')} value={f.supplier || ''} onChange={(e) => pickSupplier(e.target.value)} error={err.supplier}
+        options={[{ value: '', label: t('inv.order.chooseSupplier') }, ...data.suppliers.filter((s) => s.active !== false && s.type !== 'sublet').map((s) => ({ value: s.id, label: s.name }))]} />
       <div className="formgrid">
         <Input label={t('inv.line.qty')} value={f.qty || ''} onChange={(e) => setF({ ...f, qty: e.target.value })} error={err.qty} inputMode="decimal" />
         {showCost && <Input label={t('inv.ret.unitCost')} value={f.cost || ''} onChange={(e) => setF({ ...f, cost: e.target.value })} error={err.cost} prefix="Rp" inputMode="numeric" />}
       </div>
-      {showCost && <Toggle checked={!!f.taxable} onChange={(v) => setF((x) => ({ ...x, taxable: v }))} label={t('inv.ret.taxable', { rate: num(rate, 2) })} />}
-      {showCost && <div className="small" style={{ margin: '6px 0' }}>{t('inv.ret.value', { amount: rp(lineAmount(c, 0, q, false, 0) + tax) })}</div>}
+      {showCost && <div className="small" style={{ margin: '6px 0' }}>
+        {t('inv.ret.value', { amount: rp(lineAmount(c, 0, q, false, 0) + tax) })}{' · '}
+        <span className="muted">{src.taxable ? t('inv.ret.taxFromOrder', { rate: num(src.rate, 2) }) : f.item && f.supplier && src.line ? t('inv.ret.noTaxFromOrder') : t('inv.ret.noTaxNoOrder')}</span>
+      </div>}
       {st && q > st.onHand && <Notice kind="warn" style={{ marginTop: 8 }}>{t('inv.ret.notEnough', { n: num(st.onHand, 2) })}</Notice>}
       <Textarea label={t('inv.ret.note')} value={f.note || ''} onChange={(e) => setF({ ...f, note: e.target.value })} rows={2} maxLength={1000} placeholder={t('inv.ret.noteEx')} />
       <div className="hint">{t('inv.ret.hint')}</div>
+    </Modal>
+  )
+}
+
+// Fix a received quantity that was entered too high (before the parts are paid for or returned).
+export function CorrectReceivedModal({ open, onClose, data, line, onDone }) {
+  const { t } = useT()
+  const once = useOnce()
+  const [v, setV] = useState('')
+  const [err, setErr] = useState(null)
+  const [fail, setFail] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const floor = line ? Number(line.qty_paid) + returnedOn(data, line) : 0
+  // A cancelled PO, or a line whose rest was cancelled, stays closed: what comes off counts as cancelled, not "still to come".
+  const closed = line ? data.poById[line.po_id]?.status === 'cancelled' || Number(line.qty_cancelled) > 0 : false
+  useEffect(() => { if (open && line) { setV(qtyText(line.qty_delivered)); setErr(null); setFail(null) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!line) return null
+  const save = () => once(async () => {
+    const n = parseDecimal(v)
+    if (n == null || n < floor || n >= Number(line.qty_delivered)) return setErr(t('inv.correct.range', { min: num(floor, 2), max: num(line.qty_delivered, 2) }))
+    setErr(null); setBusy(true)
+    const { error } = await supabase.rpc('unreceive_po_item', { p_item: line.id, p_qty: Math.round((Number(line.qty_delivered) - n) * 100) / 100 })
+    setBusy(false)
+    if (error) return setFail(errorText(error, t))
+    onDone(n)
+  })
+  return (
+    <Modal open={open} title={t('inv.correct.title', { name: line.name })} onClose={onClose}
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('inv.correct.save')}</Button></>}>
+      {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
+      <div className="kvlist" style={{ marginBottom: 12 }}>
+        <div><span>{t('inv.col.ordered')}</span><b>{num(Number(line.qty_ordered) - Number(line.qty_cancelled), 2)}</b></div>
+        <div><span>{t('inv.correct.recorded')}</span><b>{num(line.qty_delivered, 2)}</b></div>
+      </div>
+      <Input label={t('inv.correct.actually')} value={v} onChange={(e) => setV(e.target.value)} error={err} inputMode="decimal" autoFocus />
+      <div className="hint">{floor > 0 ? t('inv.correct.hintFloor', { n: num(floor, 2) }) : closed ? t('inv.correct.hintClosed') : t('inv.correct.hint')}</div>
     </Modal>
   )
 }

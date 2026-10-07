@@ -199,7 +199,8 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
           {tech ? <Avatar name={tech.name} size={24} /> : <span className="avatar noone"><Icon name="user" size={13} /></span>}
           <select className="select bare" value={s.technician_id || ''} disabled={!workEditable} aria-label={t('job.technician')}
             onChange={(e) => upd({ technician_id: e.target.value || null })}>
-            <option value="">{t('job.noTechnician')}</option>
+            {/* An invoiced job keeps a technician on approved work, so "No technician" isn't offered there. */}
+            <option value="" disabled={job.ro.order_status === 'invoice' && s.approval_status === 'approved' && !!s.technician_id}>{t('job.noTechnician')}</option>
             {staff.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </label>

@@ -675,3 +675,17 @@ span.seg-btn { cursor: default; }
 .porow { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 9px; color: var(--ink); }
 .porow:hover { background: var(--bg); color: var(--ink); }
 @media (max-width: 600px) { .kpis.inv { grid-template-columns: 1fr; } .select.cell { max-width: 150px; } }
+
+/* ---------- Update 8 ---------- */
+.ev .ev-sub.ev-veh { display: block; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; font-weight: 700; }
+.ev.short .ev-time { flex-shrink: 0; }
+.ev.short .ev-who { min-width: 0; }
+.popover.floating { z-index: 60; }
+.input.cell.boxed, .select.cell.boxed { border-color: var(--line); background: #fff; }
+.input.cell.boxed:disabled, .select.cell.boxed:disabled { background: var(--head-bg); color: var(--faint); border-color: var(--line-soft); }
+.input.cell.boxed:focus, .select.cell.boxed:focus { border-color: var(--accent); }
+.rcv-qty { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
+
+.input.cell.boxed.invalid, .select.cell.boxed.invalid { border-color: var(--red); }
+/* Update 8: in a tall enough booking the plate · company line may wrap to two lines rather than cut the company off. */
+.ev:not(.short) .ev-who { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }

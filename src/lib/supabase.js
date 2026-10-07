@@ -45,6 +45,9 @@ const DB_PATTERNS = [
   [/^Only ([\d.,]+) delivered on this line can still be returned$/, 'db:returnLeft'],
   [/^Only ([\d.,]+) in stock; you can't send back more than you have$/, 'db:returnStock'],
   [/^This part is already on PO (.+)$/, 'db:alreadyOnPo'],
+  [/^Only ([\d.,]+) of this line went onto the shelf, so only that much can be taken off$/, 'db:unreceiveLine'],
+  [/^Only ([\d.,]+) can be taken off: paid or returned parts stay received$/, 'db:unreceivePaid'],
+  [/^Only ([\d.,]+) on the shelf, so the received quantity can't go down by more$/, 'db:unreceiveShelf'],
 ]
 
 // Messages that end with an amount or number; matched by their start.

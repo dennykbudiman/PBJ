@@ -10,7 +10,7 @@ import { shopToday } from '../../lib/customers'
 import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poTotals, stockState } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, TotalRow, useRun } from '../jobs/common'
 import { JobRef, PayBadge, PoBadge, Tick } from './bits'
-import { LineModal, PayModal, ReceiveModal, ReturnModal } from './PoModals'
+import { CorrectReceivedModal, LineModal, PayModal, PoReturnModal, ReceiveModal } from './PoModals'
 import { returnValue } from './ReturnsTab'
 
 // One purchase order: its parts, deliveries, supplier invoice, payments and returns.
@@ -38,6 +38,8 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
   const openLines = lines.filter((l) => openQty(l) > 0)
   const owedLines = lines.filter((l) => owedQty(l) > 0)
   const returnedOf = (l) => data.returns.filter((r) => r.po_item_id === l.id).reduce((a, r) => a + Number(r.qty), 0)
+  // Received parts that can still go back to the supplier (returns are made for the whole PO at once).
+  const returnable = lines.filter((l) => Number(l.qty_delivered) - returnedOf(l) > 0)
   const lineIds = new Set(lines.map((l) => l.id))
   const returns = data.returns.filter((r) => lineIds.has(r.po_item_id))
   const payments = data.payments.filter((p) => (p.po_item_ids || []).some((x) => lineIds.has(x)))
@@ -107,6 +109,7 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
               {canEdit && po.status === 'draft' && <Button variant="primary" icon="check" loading={busy} onClick={markOrdered}>{t('inv.po.markOrdered')}</Button>}
               {receivable && openLines.length > 0 && <Button variant="primary" icon="packages" onClick={() => setModal({ kind: 'receive', lines: openLines })}>{t('inv.po.receive')}</Button>}
               {canEdit && showCost && owedLines.length > 0 && <Button icon="wallet" onClick={() => setModal({ kind: 'pay', lines: owedLines })}>{t('inv.po.payDelivered')}</Button>}
+              {canEdit && returnable.length > 0 && <Button icon="undo" onClick={() => setModal({ kind: 'return' })}>{t('inv.po.returnToSupplier')}</Button>}
               <MoreMenu label={t('inv.more')} items={menu} />
             </div>
           </div>
@@ -179,7 +182,7 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
                             receivable && openQty(l) > 0 && { label: t('inv.po.receive'), icon: 'packages', onClick: () => setModal({ kind: 'receive', lines: [l] }) },
                             canEdit && openQty(l) > 0 && { label: t('inv.line.cancelRest'), icon: 'x', onClick: () => cancelLines([l]) },
                             canEdit && showCost && owedQty(l) > 0 && { label: t('inv.line.pay'), icon: 'wallet', onClick: () => setModal({ kind: 'pay', lines: [l] }) },
-                            canEdit && Number(l.qty_delivered) - ret > 0 && { label: t('inv.line.return'), icon: 'undo', onClick: () => setModal({ kind: 'return', line: l }) },
+                            canEdit && Number(l.qty_delivered) - Number(l.qty_paid) - ret > 0 && { label: t('inv.line.correct'), icon: 'edit', onClick: () => setModal({ kind: 'correct', line: l }) },
                             canEdit && Number(l.qty_delivered) === 0 && { label: t('common.delete'), icon: 'trash', danger: true, onClick: () => deleteLine(l) },
                           ]} />
                         </td>
@@ -294,8 +297,10 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
         onDone={(n, partial) => { if (partial) { close(); reload(); toast(partial, 'err') } else done(t('inv.receive.done', { n })) }} />
       <PayModal open={modal?.kind === 'pay'} onClose={close} supplier={sup} items={(modal?.lines || []).map((l) => ({ line: l, po }))}
         onDone={(amount) => done(t('inv.pay.done', { amount: rp(amount), name: sup?.name || '' }))} />
-      <ReturnModal open={modal?.kind === 'return'} onClose={close} data={data} line={modal?.line} po={po} showCost={showCost}
-        onDone={() => done(t('inv.ret.marked'))} />
+      <PoReturnModal open={modal?.kind === 'return'} onClose={close} data={data} po={po} lines={lines} showCost={showCost}
+        onDone={(n) => done(t('inv.ret.markedN', { n }))} />
+      <CorrectReceivedModal open={modal?.kind === 'correct'} onClose={close} data={data} line={modal?.line}
+        onDone={(n) => done(t('inv.correct.done', { name: modal?.line?.name || '', n: num(n, 2) }))} />
     </div>
   )
 }
