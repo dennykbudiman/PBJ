@@ -1,17 +1,19 @@
 [build]
-  command = "npm run build"
+  # The release check stops a build that would point Axle v2 at the old v1 database, or the live site at staging.
+  command = "node scripts/check-release.mjs && npm run build"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
 
-# Axle v2 talks to the STAGING Supabase project ("Axle v2 staging").
-# These values are public by design (the anon key only works through the
-# database's access rules). They override any variables set in the Netlify UI,
-# so a preview of this branch can never reach the live database.
-[context.production.environment]
-  VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"
-  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2FiaHd2bnpobGNjdHh3cGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODI0MTAsImV4cCI6MjEwNjc1ODQxMH0.cXKhovsB-JYtO5ubGi3Nxnp8WMuCYXkqalzdChcnK7g"
+# Previews and branch builds talk to the STAGING Supabase project ("Axle v2 staging"). These values are public by
+# design (the anon key only works through the database's access rules) and override the Netlify UI, so a preview can
+# never reach live data.
+#
+# Release setting: production builds take VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from the site's environment
+# variables (Netlify → Site configuration → Environment variables). Before Axle v2 goes onto the live site, set those
+# to the PRODUCTION Supabase project; scripts/check-release.mjs refuses the build while they still point at the v1
+# database or at staging.
 
 [context.deploy-preview.environment]
   VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"

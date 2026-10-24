@@ -4,6 +4,7 @@ import { Button, Card, Input, Notice, PageHead, Select, Textarea, Toggle, useToa
 import Icon from '../../components/Icon'
 import LaborRates from './LaborRates'
 import Users from './Users'
+import ImportData from './ImportData'
 import Appearance, { themeError } from './Appearance'
 import OpeningHours, { hoursError } from './OpeningHours'
 import { normHours } from '../../lib/hours'
@@ -15,7 +16,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { initials, invoiceNo, jobNo, stockPoNo, readAmount, parseDecimal, rp, num } from '../../lib/format'
 
-const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'fees', 'labor', 'users']
+const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'fees', 'labor', 'users', 'import']
 
 // shop_settings columns edited on this page, with how each is read from the form.
 const TEXT = ['shop_name', 'legal_name', 'npwp', 'address', 'phone', 'email', 'bank_details', 'terms_id', 'terms_en', 'tax_name']
@@ -170,7 +171,8 @@ export default function Settings() {
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
   // Appearance (colour theme) is only for people who can change settings (Owner, Admin).
-  const SECTIONS = editable ? ALL_SECTIONS : ALL_SECTIONS.filter((x) => x !== 'appearance')
+  // Import data is for Owner and Admin (they also hold the permissions each kind of row needs).
+  const SECTIONS = editable ? ALL_SECTIONS : ALL_SECTIONS.filter((x) => x !== 'appearance' && x !== 'import')
   const [active, go] = useScrollSpy(SECTIONS, { prefix: 'set-' })
   const navRef = useRef(null)
 
@@ -364,6 +366,7 @@ export default function Settings() {
 
           <LaborRates id="set-labor" />
           <Users id="set-users" />
+          {editable && <ImportData id="set-import" />}
 
           {editable && dirty && (
             <div className="savebar">

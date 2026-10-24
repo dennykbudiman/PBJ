@@ -27,10 +27,12 @@ export default function InventoryArea() {
   const navigate = useNavigate()
   const location = useLocation()
   const { can } = useAuth()
+  // Supplier money (PO costs, bills, returns and cores) is shown to people who see costs or pay supplier bills (the
+  // Cashier); catalog costs only to people who see costs. The database blanks the rest either way.
   const showCost = can('view_costs')
+  const showSupplierMoney = showCost || can('pay_supplier_bills')
   const { tab: asked, id } = parseInventoryPath(location.pathname)
-  // Supplier bills are money only, so they need cost access.
-  const tabs = INVENTORY_TABS.filter((x) => x !== 'bills' || showCost)
+  const tabs = INVENTORY_TABS.filter((x) => x !== 'bills' || showSupplierMoney)
   const tab = tabs.includes(asked) ? asked : 'stock'
   const { data, error, reload } = useInventoryData()
   const go = (path) => navigate(path)
@@ -39,13 +41,14 @@ export default function InventoryArea() {
   if (!data) return <Page tabs={tabBar}><div className="muted">{error ? errorText(error, t) : t('common.loading')}</div></Page>
 
   // After a partial load failure, changes are paused so nothing is worked out from rows that didn't load.
-  const props = { data, reload, go, canEdit: can('manage_inventory') && !error, canAdjust: can('adjust_stock'), showCost }
+  const props = { data, reload, go, canEdit: can('manage_inventory') && !error, canAdjust: can('adjust_stock'), showCost: showSupplierMoney,
+    canPay: can('pay_supplier_bills') && !error }
   let body
   if (tab === 'purchase-orders') body = id ? <PoPage key={id} id={id} {...props} /> : <PurchaseOrdersTab {...props} />
   else if (tab === 'returns') body = <ReturnsTab {...props} />
   else if (tab === 'cores') body = <CoresTab {...props} />
   else if (tab === 'bills') body = <BillsTab {...props} />
-  else body = <StockTab {...props} />
+  else body = <StockTab {...props} showCost={showCost} />
 
   return (
     <Page tabs={tabBar}>

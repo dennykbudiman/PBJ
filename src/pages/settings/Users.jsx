@@ -4,6 +4,7 @@ import { supabase, errorText } from '../../lib/supabase'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
 import { useT } from '../../lib/i18n'
+import { timeAgo } from '../../lib/format'
 
 // Role order and descriptions shown in Settings (decided Oct 5; technicians view-only Oct 5).
 const ROLE_ORDER = ['Owner', 'Admin', 'Service advisor', 'Cashier', 'Technician', 'Viewer', 'Fleet manager']
@@ -13,12 +14,13 @@ const BLANK = { name: '', email: '', username: '', phone: '', role_id: '' }
 // Invites can't create Owners; an Owner promotes someone afterwards.
 
 export default function Users({ id }) {
-  const { t } = useT()
+  const { t, lang } = useT()
   const toast = useToast()
   const { can, user, roleName: myRole } = useAuth()
   const manage = can('manage_users')
   const [people, setPeople] = useState(null)
   const [roles, setRoles] = useState([])
+  const [logins, setLogins] = useState({}) // id → { invited, last_sign_in_at } (people who manage users only)
   const [invite, setInvite] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -26,15 +28,17 @@ export default function Users({ id }) {
   const [confirm, setConfirm] = useState(null) // { person, patch | remove, text }
 
   const load = useCallback(async () => {
-    const [p, r] = await Promise.all([
+    const [p, r, l] = await Promise.all([
       supabase.from('profiles').select('id, name, username, phone, status, role_id, roles(name)').order('name'),
       supabase.from('roles').select('id, name'),
+      manage ? supabase.rpc('user_logins') : { data: [] },
     ])
+    setLogins(Object.fromEntries((l.data ?? []).map((x) => [x.id, x])))
     if (p.error) toast(errorText(p.error, t), 'err')
     setPeople(p.data ?? [])
     const sorted = (r.data ?? []).slice().sort((a, b) => ROLE_ORDER.indexOf(a.name) - ROLE_ORDER.indexOf(b.name))
     setRoles(sorted)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [manage]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -127,6 +131,10 @@ export default function Users({ id }) {
                         <div>
                           <div style={{ fontWeight: 700 }}>{p.name}{self && <span className="muted small"> · {t('users.you')}</span>}</div>
                           {p.phone && <div className="muted small">{p.phone}</div>}
+                          {manage && logins[p.id] && (
+                            <div className="muted small">{logins[p.id].invited ? t('users.inviteNotDone')
+                              : logins[p.id].last_sign_in_at ? t('users.lastSignIn', { when: timeAgo(logins[p.id].last_sign_in_at, lang) }) : t('users.neverSignedIn')}</div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -140,7 +148,9 @@ export default function Users({ id }) {
                     </td>
                     <td style={{ minWidth: 170 }}>
                       <div className="row">
-                        <Badge color={STATUS_COLOR[p.status]}>{t(`users.status.${p.status}`)}</Badge>
+                        {p.status === 'active' && logins[p.id]?.invited
+                          ? <Badge color="amber" title={t('users.inviteNotDone')}>{t('users.status.invitedPending')}</Badge>
+                          : <Badge color={STATUS_COLOR[p.status]}>{t(`users.status.${p.status}`)}</Badge>}
                         {canTouch(p) && p.status !== 'active' && (
                           <button className="linkbtn small" disabled={savingId === p.id} onClick={() => askChange(p, { status: 'active' })}>{t('users.activate')}</button>
                         )}

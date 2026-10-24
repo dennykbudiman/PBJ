@@ -3,19 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import Icon from './Icon'
 import { usePopover } from './ui'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
 import { useT } from '../lib/i18n'
 import { fmtDate, invoiceNo, km, rp, timeAgo } from '../lib/format'
 
-// Broadcast notifications (no user_id) can't be marked read in the database,
-// so a viewer's "seen" list for those is kept in this browser only.
-const SEEN_KEY = 'axle.seenBroadcasts'
-function readSeen() {
-  try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) || '[]')) } catch { return new Set() }
-}
-function writeSeen(set) {
-  try { localStorage.setItem(SEEN_KEY, JSON.stringify([...set].slice(-300))) } catch { /* storage unavailable */ }
-}
+// Read state is kept by the database for each person, also for shop-wide notifications (migration 129), so it
+// follows the person to every device. The old per-browser list is no longer used.
+try { localStorage.removeItem('axle.seenBroadcasts') } catch { /* storage unavailable */ }
 
 const SEVERITY_DOT = { info: '#1D4ED8', warning: '#D97706', urgent: '#E5484D' }
 
@@ -50,16 +43,14 @@ function textOf(n, t, lang) {
 }
 
 export default function NotificationBell() {
-  const { user } = useAuth()
   const { t, lang } = useT()
   const pop = usePopover()
   const navigate = useNavigate()
   const [items, setItems] = useState([])
-  const [seen, setSeen] = useState(readSeen)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
-      .from('notifications')
+      .from('my_notifications')
       .select('id, type, severity, title, body, entity_type, entity_id, user_id, read_at, created_at, data')
       .order('created_at', { ascending: false })
       .order('id')
@@ -82,23 +73,15 @@ export default function NotificationBell() {
     if (pop.open) load()
   }, [pop.open, load])
 
-  const isUnread = (n) => (n.user_id ? !n.read_at : !seen.has(n.id))
+  const isUnread = (n) => !n.read_at
   const unread = items.filter(isUnread).length
 
   async function markRead(ids) {
-    const own = items.filter((n) => ids.includes(n.id) && n.user_id === user?.id && !n.read_at).map((n) => n.id)
-    const broadcast = items.filter((n) => ids.includes(n.id) && !n.user_id).map((n) => n.id)
-    if (broadcast.length) {
-      const next = new Set(seen)
-      broadcast.forEach((id) => next.add(id))
-      setSeen(next)
-      writeSeen(next)
-    }
-    if (own.length) {
-      const now = new Date().toISOString()
-      setItems((xs) => xs.map((n) => (own.includes(n.id) ? { ...n, read_at: now } : n)))
-      await supabase.from('notifications').update({ read_at: now }).in('id', own)
-    }
+    const fresh = items.filter((n) => ids.includes(n.id) && !n.read_at).map((n) => n.id)
+    if (!fresh.length) return
+    const now = new Date().toISOString()
+    setItems((xs) => xs.map((n) => (fresh.includes(n.id) ? { ...n, read_at: now } : n)))
+    await supabase.rpc('mark_notifications_read', { p_ids: fresh })
   }
 
   function open(n) {

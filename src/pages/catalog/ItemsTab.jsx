@@ -3,7 +3,7 @@ import { Badge, Button, Input, Select, Textarea, Toggle, useToast } from '../../
 import Icon from '../../components/Icon'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, RowLink, deleteErrorText } from './common'
 import { categoryPath } from './useCatalogData'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import History from './History'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
@@ -257,9 +257,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
     }
     setBusy(true)
     setMsg(null)
-    const res = isNew
-      ? await supabase.from('catalog_items').insert(row).select().single()
-      : await supabase.from('catalog_items').update(row).eq('id', item.id).select().single()
+    const res = await writeRow('catalog_items', row, isNew ? null : item.id)
     if (res.error) { setBusy(false); return setMsg(errorText(res.error, t)) }
     const saved = res.data
     // Auto-added fees: add the new links, remove the dropped ones.

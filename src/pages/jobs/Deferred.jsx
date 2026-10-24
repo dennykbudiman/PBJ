@@ -4,7 +4,7 @@ import { Button, Modal, Notice, Textarea, useToast } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { fmtDate, jobNo, rp } from '../../lib/format'
 
 // Deferred work still waiting: deferred services that were neither carried into a later job nor dismissed.
@@ -125,9 +125,9 @@ export function AddToJobModal({ open, service, onClose, onDone }) {
       // The vehicle may have moved to another company since that visit: the new estimate goes to its current owner.
       const veh = await supabase.from('vehicles').select('customer_id').eq('id', vehicleId).maybeSingle()
       if (veh.error || !veh.data) { setBusy(false); return setMsg(errorText(veh.error || { message: 'not found' }, t)) }
-      const { data, error } = await supabase.from('repair_orders').insert({
+      const { data, error } = await writeRow('repair_orders', {
         customer_id: veh.data.customer_id, vehicle_id: vehicleId, priority: 'medium', service_advisor_id: roleName !== 'Technician' ? profile?.id || null : null,
-      }).select().single()
+      })
       if (error) { setBusy(false); return setMsg(errorText(error, t)) }
       ro = data
     }

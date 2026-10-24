@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, signInThroughServer } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
@@ -96,17 +96,12 @@ export function AuthProvider({ children }) {
       clearLinkError: () => setLinkError(null),
       completePasswordSetup: () => setRecovery(false),
       refreshProfile: loadProfile,
-      // People sign in with a username (or their email). A username is resolved
-      // to its email by the get_email_for_username database function.
+      // People sign in with a username (or their email) through the server function `login`, which keeps emails
+      // private and answers every wrong username or password the same way. The session it returns is kept as usual.
       signIn: async (identifier, password) => {
-        let email = identifier.trim()
-        if (!email.includes('@')) {
-          const { data, error } = await supabase.rpc('get_email_for_username', { p_username: email })
-          if (error) return { error }
-          if (!data) return { error: { code: 'no_user' } }
-          email = data
-        }
-        return supabase.auth.signInWithPassword({ email, password })
+        const { session: s, error } = await signInThroughServer(identifier.trim(), password)
+        if (error) return { error }
+        return supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token })
       },
       sendPasswordReset: (email) =>
         supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/set-password` }),

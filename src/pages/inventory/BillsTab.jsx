@@ -13,7 +13,7 @@ import { Tick } from './bits'
 import { PayModal } from './PoModals'
 
 // Inventory → Supplier bills: delivered parts not paid for yet, by supplier and due date, and recent payments.
-export default function BillsTab({ data, reload, canEdit }) {
+export default function BillsTab({ data, reload, canPay: canEdit }) {
   const { t, lang } = useT()
   const toast = useToast()
   const { timezone } = useShop()

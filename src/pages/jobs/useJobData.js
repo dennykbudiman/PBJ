@@ -16,7 +16,7 @@ export function useJobData(id) {
     if (ro.error) { setError(ro.error); return }
     if (!ro.data) { setMissing(true); setJob(null); return }
     const r = ro.data
-    const [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, pos] = await Promise.all([
+    const [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, pos, files] = await Promise.all([
       supabase.from('customers').select('*').eq('id', r.customer_id).maybeSingle(),
       supabase.from('vehicles').select('*').eq('id', r.vehicle_id).maybeSingle(),
       supabase.from('customer_contacts').select('*').eq('customer_id', r.customer_id).order('is_primary', { ascending: false }).order('name'),
@@ -33,6 +33,7 @@ export function useJobData(id) {
       supabase.from('appointments').select('*').eq('ro_id', id).order('start_time').order('id'),
       supabase.from('service_schedules').select('*').eq('vehicle_id', r.vehicle_id).order('name').order('id'),
       supabase.from('purchase_orders').select('*').eq('ro_id', id).order('created_at').order('id'),
+      supabase.from('attachments').select('*').eq('entity_type', 'repair_order').eq('entity_id', id).order('created_at').order('id'),
     ])
     const svcIds = (services.data || []).map((s) => s.id)
     const inspIds = (inspections.data || []).map((x) => x.id)
@@ -43,7 +44,7 @@ export function useJobData(id) {
       poIds.length ? supabase.from('purchase_order_items').select('*').in('po_id', poIds).order('created_at').order('id') : { data: [] },
     ])
     if (n !== loads.current) return
-    const all = [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, pos, items, results, poLines]
+    const all = [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, pos, files, items, results, poLines]
     const firstError = all.find((x) => x.error)?.error
     setError(firstError || null)
     setMissing(false)
@@ -70,6 +71,7 @@ export function useJobData(id) {
       // Purchase orders raised for this job, and their lines (job part lines point at them through po_item_id).
       pos: pos.data || [],
       poLines: poLines.data || [],
+      attachments: files.data || [],
       version: n,
     })
   }, [id])

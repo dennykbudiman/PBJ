@@ -17,7 +17,7 @@ import { BlurInput, MoreMenu, useRun } from './common'
 import ServicesTab from './ServicesTab'
 import JobInspections from './JobInspections'
 import JobActivity from './JobActivity'
-import { AppointmentsCard, ApprovalsCard, ProfitCard, StatusCard, TotalsCard } from './JobSide'
+import { AppointmentsCard, ApprovalsCard, AttachmentsCard, ProfitCard, StatusCard, TotalsCard } from './JobSide'
 import { DeferredBanner } from './Deferred'
 import DueBanner from './DueWork'
 import { addBundleService } from './ServicesTab'
@@ -188,11 +188,12 @@ export default function JobPage({ id }) {
           <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')} />
           <AppointmentsCard job={job} staff={staff} canBook={editable} onOpen={(a) => open('appt', { appointment: a })} onNew={() => open('appt', {})} />
           <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')} />
-          <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} editable={editable} canVoid={canVoid && invoiced}
+          <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} canFaktur={canEdit || canPay} editable={editable} canVoid={canVoid && invoiced}
             run={run} onInvoice={() => open('invoice')} onVoid={() => open('void')} />
           <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canRefund} canFixPaid={canVoid} canCredit={canPay || canIssue || canRefund}
             run={run} onPayment={() => open('payment')} onCredit={() => open('credit')} onFee={() => open('fee')} onDiscount={() => open('discount')} />
           {showCost && <ProfitCard job={job} />}
+          <AttachmentsCard job={job} canGeneral={canEdit && !closed} canSlip={canPay && !closed} run={run} />
         </aside>
       </div>
 

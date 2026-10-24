@@ -6,6 +6,7 @@ import { boardEn, boardId } from './strings-board.js'
 import { schedulesEn, schedulesId } from './strings-schedules.js'
 import { inventoryEn, inventoryId } from './strings-inventory.js'
 import { reportsEn, reportsId } from './strings-reports.js'
+import { goliveEn, goliveId } from './strings-golive.js'
 
 const base = {
   en: {
@@ -110,9 +111,9 @@ const base = {
     'users.desc.owner': 'Everything, including settings, users, voiding invoices, issuing credits, changing payments on issued invoices, and making or removing Owners',
     'users.desc.admin': 'The same as an Owner, except they can\'t change, disable or remove an Owner, or make someone an Owner',
     'users.desc.advisor': 'Jobs from booking to invoice, customers, catalog and inventory. No payments',
-    'users.desc.cashier': 'Payments, deposits, refunds and company credit; sales, aging and payments reports. Can\'t change jobs',
-    'users.desc.technician': 'View only (assigned on jobs and the calendar)',
-    'users.desc.viewer': 'View only',
+    'users.desc.cashier': 'Payments, deposits, refunds and company credit; supplier bills; faktur pajak number and transfer slips on invoices; sales, aging and payments reports. Can\'t change jobs or see cost prices',
+    'users.desc.technician': 'View only (assigned on jobs and the calendar); prices and totals only on their own jobs',
+    'users.desc.viewer': 'View only, without prices, costs or payments',
     'users.desc.fleet': 'No access yet (planned: approve their own company\'s work)',
     'users.hint': 'Detailed per-permission settings come later. People are invited by an admin; public sign-up is off. You can\'t change your own role or status.',
     'users.fullName': 'Full name', 'users.email': 'Email', 'users.phone': 'Phone (optional)', 'users.pickRole': 'Choose a role…',
@@ -234,9 +235,9 @@ const base = {
     'users.desc.owner': 'Semuanya, termasuk pengaturan, pengguna, membatalkan invoice, menerbitkan kredit, mengubah pembayaran pada invoice terbit, serta menambah atau menghapus Pemilik',
     'users.desc.admin': 'Sama seperti Pemilik, kecuali tidak bisa mengubah, menonaktifkan atau menghapus Pemilik, atau menjadikan seseorang Pemilik',
     'users.desc.advisor': 'Pekerjaan dari booking sampai invoice, pelanggan, katalog dan inventaris. Tanpa pembayaran',
-    'users.desc.cashier': 'Pembayaran, uang muka, pengembalian dana dan kredit perusahaan; laporan penjualan, umur piutang dan pembayaran. Tidak bisa mengubah pekerjaan',
-    'users.desc.technician': 'Hanya lihat (ditugaskan di pekerjaan dan kalender)',
-    'users.desc.viewer': 'Hanya lihat',
+    'users.desc.cashier': 'Pembayaran, uang muka, pengembalian dana dan kredit perusahaan; tagihan pemasok; no. faktur pajak dan bukti transfer pada invoice; laporan penjualan, umur piutang dan pembayaran. Tidak bisa mengubah pekerjaan atau melihat harga pokok',
+    'users.desc.technician': 'Hanya lihat (ditugaskan di pekerjaan dan kalender); harga dan total hanya pada pekerjaannya sendiri',
+    'users.desc.viewer': 'Hanya lihat, tanpa harga, harga pokok, atau pembayaran',
     'users.desc.fleet': 'Belum ada akses (rencana: menyetujui pekerjaan perusahaannya sendiri)',
     'users.hint': 'Pengaturan izin terperinci menyusul. Pengguna diundang oleh admin; pendaftaran umum dimatikan. Anda tidak bisa mengubah peran atau status Anda sendiri.',
     'users.fullName': 'Nama lengkap', 'users.email': 'Email', 'users.phone': 'Telepon (opsional)', 'users.pickRole': 'Pilih peran…',
@@ -259,6 +260,6 @@ const base = {
 }
 
 export const dict = {
-  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn },
-  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId },
+  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn },
+  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId },
 }

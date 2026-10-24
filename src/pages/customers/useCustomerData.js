@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, errorText } from '../../lib/supabase'
 import { monthStart, zonedMidnightUtc } from '../../lib/customers'
+import { useAuth } from '../../context/AuthContext'
 
 // Supabase returns at most 1000 rows per request, so read big tables page by page.
 export async function selectAll(build, pageSize = 1000) {
@@ -17,6 +18,9 @@ export async function selectAll(build, pageSize = 1000) {
 // Fleets here are tens of companies and a few hundred vehicles, so filtering and
 // counting happen in the browser.
 export function useCustomerData(timezone) {
+  // Company money (balances, sales) is only given to people who handle money (migration 129); others see "—".
+  const { can } = useAuth()
+  const money = can('view_reports') || can('record_payments')
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
@@ -65,6 +69,7 @@ export function useCustomerData(timezone) {
       s.openInvoices = Number(b.open_invoices) || 0
       s.credit = Number(b.available_credit) || 0
     }
+    if (!money) for (const s of Object.values(byCustomer)) { s.sales = null; s.balance = null; s.overdue = null; s.credit = null }
     for (const ct of contacts.data ?? []) byCustomer[ct.customer_id]?.contacts.push(ct)
 
     const openJobByVehicle = {}
@@ -80,7 +85,7 @@ export function useCustomerData(timezone) {
       openJobByVehicle,
       since,
     })
-  }, [timezone])
+  }, [timezone, money])
 
   useEffect(() => { load() }, [load])
 

@@ -14,7 +14,7 @@ import { CorrectReceivedModal, LineModal, PayModal, PoReturnModal, ReceiveModal 
 import { returnValue } from './ReturnsTab'
 
 // One purchase order: its parts, deliveries, supplier invoice, payments and returns.
-export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
+export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost }) {
   const { t, lang } = useT()
   const navigate = useNavigate()
   const toast = useToast()
@@ -108,7 +108,7 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
             <div className="row wrap" style={{ gap: 8 }}>
               {canEdit && po.status === 'draft' && <Button variant="primary" icon="check" loading={busy} onClick={markOrdered}>{t('inv.po.markOrdered')}</Button>}
               {receivable && openLines.length > 0 && <Button variant="primary" icon="packages" onClick={() => setModal({ kind: 'receive', lines: openLines })}>{t('inv.po.receive')}</Button>}
-              {canEdit && showCost && owedLines.length > 0 && <Button icon="wallet" onClick={() => setModal({ kind: 'pay', lines: owedLines })}>{t('inv.po.payDelivered')}</Button>}
+              {canPay && showCost && owedLines.length > 0 && <Button icon="wallet" onClick={() => setModal({ kind: 'pay', lines: owedLines })}>{t('inv.po.payDelivered')}</Button>}
               {canEdit && returnable.length > 0 && <Button icon="undo" onClick={() => setModal({ kind: 'return' })}>{t('inv.po.returnToSupplier')}</Button>}
               <MoreMenu label={t('inv.more')} items={menu} />
             </div>
@@ -127,7 +127,7 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
                 <span className="small muted">{t('inv.nSelected', { n: picked.length })}</span>
                 {receivable && picked.some((l) => openQty(l) > 0) && <Button size="sm" onClick={() => setModal({ kind: 'receive', lines: picked.filter((l) => openQty(l) > 0) })}>{t('inv.po.receive')}</Button>}
                 {picked.some((l) => openQty(l) > 0) && <Button size="sm" onClick={() => cancelLines(picked.filter((l) => openQty(l) > 0))}>{t('inv.line.cancel')}</Button>}
-                {showCost && picked.some((l) => owedQty(l) > 0) && <Button size="sm" onClick={() => setModal({ kind: 'pay', lines: picked.filter((l) => owedQty(l) > 0) })}>{t('inv.line.pay')}</Button>}
+                {canPay && showCost && picked.some((l) => owedQty(l) > 0) && <Button size="sm" onClick={() => setModal({ kind: 'pay', lines: picked.filter((l) => owedQty(l) > 0) })}>{t('inv.line.pay')}</Button>}
               </div>
             )}
           </div>
@@ -181,7 +181,7 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
                             editable && { label: t('common.edit'), icon: 'edit', onClick: () => setModal({ kind: 'line', line: l }) },
                             receivable && openQty(l) > 0 && { label: t('inv.po.receive'), icon: 'packages', onClick: () => setModal({ kind: 'receive', lines: [l] }) },
                             canEdit && openQty(l) > 0 && { label: t('inv.line.cancelRest'), icon: 'x', onClick: () => cancelLines([l]) },
-                            canEdit && showCost && owedQty(l) > 0 && { label: t('inv.line.pay'), icon: 'wallet', onClick: () => setModal({ kind: 'pay', lines: [l] }) },
+                            canPay && showCost && owedQty(l) > 0 && { label: t('inv.line.pay'), icon: 'wallet', onClick: () => setModal({ kind: 'pay', lines: [l] }) },
                             canEdit && Number(l.qty_delivered) - Number(l.qty_paid) - ret > 0 && { label: t('inv.line.correct'), icon: 'edit', onClick: () => setModal({ kind: 'correct', line: l }) },
                             canEdit && Number(l.qty_delivered) === 0 && { label: t('common.delete'), icon: 'trash', danger: true, onClick: () => deleteLine(l) },
                           ]} />
@@ -280,7 +280,7 @@ export default function PoPage({ id, data, reload, go, canEdit, showCost }) {
                   <div key={p.id} className="row" style={{ gap: 6, fontSize: 13 }}>
                     <span><b>{rp(p.amount)}</b> <span className="muted small">· {fmtDate(p.paid_at, lang)} · {t(`inv.pay.m.${p.method || 'other'}`)}{p.reference ? ` · ${p.reference}` : ''}</span></span>
                     <div className="spacer" />
-                    {canEdit && <button type="button" className="linkbtn small" onClick={() => undoPayment(p)}>{t('inv.pay.undo')}</button>}
+                    {canPay && <button type="button" className="linkbtn small" onClick={() => undoPayment(p)}>{t('inv.pay.undo')}</button>}
                   </div>
                 ))}
               </div>

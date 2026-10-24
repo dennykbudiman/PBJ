@@ -1,9 +1,9 @@
 import React from 'react'
-import { Badge, Button, Modal, Select } from '../../components/ui'
+import { Badge, Button, Modal, Select, useConfirm, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
-import { supabase } from '../../lib/supabase'
+import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, fmtDateTime, invoiceNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { APPT_COLOR, clock, dayLabel, isActiveAppt, shopParts } from '../../lib/calendar'
@@ -40,7 +40,7 @@ export function ApprovalsCard({ job, editable, onRecord }) {
   )
 }
 
-export function StatusCard({ job, staff, settings, canEdit, editable, canVoid, run, onInvoice, onVoid }) {
+export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable, canVoid, run, onInvoice, onVoid }) {
   const { t, lang } = useT()
   const { timezone } = useShop()
   const ro = job.ro
@@ -62,8 +62,8 @@ export function StatusCard({ job, staff, settings, canEdit, editable, canVoid, r
           <div>{t('job.dueDate')}: <b>{fmtDate(ro.due_date, lang)}</b> {state === 'overdue' && <Badge color="red">{t('job.state.overdue')}</Badge>}</div>
           <div className="field" style={{ marginTop: 6 }}>
             <label htmlFor="fp-no">{t('job.fakturNo')}</label>
-            <BlurInput id="fp-no" value={ro.faktur_pajak_number || ''} disabled={!canEdit} placeholder="010.000-26.00000001"
-              onCommit={(v) => upd({ faktur_pajak_number: v.trim() || null })} />
+            <BlurInput id="fp-no" value={ro.faktur_pajak_number || ''} disabled={!canFaktur || !!ro.closed_at} placeholder="010.000-26.00000001"
+              onCommit={(v) => run(() => supabase.rpc('set_faktur_pajak', { p_ro: ro.id, p_number: v.trim() }), t('job.fakturSaved'))} />
           </div>
           {canVoid && <button type="button" className="linkbtn small" style={{ color: 'var(--red)', marginTop: 6 }} onClick={onVoid}>{t('job.voidInvoice')}</button>}
         </div>
@@ -122,6 +122,15 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
   const removeFee = (f) => run(() => supabase.from('ro_job_fees').delete().eq('id', f.id))
   const removeDisc = (d) => run(() => supabase.from('ro_job_discounts').delete().eq('id', d.id))
   const credits = job.appliedCredits.reduce((a, c) => a + Number(c.amount), 0)
+  // The database blanks this job's money for people who don't handle money and don't work on it.
+  if (ro.total === null || ro.total === undefined) {
+    return (
+      <section className="card side-card totals">
+        <h2>{t('job.totals')}</h2>
+        <div className="muted small" style={{ lineHeight: 1.55 }}>{t('job.moneyHidden')}</div>
+      </section>
+    )
+  }
   return (
     <section className="card side-card totals">
       <h2>{t('job.totals')}</h2>
@@ -273,6 +282,88 @@ export function AppointmentsCard({ job, staff, canBook, onOpen, onNew }) {
           {list.length > 4 && <div className="muted small">{t('job.moreAppointments', { n: list.length - 4 })}</div>}
         </div>
       )}
+    </section>
+  )
+}
+
+// Files on a job: photos and documents (people who edit jobs) and transfer slips (people who record payments; only
+// people who handle money see them). The database and file storage check both.
+const FILE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+export function AttachmentsCard({ job, canGeneral, canSlip, run }) {
+  const { t, lang } = useT()
+  const { timezone } = useShop()
+  const toast = useToast()
+  const [confirm, confirmEl] = useConfirm()
+  const input = React.useRef(null)
+  const [kind, setKind] = React.useState('general')
+  const [busy, setBusy] = React.useState(false)
+  const ro = job.ro
+  const list = job.attachments || []
+  const mayRemove = (a) => (a.kind === 'payment' ? canSlip : canGeneral)
+  if (!list.length && !canGeneral && !canSlip) return null
+
+  function pick(k) { setKind(k); input.current?.click() }
+  async function upload(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!FILE_TYPES.includes(file.type)) return toast(t('job.fileType'), 'err')
+    if (file.size > 10 * 1024 * 1024) return toast(t('job.fileTooBig'), 'err')
+    const name = file.name.slice(-120)
+    const safe = name.replace(/[^A-Za-z0-9._-]+/g, '_')
+    const path = `${kind === 'payment' ? 'payments' : 'jobs'}/${ro.id}/${Date.now()}-${safe}`
+    setBusy(true)
+    const up = await supabase.storage.from('attachments').upload(path, file, { contentType: file.type, upsert: false })
+    if (up.error) { setBusy(false); return toast(errorText(up.error, t), 'err') }
+    const ok = await run(async () => {
+      const res = await supabase.from('attachments').insert({ entity_type: 'repair_order', entity_id: ro.id, kind, file_path: path, file_name: name })
+      if (res.error) await supabase.storage.from('attachments').remove([path])
+      return res
+    }, t('job.fileAdded', { name }))
+    setBusy(false)
+    return ok
+  }
+  async function open(a) {
+    const { data, error } = await supabase.storage.from('attachments').createSignedUrl(a.file_path, 300)
+    if (error || !data?.signedUrl) return toast(errorText(error || { message: 'not found' }, t), 'err')
+    window.open(data.signedUrl, '_blank', 'noopener')
+  }
+  async function remove(a) {
+    const yes = await confirm({ title: t('job.removeFile', { name: a.file_name }), text: t('job.removeFileText', { name: a.file_name }), yes: t('job.removeFileYes'), danger: true })
+    if (!yes) return
+    run(async () => {
+      const res = await supabase.from('attachments').delete().eq('id', a.id).select('id')
+      if (!res.error && res.data?.length) await supabase.storage.from('attachments').remove([a.file_path])
+      return res
+    }, t('job.fileRemoved', { name: a.file_name }))
+  }
+  return (
+    <section className="card side-card">
+      <div className="sectionlabel" style={{ marginTop: 0 }}>{t('job.files')}</div>
+      {list.length === 0 ? <div className="muted small">{t('job.noFiles')}</div> : (
+        <div className="paylist" style={{ marginTop: 0 }}>
+          {list.map((a) => (
+            <div key={a.id} className="payrow">
+              <div style={{ minWidth: 0 }}>
+                <button type="button" className="linkbtn" style={{ textAlign: 'left', overflowWrap: 'anywhere' }} onClick={() => open(a)} aria-label={t('job.openFile', { name: a.file_name })}>
+                  <Icon name="paperclip" size={13} /> {a.file_name}
+                </button>
+                <div className="muted small">{a.kind === 'payment' && <><Badge color="green">{t('job.slip')}</Badge> </>}{fmtDate(a.created_at, lang, timezone)}</div>
+              </div>
+              {mayRemove(a) && <button type="button" className="xbtn" onClick={() => remove(a)} aria-label={t('job.removeFile', { name: a.file_name })}><Icon name="trash" size={13} /></button>}
+            </div>
+          ))}
+        </div>
+      )}
+      {(canGeneral || canSlip) && (
+        <div className="row wrap" style={{ gap: 12, marginTop: 8 }}>
+          {canGeneral && <button type="button" className="linkbtn small" disabled={busy} onClick={() => pick('general')}>+ {t('job.addFile')}</button>}
+          {canSlip && <button type="button" className="linkbtn small" disabled={busy} onClick={() => pick('payment')}>+ {t('job.addSlip')}</button>}
+        </div>
+      )}
+      {canSlip && <div className="hint">{t('job.slipsHint')}</div>}
+      <input ref={input} type="file" accept={FILE_TYPES.join(',')} style={{ display: 'none' }} onChange={upload} data-testid="file-input" />
+      {confirmEl}
     </section>
   )
 }

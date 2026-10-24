@@ -46,7 +46,9 @@ export default function Login() {
     const { error: err } = await signIn(identifier, password)
     setBusy(false)
     if (err) {
-      if (err.code === 'no_user' || /invalid login credentials/i.test(err.message || '')) setError(t('auth.badLogin'))
+      if (err.code === 'bad_login') setError(t('auth.badLogin'))
+      else if (err.code === 'too_many') setError(t('auth.tooMany'))
+      else if (err.code === 'server') setError(t('auth.serverDown'))
       else setError(errorText(err, t))
     }
   }

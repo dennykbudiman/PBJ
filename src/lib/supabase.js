@@ -5,11 +5,62 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabaseConfigured = Boolean(url && anonKey)
 
+// Sign-in goes through the server function `login` (migration 129): it turns a username into an email without
+// telling the browser, slows down guessing, and returns the session. Resolves to { error } or { session }.
+export async function signInThroughServer(login, password) {
+  let res
+  try {
+    res = await fetch(`${url}/functions/v1/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+      body: JSON.stringify({ login, password }),
+    })
+  } catch (e) {
+    return { error: { message: 'Failed to fetch' } }
+  }
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body.session) return { error: { code: body.error || 'server', message: body.error || `HTTP ${res.status}` } }
+  return { session: body.session }
+}
+
 if (!supabaseConfigured) {
   console.warn('Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copy .env.example to .env.local and fill them in.')
 }
 
 export const supabase = createClient(url || 'http://localhost:54321', anonKey || 'missing-key')
+
+// Money is kept back by the database (migration 129): these tables don't hand out their money columns, and are read
+// through views that show each figure only to people allowed to see it (blank otherwise). Reads of these tables go to
+// the views; inserts, updates and deletes still go to the tables.
+export const READ_VIEWS = {
+  catalog_items: 'catalog_items_read',
+  ro_service_items: 'ro_service_items_read',
+  purchase_order_items: 'purchase_order_items_read',
+  supplier_payments: 'supplier_payments_read',
+  returns: 'returns_read',
+  cores: 'cores_read',
+  repair_orders: 'repair_orders_read',
+  ro_services: 'ro_services_read',
+  ro_job_fees: 'ro_job_fees_read',
+  ro_job_discounts: 'ro_job_discounts_read',
+  activity_log: 'activity_log_read',
+}
+const tableFrom = supabase.from.bind(supabase)
+supabase.from = (table) => {
+  const builder = tableFrom(table)
+  const view = READ_VIEWS[table]
+  if (view) builder.select = (...args) => tableFrom(view).select(...args)
+  return builder
+}
+
+// Insert or update one row and get it back as the person may see it (writes can't return the hidden columns).
+export async function writeRow(table, row, id = null) {
+  const res = id
+    ? await tableFrom(table).update(row).eq('id', id).select('id').single()
+    : await tableFrom(table).insert(row).select('id').single()
+  if (res.error) return res
+  return supabase.from(table).select('*').eq('id', res.data.id).single()
+}
 
 // Turns a Supabase / Postgres error into a sentence a person can act on.
 // Database rules raise plain-English messages (e.g. "This job is closed. Reopen it first."),

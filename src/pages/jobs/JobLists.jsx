@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
-import { fmtDate, invoiceNo, jobNo, rp } from '../../lib/format'
+import { fmtDate, invoiceNo, jobNo, rp, sumOf } from '../../lib/format'
 import { shopToday, vehicleName } from '../../lib/customers'
 import { STATE_COLOR, WORKFLOW_COLOR, jobState } from '../../lib/jobs'
 import { selectAll } from '../customers/useCustomerData'
@@ -72,7 +72,7 @@ function RepairOrdersList() {
     const v = names?.vehicle[j.vehicle_id]
     return matches(needle, jobNo(j.job_number), c?.display_name, v?.plate, v && vehicleName(v))
   }), [rows, names, status, needle])
-  const sum = shown.reduce((a, j) => a + Number(j.total), 0)
+  const sum = sumOf(shown, (j) => j.total)
   return (
     <>
       <PageHead title={t('cust.area.repair-orders')} sub={t('jobs.roSub')}
@@ -139,8 +139,8 @@ function InvoicesList() {
     const v = names?.vehicle[j.vehicle_id]
     return matches(needle, invoiceNo(j.invoice_number), jobNo(j.job_number), c?.display_name, v?.plate)
   }), [rows, names, status, needle, today])
-  const outstanding = shown.reduce((a, j) => a + Math.max(0, Number(j.balance)), 0)
-  const overdue = shown.filter((j) => jobState(j, today) === 'overdue').reduce((a, j) => a + Number(j.balance), 0)
+  const outstanding = sumOf(shown, (j) => (j.balance == null ? null : Math.max(0, Number(j.balance))))
+  const overdue = sumOf(shown.filter((j) => jobState(j, today) === 'overdue'), (j) => j.balance)
   return (
     <>
       <PageHead title={t('cust.area.invoices')} sub={t('jobs.invSub')} />

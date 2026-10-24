@@ -93,3 +93,14 @@ export function parseAmount(text) {
   const v = Number(clean)
   return Number.isNaN(v) ? null : v
 }
+
+// Adds up money; blank (null) when any figure is hidden from this person (migration 129), so the total shows "—".
+export function sumOf(list, f) {
+  let s = 0
+  for (const x of list) {
+    const v = f(x)
+    if (v === null || v === undefined) return null
+    s += Number(v)
+  }
+  return s
+}

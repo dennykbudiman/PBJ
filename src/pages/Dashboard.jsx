@@ -70,7 +70,7 @@ export default function Dashboard() {
             <Attn to="/customers/service-due" icon="clock" label={t('dash.service')} count={Number(d.service_overdue) + Number(d.service_due_soon)}
               detail={t('dash.serviceDetail', { over: d.service_overdue, soon: d.service_due_soon })} danger={Number(d.service_overdue) > 0} />
             <Attn to="/inventory/stock" icon="packages" label={t('dash.lowStock')} count={Number(d.low_stock)} detail={t('dash.lowStockDetail')} />
-            {d.bills && can('view_costs') && (
+            {d.bills && (can('view_costs') || can('pay_supplier_bills')) && (
               <Attn to="/inventory/bills" icon="wallet" label={t('dash.bills')} count={Number(d.bills.owed) > 0 ? 1 : 0} value={rp(d.bills.owed)}
                 detail={t('dash.billsDetail', { overdue: rp(d.bills.overdue), soon: rp(d.bills.due_7) })} danger={Number(d.bills.overdue) > 0} />
             )}

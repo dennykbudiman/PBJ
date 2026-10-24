@@ -68,6 +68,7 @@ export function shopToday(tz = 'Asia/Jakarta') {
 
 // Compact money for KPI tiles: Rp 10,4 jt / Rp 1,2 M.
 export function rpShort(n, lang = 'en') {
+  if (n === null || n === undefined) return '—'
   const v = Math.round(Number(n) || 0)
   const abs = Math.abs(v)
   const sign = v < 0 ? '-' : ''

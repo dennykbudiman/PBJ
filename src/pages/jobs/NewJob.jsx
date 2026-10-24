@@ -5,7 +5,7 @@ import { Button, Card, Empty, Input, Notice, PageHead, Select, Textarea, useConf
 import { confirmKm } from '../../lib/mileage'
 import { useAuth } from '../../context/AuthContext'
 import { useT } from '../../lib/i18n'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { selectAll } from '../customers/useCustomerData'
 import { jobNo, km } from '../../lib/format'
 import { vehicleName } from '../../lib/customers'
@@ -88,9 +88,9 @@ export default function NewJob() {
     setBusy(true)
     setMsg(null)
     if (!(await confirmKm({ value: odo, vehicleId: f.vehicle_id, confirm, t, fmt: km, jobNo }))) { setBusy(false); return }
-    const { data, error } = await supabase.from('repair_orders').insert({
+    const { data, error } = await writeRow('repair_orders', {
       customer_id: f.customer_id, vehicle_id: f.vehicle_id, odometer_in: odo, priority: f.priority, service_advisor_id: f.advisor || null,
-    }).select().single()
+    })
     if (error) { setBusy(false); return setMsg(errorText(error, t)) }
     if (f.concern.trim()) {
       const c = await supabase.from('ro_concerns').insert({ ro_id: data.id, position: 0, text: f.concern.trim() })

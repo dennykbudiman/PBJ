@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Avatar, Badge, Button, Empty, Modal, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
-import { supabase } from '../../lib/supabase'
+import { supabase, writeRow } from '../../lib/supabase'
 import { num, parseDecimal, readAmount, rp } from '../../lib/format'
 import { APPROVAL_COLOR, LINE_TYPES, WORK_STATUS, autoFeesFor, linesFromCatalogItem, lineAmount, lineDiscount, lineNet } from '../../lib/jobs'
 import { discountState } from '../catalog/DiscountsTab'
@@ -46,10 +46,10 @@ function buildFor(item, cat, opts = {}, flat = false) {
 // `scheduleId` links it to a service schedule. Returns the database results, for useRun.
 export async function addBundleService({ job, cat, tp, name, scheduleId }) {
   const ro = job.ro
-  const { data: svc, error } = await supabase.from('ro_services').insert({
+  const { data: svc, error } = await writeRow('ro_services', {
     ro_id: ro.id, name: tp ? tp.name : name, template_id: tp?.id || null, checklist_id: tp?.checklist_id || null,
     flat_price: tp?.flat_price ?? null, position: nextPos(job.services), service_schedule_id: scheduleId || null,
-  }).select().single()
+  })
   if (error) return { error }
   if (!tp) return { data: svc }
   const built = { lines: [], jobFees: [] }
@@ -295,12 +295,12 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
                   )}
                   <td className="num">{editable ? <BlurInput className="input cell num" value={num(l.price)} aria-label={t('cat.price')} onCommit={commitMoney(l.id, 'price')} /> : rp(l.price)}</td>
                   <td className="num">{editable ? <BlurInput className="input cell num narrow" value={String(Number(l.qty)).replace('.', ',')} aria-label={t('job.col.qty')} onCommit={commitQty(l.id)} /> : num(l.qty, 2)}</td>
-                  <td className="num">{rp(lineAmount(l))}</td>
+                  <td className="num">{l.price == null ? '—' : rp(lineAmount(l))}</td>
                   <td className="num">
                     {editable ? <BlurInput className="input cell num narrow" value={discountText(l.discount_pct, l.discount_amount)} placeholder="—" aria-label={t('job.col.discount')} onCommit={commitDiscount(l.id)} />
                       : disc ? `-${rp(disc)}${Number(l.discount_pct) > 0 ? ` (${num(l.discount_pct, 2)}%)` : ''}` : '—'}
                   </td>
-                  <td className="num"><b>{rp(lineNet(l))}</b></td>
+                  <td className="num"><b>{l.price == null ? '—' : rp(lineNet(l))}</b></td>
                   <td>
                     <input type="checkbox" checked={l.taxable} disabled={!editable} aria-label={t('cat.tax')} onChange={(e) => updLine(l.id, { taxable: e.target.checked })} />
                   </td>
@@ -333,12 +333,12 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
             {editable ? <BlurInput className="input cell num" style={{ width: 120 }} value={num(s.flat_price)} aria-label={t('job.flatPrice')}
               onCommit={(v, reset) => { const n = readAmount(v); if (n === null || Number.isNaN(n)) { toast(t('settings.badAmount'), 'err'); reset(); return } upd({ flat_price: n }) }} />
               : <b>{rp(s.flat_price)}</b>}
-            <span className="muted small">({t('job.linesWorth', { amount: rp(lineSum) })})</span>
+            <span className="muted small">({t('job.linesWorth', { amount: lines.some((l) => l.price == null) ? '—' : rp(lineSum) })})</span>
           </span>
         )}
         <div className="spacer" />
         <span>{t('job.serviceTotal')} <b>{rp(s.service_total)}</b></span>
-        <span>{t('job.col.discount')} <b>{Number(s.service_discount) ? `-${rp(s.service_discount)}` : rp(0)}</b>
+        <span>{t('job.col.discount')} <b>{s.service_discount == null ? '—' : Number(s.service_discount) ? `-${rp(s.service_discount)}` : rp(0)}</b>
           {Number(s.discount_pct) > 0 && <span className="muted small"> ({num(s.discount_pct, 2)}%)</span>}</span>
         <span>{t('job.serviceNet')} <b>{rp(s.service_net)}</b></span>
       </div>

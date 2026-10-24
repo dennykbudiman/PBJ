@@ -4,7 +4,7 @@ import { Badge, Button, Modal, Notice, Select, Textarea, useToast } from '../../
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { fmtDateTime, jobNo } from '../../lib/format'
 import { shopToday, vehicleName } from '../../lib/customers'
 import { WORKFLOW_COLOR } from '../../lib/jobs'
@@ -165,7 +165,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
       if (createdJob && createdJob.vehicle_id === f.vehicle_id) roId = createdJob.id
       else {
         const advisor = roleName !== 'Technician' && staff.some((s) => s.id === profile?.id) ? profile.id : null
-        const { data: ro, error } = await supabase.from('repair_orders').insert({ customer_id: f.customer_id, vehicle_id: f.vehicle_id, priority: 'medium', service_advisor_id: advisor }).select().single()
+        const { data: ro, error } = await writeRow('repair_orders', { customer_id: f.customer_id, vehicle_id: f.vehicle_id, priority: 'medium', service_advisor_id: advisor })
         if (error) { setBusy(false); return setMsg(errorText(error, t)) }
         roId = ro.id
         jobMade = ro

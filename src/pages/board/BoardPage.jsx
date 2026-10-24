@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
-import { initials, invoiceNo, jobNo, num, rp } from '../../lib/format'
+import { initials, invoiceNo, jobNo, num, rp, sumOf } from '../../lib/format'
 import { shopToday, vehicleName } from '../../lib/customers'
 import { PRIORITIES, PRIORITY_COLOR, WORKFLOW_COLOR, WORKFLOW_MANUAL } from '../../lib/jobs'
 import { APPT_COLOR, addDays, clock, dayLabel, daysBetween, shopParts } from '../../lib/calendar'
@@ -161,7 +161,7 @@ function Kanban({ jobs, data, staff, today, canEdit, onMove, onPickedUp, onBook,
     <div className="board" role="list" aria-label={t('nav.board')}>
       {COLUMNS.map((col) => {
         const list = byCol[col]
-        const sum = list.reduce((a, j) => a + Number(j.total || 0), 0)
+        const sum = sumOf(list, (j) => j.total)
         return (
           <section key={col} role="listitem" aria-label={t(`job.wf.${col}`)}
             className={`bcol ${droppable(col) ? 'can-drop' : ''} ${over === col && droppable(col) ? 'over' : ''}`}
@@ -318,7 +318,7 @@ function BoardList({ jobs, data, today }) {
           </tbody>
         </table>
       </div>
-      <div className="hint">{t('board.listTotal', { n: rows.length, amount: rp(rows.reduce((a, j) => a + Number(j.total || 0), 0)) })}</div>
+      <div className="hint">{t('board.listTotal', { n: rows.length, amount: rp(sumOf(rows, (j) => j.total)) })}</div>
     </>
   )
 }
