@@ -1,19 +1,26 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Badge, Input, Select, Toggle, useToast } from '../../components/ui'
 import { EditorPanel, EmptyCard, ListShell, RowButtons, SearchBox, Section, StatusSelect, RowLink, deleteErrorText, move, parseTags, statusMatch, syncRows } from './common'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import History from './History'
 import { useT } from '../../lib/i18n'
-import { num, parseDecimal, readAmount, rp } from '../../lib/format'
+import { num, parseDecimal, readAmount, rp, sumOf } from '../../lib/format'
 
 // Price of one bundle line: the override when set, otherwise the catalog price.
+// Blank (null) when the price is hidden from this person (migration 130), so the value shows "—".
 export function linePrice(line, itemById) {
-  return line.price_override != null ? Number(line.price_override) : Number(itemById[line.catalog_item_id]?.price ?? 0)
+  if (line.price_override != null) return Number(line.price_override)
+  const p = itemById[line.catalog_item_id]?.price
+  return p === null ? null : Number(p ?? 0)
 }
 export function templateValue(templateId, data) {
-  return data.templateItems.filter((x) => x.template_id === templateId)
-    .reduce((sum, x) => sum + linePrice(x, data.itemById) * Number(x.qty), 0)
+  return sumOf(data.templateItems.filter((x) => x.template_id === templateId), (x) => {
+    const p = linePrice(x, data.itemById)
+    return p === null ? null : p * Number(x.qty)
+  })
 }
+// A flat rate item has a flat price; is_flat says so even when the price itself is hidden from this person.
+export const isFlatTemplate = (x) => (x.is_flat ?? x.flat_price != null)
 
 function intervalText(x, t) {
   const parts = []
@@ -30,7 +37,7 @@ export default function TemplatesTab({ tab, data, id, canEdit, reload, go }) {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('active')
   const base = `/catalog/${tab}`
-  const mine = data.templates.filter((x) => (x.flat_price != null) === flat)
+  const mine = data.templates.filter((x) => isFlatTemplate(x) === flat)
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -42,7 +49,7 @@ export default function TemplatesTab({ tab, data, id, canEdit, reload, go }) {
   // A flat rate item opened under Service bundles (or the other way round) goes to its own tab.
   const elsewhere = !isNew && id && !selected ? data.templates.find((x) => x.id === id) : null
   useEffect(() => {
-    if (elsewhere) go(`/catalog/${elsewhere.flat_price != null ? 'flat-rate' : 'bundles'}/${elsewhere.id}`)
+    if (elsewhere) go(`/catalog/${isFlatTemplate(elsewhere) ? 'flat-rate' : 'bundles'}/${elsewhere.id}`)
   }, [elsewhere?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const panel = id && (isNew || selected) ? (
     <TemplateEditor key={`${id}:${data.version}`} flat={flat} template={selected} data={data} canEdit={canEdit}
@@ -160,9 +167,7 @@ function TemplateEditor({ flat, template, data, canEdit, onClose, onSaved, onDel
     }
     setBusy(true)
     setMsg(null)
-    const res = isNew
-      ? await supabase.from('service_templates').insert(row).select().single()
-      : await supabase.from('service_templates').update(row).eq('id', template.id).select().single()
+    const res = await writeRow('service_templates', row, isNew ? null : template.id)
     if (res.error) { setBusy(false); return setMsg(errorText(res.error, t)) }
     const saved = res.data
     const error = await syncRows({

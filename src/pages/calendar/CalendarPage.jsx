@@ -332,7 +332,8 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
                   <>
                     {slots.map((m) => (
                       <button key={m} type="button" tabIndex={-1} className={`tgrid-slot ${m % 60 === 0 ? 'hour' : ''}`} style={{ top: px(m), height: (SLOT / 60) * HOUR_PX }}
-                        disabled={!canEdit || !isOpen(m)} aria-label={canEdit && isOpen(m) ? t('cal.newAt', { when: `${dayLabel(c.date, lang)} ${clock(m, lang)}`, who: byTech ? c.label : '' }) : undefined}
+                        disabled={!canEdit || !isOpen(m)} aria-hidden={canEdit && isOpen(m) ? undefined : true}
+                        aria-label={canEdit && isOpen(m) ? t('cal.newAt', { when: `${dayLabel(c.date, lang)} ${clock(m, lang)}`, who: byTech ? c.label : '' }) : undefined}
                         onClick={() => onNew(c.date, m, byTech ? c.techId : '')} />
                     ))}
                     {!dh.open ? <div className="tgrid-closed" style={{ top: 0, height: px(hi) }} title={t('hours.closedAllDay')} />

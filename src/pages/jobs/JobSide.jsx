@@ -324,9 +324,11 @@ export function AttachmentsCard({ job, canGeneral, canSlip, run }) {
     return ok
   }
   async function open(a) {
+    // The new tab is opened during the click (browsers block tabs opened later), then sent to the file's address.
+    const win = window.open('', '_blank')
     const { data, error } = await supabase.storage.from('attachments').createSignedUrl(a.file_path, 300)
-    if (error || !data?.signedUrl) return toast(errorText(error || { message: 'not found' }, t), 'err')
-    window.open(data.signedUrl, '_blank', 'noopener')
+    if (error || !data?.signedUrl) { win?.close(); return toast(errorText(error || { message: 'not found' }, t), 'err') }
+    if (win) { win.opener = null; win.location.href = data.signedUrl } else window.location.href = data.signedUrl
   }
   async function remove(a) {
     const yes = await confirm({ title: t('job.removeFile', { name: a.file_name }), text: t('job.removeFileText', { name: a.file_name }), yes: t('job.removeFileYes'), danger: true })

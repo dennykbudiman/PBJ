@@ -1,14 +1,14 @@
 /* Axle design tokens — taken from the approved prototype (Claude Design canvas). */
 :root {
-  --accent: #0e9f7e;
-  --accent-dark: #0b7f65;
+  --accent: #0a8167;
+  --accent-dark: #086a54;
   --accent-soft: #e3f4ee;
   --accent-ring: rgba(14, 159, 126, 0.18);
   --link-hover: #0b5e49;
   --link: #0f7b5f;
   --ink: #14181c;
-  --muted: #6b7280;
-  --faint: #8a919b;
+  --muted: #5f6670;
+  --faint: #646b76;
   --line: #e3e7ea;
   --line-soft: #eef0f2;
   --bg: #f4f6f7;

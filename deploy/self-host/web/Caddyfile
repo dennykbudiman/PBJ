@@ -28,7 +28,10 @@
 	# Supabase APIs (same paths as on supabase.co, so the app needs no changes)
 	@api path /auth/v1/* /rest/v1/* /graphql/v1 /graphql/v1/* /realtime/v1/* /storage/v1/* /functions/v1/*
 	handle @api {
-		reverse_proxy {$AXLE_API_UPSTREAM:api-gw:8000}
+		reverse_proxy {$AXLE_API_UPSTREAM:api-gw:8000} {
+			# The real client address for the sign-in limit (replaces anything the caller sent).
+			header_up X-Axle-Client-IP {remote_host}
+		}
 	}
 
 	# Built files have a fingerprint in their name: cache for a year. A missing one is a plain 404
@@ -54,5 +57,8 @@
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options SAMEORIGIN
+		# Same rules as netlify.toml; here Supabase is on the same address, so 'self' covers it.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' wss:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 	}
 }

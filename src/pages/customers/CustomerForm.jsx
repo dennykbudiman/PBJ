@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Button, Input, Modal, Notice, Select, Textarea, Toggle, useToast } from '../../components/ui'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { num, readAmount } from '../../lib/format'
@@ -69,9 +69,7 @@ export default function CustomerForm({ open, customer, customers, onClose, onSav
     }
     setBusy(true)
     setMsg(null)
-    const res = editing
-      ? await supabase.from('customers').update(row).eq('id', customer.id).select().single()
-      : await supabase.from('customers').insert(row).select().single()
+    const res = await writeRow('customers', row, editing ? customer.id : null)
     if (res.error) { setBusy(false); return setMsg(errorText(res.error, t)) }
     if (!editing && f.contact_name.trim()) {
       const { error } = await supabase.from('customer_contacts').insert({

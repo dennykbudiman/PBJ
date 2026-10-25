@@ -44,6 +44,13 @@ export const READ_VIEWS = {
   ro_job_fees: 'ro_job_fees_read',
   ro_job_discounts: 'ro_job_discounts_read',
   activity_log: 'activity_log_read',
+  // migration 130: the voided-invoice copy without cost prices, and the price list for people who handle money
+  invoice_voids: 'invoice_voids_read',
+  labor_rates: 'labor_rates_read',
+  service_templates: 'service_templates_read',
+  service_template_items: 'service_template_items_read',
+  discounts: 'discounts_read',
+  customers: 'customers_read',
 }
 const tableFrom = supabase.from.bind(supabase)
 supabase.from = (table) => {

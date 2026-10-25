@@ -132,7 +132,7 @@ export default function PrintJob() {
           </thead>
           {billed.map((s) => {
             const lines = job.items.filter((l) => l.service_id === s.id)
-            const flat = s.flat_price != null
+            const flat = s.is_flat ?? s.flat_price != null
             return (
               <tbody key={s.id} className="doc-svc">
                 <tr className="svc-row">

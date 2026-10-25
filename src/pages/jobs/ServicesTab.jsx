@@ -180,7 +180,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
     return updLine(id, { hours_worked: n })
   }
 
-  const isFlat = s.flat_price != null
+  const isFlat = s.is_flat ?? s.flat_price != null
   const lineSum = lines.reduce((a, l) => a + lineNet(l) + Math.round(Number(l.core_charge) * Number(l.qty)), 0)
   const declinedLike = s.approval_status === 'declined' || s.approval_status === 'deferred'
   const concern = job.concerns.find((c) => c.id === s.concern_id)

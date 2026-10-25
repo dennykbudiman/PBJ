@@ -17,6 +17,11 @@ services:
       - "127.0.0.1:${POSTGRES_PORT}:5432"
       - "127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543"
 
+  # The `login` function takes the caller's address from the header the web server sets (see Caddyfile).
+  functions:
+    environment:
+      AXLE_CLIENT_IP_HEADER: x-axle-client-ip
+
   # The Axle app + HTTPS. Serves the app and forwards /auth, /rest, /storage, /functions... to the gateway.
   web:
     container_name: axle-web

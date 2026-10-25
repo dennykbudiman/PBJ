@@ -184,7 +184,7 @@ function MonthChart({ series }) {
                 {bar(x0, Number(s.invoiced), C_INVOICED, 'a')}
                 {bar(x0 + bw + 2, Number(s.received), C_RECEIVED, 'b')}
                 <text x={L + i * gw + gw / 2} y={H - 8} textAnchor="middle" className="tick">{label(s)}</text>
-                <rect x={L + i * gw} y={0} width={gw} height={H} fill="transparent" tabIndex={0} aria-label={`${label(s)}: ${t('dash.invoiced')} ${rp(s.invoiced)}, ${t('dash.received')} ${rp(s.received)}`}
+                <rect x={L + i * gw} y={0} width={gw} height={H} fill="transparent" tabIndex={0} role="img" aria-label={`${label(s)}: ${t('dash.invoiced')} ${rp(s.invoiced)}, ${t('dash.received')} ${rp(s.received)}`}
                   onMouseEnter={() => setHover(i)} onFocus={() => setHover(i)} onBlur={() => setHover(null)} />
               </g>
             )

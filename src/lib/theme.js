@@ -49,8 +49,17 @@ export function accentOf(theme) {
   return (PRESETS.find((p) => p.id === theme?.preset) || PRESETS[0]).accent
 }
 
+// The colour used for buttons, the top bar and accent text: the chosen colour, darkened just enough (if needed) for
+// white text on it, and it as text on white, to reach the WCAG AA contrast of 4.5:1.
+export function readableAccent(accent) {
+  let ui = accent
+  for (let i = 0; i < 12 && contrast(ui, '#FFFFFF') < 4.5; i++) ui = shade(ui, 0.05)
+  return ui
+}
+
 // The full set of shades the stylesheet uses, from one accent colour.
-export function palette(accent) {
+export function palette(chosen) {
+  const accent = readableAccent(chosen)
   let link = shade(accent, 0.12)
   for (let i = 0; i < 6 && contrast(link, '#FFFFFF') < 4.5; i++) link = shade(link, 0.15)
   const [r, g, b] = toRgb(accent)

@@ -42,13 +42,14 @@ export default function ImportData({ id }) {
     const [customers, vehicles, suppliers, categories, items, templates, schedules, stock] = await Promise.all([
       q('customers', 'id, display_name'), q('vehicles', 'id, plate, vin'), q('suppliers', 'id, name'), q('categories', 'id, name'),
       q('catalog_items', 'id, item_type, name, code, track_inventory'), q('service_templates', 'id, name'), q('service_schedules', 'id, vehicle_id, name'),
-      q('stock_movements', 'catalog_item_id'),
+      q('stock_movements', 'catalog_item_id, reason, qty_change'),
     ])
     const failed = [customers, vehicles, suppliers, categories, items, templates, schedules, stock].find((r) => r.error)
     if (failed) throw failed.error
     return {
       customers: customers.data, vehicles: vehicles.data, suppliers: suppliers.data, categories: categories.data, items: items.data,
-      templates: templates.data, schedules: schedules.data, stocked: new Set(stock.data.map((x) => x.catalog_item_id)),
+      templates: templates.data, schedules: schedules.data,
+      stockMoves: stock.data.reduce((m, x) => { (m[x.catalog_item_id] ||= []).push(x); return m }, {}),
       settings, today: shopToday(timezone),
     }
   }
@@ -103,6 +104,7 @@ export default function ImportData({ id }) {
       </div>
       <div className="hint">{t('imp.columns', { cols: COLUMNS[type].join(', ') })}</div>
       <div className="hint">{t(`imp.order`)}</div>
+      <div className="hint">{t('imp.excelTip')}</div>
 
       {check?.problem && <Notice kind="err" style={{ marginTop: 12 }}>{check.file}: {check.problem}</Notice>}
       {check && !check.problem && (

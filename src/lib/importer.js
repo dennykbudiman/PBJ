@@ -4,8 +4,8 @@
 // database checks them exactly like rows entered on screen. Unpaid invoices from before Axle are not imported
 // (Denny, Oct 24: there are none).
 //
-// Each template has a header row (the column names below; * = required) and a "#" row explaining the columns.
-// Lines starting with "#" are skipped. Rows that already exist in Axle (same company name, plate, supplier name,
+// Each template has a header row (the column names below; * = required) and a "# " row explaining the columns.
+// Lines starting with "# " (hash and space) are skipped, so a part code like "#123" still loads. Rows that already exist in Axle (same company name, plate, supplier name,
 // part code, schedule name on that vehicle) are skipped, so a file can be loaded again after fixing a problem.
 import { CUSTOMER_TYPES, FUEL_TYPES, VEHICLE_TYPES, formatPlate, normalizePlate, normalizeVin, npwpDigits } from './customers'
 
@@ -82,7 +82,7 @@ export function templateCsv(type, help) {
 
 // Header names → column keys ("Name*" → "name"); unknown columns are reported.
 export function readTable(type, rows) {
-  const body = rows.filter((r) => !String(r[0] || '').startsWith('#'))
+  const body = rows.filter((r) => !/^#(\s|$)/.test(String(r[0] || '')))
   if (!body.length) return { error: 'empty' }
   const keys = COLUMNS[type].map((c) => c.replace('*', ''))
   const head = body[0].map((h) => h.toLowerCase().replace(/\*/g, '').trim().replace(/\s+/g, '_'))
@@ -110,20 +110,44 @@ export function readBool(v, fallback) {
   if (NO.includes(s)) return false
   return undefined
 }
-// Whole numbers and rupiah: "1.250.000", "1,250,000", "Rp 1 250 000" → 1250000.
+// Numbers as people and Excel write them, Indonesian or English style:
+//   "1250000", "1.250.000", "1,250,000", "Rp 1.250.000", "1.250.000,00", "1,250,000.00", "1,5", "1.5".
+// With both "." and "," the last one is the decimal mark. With one kind used once, exactly three digits after it
+// means thousands ("1.500" = 1500); otherwise it is the decimal mark ("1,5" = 1.5). Anything else is refused
+// rather than guessed. Returns a number, null for an empty cell, or undefined when it can't be read.
+export function readNumber(v) {
+  let s = String(v ?? '').trim().replace(/^rp\.?/i, '').replace(/[\s\u00a0]/g, '')
+  if (!s) return null
+  let sign = 1
+  if (s.startsWith('-')) { sign = -1; s = s.slice(1) }
+  if (/^\d+$/.test(s)) return sign * Number(s)
+  const grouped = (intPart, sep) => (intPart.includes(sep) ? new RegExp(`^\\d{1,3}(\\${sep}\\d{3})+$`).test(intPart) : /^\d+$/.test(intPart))
+  const lastDot = s.lastIndexOf('.')
+  const lastComma = s.lastIndexOf(',')
+  if (lastDot >= 0 && lastComma >= 0) {
+    const dec = lastDot > lastComma ? '.' : ','
+    const thou = dec === '.' ? ',' : '.'
+    const at = s.lastIndexOf(dec)
+    const intPart = s.slice(0, at)
+    const frac = s.slice(at + 1)
+    if (!/^\d+$/.test(frac) || intPart.includes(dec) || !grouped(intPart, thou)) return undefined
+    return sign * Number(intPart.split(thou).join('') + '.' + frac)
+  }
+  const sep = lastDot >= 0 ? '.' : ','
+  const parts = s.split(sep)
+  if (parts.some((x) => !/^\d+$/.test(x))) return undefined
+  if (parts.length > 2) return grouped(s, sep) ? sign * Number(parts.join('')) : undefined
+  if (parts[1].length === 3 && parts[0].length <= 3) return sign * Number(parts.join(''))
+  return sign * Number(parts[0] + '.' + parts[1])
+}
+// Whole numbers and rupiah amounts ("1.250.000,00" is fine; "1.250,50" isn't whole rupiah and is refused).
 export function readInt(v) {
-  const s = String(v ?? '').trim()
-  if (!s) return null
-  const clean = s.replace(/^rp\.?\s*/i, '').replace(/[.\s,]/g, '')
-  return /^-?\d+$/.test(clean) ? Number(clean) : undefined
+  const n = readNumber(v)
+  if (n === null || n === undefined) return n
+  return Number.isInteger(n) ? n : undefined
 }
-// Quantities and hours: "2", "1,5", "1.5".
-export function readDecimal(v) {
-  const s = String(v ?? '').trim()
-  if (!s) return null
-  const clean = s.includes(',') && !s.includes('.') ? s.replace(',', '.') : s.replace(/,/g, '')
-  return /^-?\d+(\.\d+)?$/.test(clean) ? Number(clean) : undefined
-}
+// Quantities and hours.
+export const readDecimal = readNumber
 // Dates: 2026-10-24, 24/10/2026, 24-10-2026.
 export function readDate(v) {
   const s = String(v ?? '').trim()
@@ -187,7 +211,7 @@ export function checkRows(type, records, ctx) {
       if (errors.length > before) continue
       if (ctx.customers.some((x) => key(x.display_name) === key(r.name))) { skipped++; continue }
       ready.push({
-        row: { display_name: r.name.trim(), legal_name: r.legal_name || null, npwp, type: typ, billing_address: r.billing_address || null, phone: r.phone || null,
+        row: { display_name: r.name.trim(), legal_name: r.legal_name || null, npwp: r.npwp ? r.npwp.trim() : null, type: typ, billing_address: r.billing_address || null, phone: r.phone || null,
           email: r.email || null, payment_terms_days: terms, credit_limit: limit, charge_account: charge, tax_exempt: exempt },
         contact: r.contact_name ? { name: r.contact_name, phone: r.contact_phone || null, email: r.contact_email || null, is_primary: true } : null,
       })
@@ -283,7 +307,11 @@ export function checkRows(type, records, ctx) {
       if (!item) { err(r, 'notFound', { col: 'part', value: r.part }); continue }
       if (!item.track_inventory) { err(r, 'notTracked', { value: item.name }); continue }
       if (dupInFile(r, item.id)) continue
-      if (ctx.stocked.has(item.id)) { skipped++; continue }
+      // Opening stock is a part's first stock entry. If it is already there with this quantity, the row was loaded
+      // before (skip); any other stock history means the count is corrected with Adjust stock instead.
+      const moves = ctx.stockMoves?.[item.id] || []
+      if (moves.length === 1 && moves[0].reason === 'opening' && Number(moves[0].qty_change) === qty) { skipped++; continue }
+      if (moves.length) { err(r, 'hasStock', { value: item.name }); continue }
       ready.push({ catalog_item_id: item.id, qty_change: qty, reason: 'opening', note: r.note || null, _name: item.name })
     }
   }

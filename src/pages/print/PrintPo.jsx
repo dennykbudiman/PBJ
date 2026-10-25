@@ -16,7 +16,7 @@ export default function PrintPo() {
   const { t: tUi } = useT()
   const { settings, logoUrl, timezone } = useShop()
   const { can } = useAuth()
-  const money = can('view_costs')   // prices only for people who may see costs
+  const money = can('view_costs') || can('pay_supplier_bills')   // prices for people who see costs or pay supplier bills
   const [d, setD] = useState(null)
   const [error, setError] = useState(null)
 

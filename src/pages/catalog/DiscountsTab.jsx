@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Badge, Input, Select, Toggle, useToast } from '../../components/ui'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, StatusSelect, RowLink, deleteErrorText, statusMatch } from './common'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import History from './History'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
@@ -117,9 +117,7 @@ function DiscountEditor({ discount, data, canEdit, today, onClose, onSaved, onDe
     }
     setBusy(true)
     setMsg(null)
-    const res = isNew
-      ? await supabase.from('discounts').insert(row).select().single()
-      : await supabase.from('discounts').update(row).eq('id', discount.id).select().single()
+    const res = await writeRow('discounts', row, isNew ? null : discount.id)
     if (res.error) { setBusy(false); return setMsg(errorText(res.error, t)) }
     toast(t('cat.saved', { name: res.data.name }))
     await onSaved(res.data)
