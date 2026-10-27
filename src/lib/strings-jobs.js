@@ -57,6 +57,12 @@ export const jobsEn = {
   'job.decideHint.declined': 'The company doesn\'t want this work; not billed.', 'job.decideHint.pending': 'Undo a decision; the service waits for approval again.',
   'job.method': 'How', 'job.approvedBy': 'Decided by', 'job.canApprove': 'can approve', 'job.someoneElse': 'Someone else…', 'job.approverName': 'Name',
   'job.optional': 'Optional', 'job.note': 'Note', 'job.approvalNoteExample': 'e.g. Approved by phone, PO to follow',
+  'job.completedNoDecline': 'Completed work can\'t be declined or deferred: {names}. Set its work status back first.',
+  'job.stockShortIntro': 'Not enough on the shelf; stock will go below zero:', 'job.stockShort': '{name} (have {have}, need {need})',
+  'job.overCreditLimit': 'With this invoice the company owes {owed}, over its credit limit of {limit}.',
+  'job.notOnAccount': 'This company isn\'t on account: collect payment when the vehicle is picked up.',
+  'sys.part': 'part', 'sys.refundedPart': 'refunded part', 'sys.released': 'released, job total lower', 'sys.paymentsOnVoided': 'Payments on voided {no}',
+  'sys.movedToCredit': 'Moved to company credit (voided {no})', 'sys.invoiceVoided': 'Invoice {no} voided', 'sys.lineRemoved': 'Line removed after void',
   'job.saveDecision': 'Save decision', 'job.approvalSaved': 'Decision saved for {n} service(s)', 'job.pickServices': 'Pick at least one service.',
   'job.whoApproved': 'Say who made the decision.',
   'job.via.in_person': 'In person', 'job.via.phone': 'Phone', 'job.via.whatsapp': 'WhatsApp', 'job.via.email': 'Email', 'job.via.internal': 'Internal',
@@ -69,7 +75,7 @@ export const jobsEn = {
   'job.wf.estimate': 'Estimate', 'job.wf.scheduled': 'Scheduled', 'job.wf.arrived': 'Arrived', 'job.wf.in_progress': 'In progress',
   'job.wf.waiting_parts': 'Waiting for parts', 'job.wf.completed': 'Completed', 'job.wf.invoiced': 'Invoiced', 'job.wf.paid': 'Paid',
   'job.ps.unpaid': 'Unpaid', 'job.ps.partial': 'Part paid', 'job.ps.paid': 'Paid',
-  'job.state.estimate': 'Estimate', 'job.state.closed': 'Closed', 'job.state.paid': 'Paid', 'job.state.overdue': 'Overdue', 'job.state.partial': 'Part paid', 'job.state.unpaid': 'Unpaid',
+  'job.state.estimate': 'Estimate', 'job.state.closed': 'Closed', 'job.state.invoiced': 'Invoiced', 'job.state.paid': 'Paid', 'job.state.overdue': 'Overdue', 'job.state.partial': 'Part paid', 'job.state.unpaid': 'Unpaid',
 
   // Invoice
   'job.stillPending': '{n} service(s) still need a decision: {names}. Record approval first.', 'job.noneApproved': 'Approve at least one service before invoicing.',
@@ -228,6 +234,12 @@ export const jobsId = {
   'job.decideHint.declined': 'Perusahaan tidak mau pekerjaan ini; tidak ditagih.', 'job.decideHint.pending': 'Batalkan keputusan; servis menunggu persetujuan lagi.',
   'job.method': 'Lewat', 'job.approvedBy': 'Diputuskan oleh', 'job.canApprove': 'boleh menyetujui', 'job.someoneElse': 'Orang lain…', 'job.approverName': 'Nama',
   'job.optional': 'Opsional', 'job.note': 'Catatan', 'job.approvalNoteExample': 'mis. Disetujui lewat telepon, PO menyusul',
+  'job.completedNoDecline': 'Pekerjaan yang sudah selesai tidak bisa ditolak atau ditunda: {names}. Kembalikan status pekerjaannya dulu.',
+  'job.stockShortIntro': 'Stok di rak tidak cukup; stok akan menjadi minus:', 'job.stockShort': '{name} (ada {have}, perlu {need})',
+  'job.overCreditLimit': 'Dengan invoice ini perusahaan berutang {owed}, melebihi batas kreditnya {limit}.',
+  'job.notOnAccount': 'Perusahaan ini tidak memakai sistem tagihan: tagih pembayaran saat kendaraan diambil.',
+  'sys.part': 'sebagian', 'sys.refundedPart': 'bagian yang dikembalikan', 'sys.released': 'dilepas, total pekerjaan lebih kecil', 'sys.paymentsOnVoided': 'Pembayaran dari invoice batal {no}',
+  'sys.movedToCredit': 'Dipindahkan ke kredit perusahaan (invoice batal {no})', 'sys.invoiceVoided': 'Invoice {no} dibatalkan', 'sys.lineRemoved': 'Baris dihapus setelah pembatalan',
   'job.saveDecision': 'Simpan keputusan', 'job.approvalSaved': 'Keputusan disimpan untuk {n} servis', 'job.pickServices': 'Pilih minimal satu servis.',
   'job.whoApproved': 'Sebutkan siapa yang memutuskan.',
   'job.via.in_person': 'Langsung', 'job.via.phone': 'Telepon', 'job.via.whatsapp': 'WhatsApp', 'job.via.email': 'Email', 'job.via.internal': 'Internal',
@@ -240,7 +252,7 @@ export const jobsId = {
   'job.wf.estimate': 'Estimasi', 'job.wf.scheduled': 'Dijadwalkan', 'job.wf.arrived': 'Sudah datang', 'job.wf.in_progress': 'Dikerjakan',
   'job.wf.waiting_parts': 'Menunggu part', 'job.wf.completed': 'Selesai', 'job.wf.invoiced': 'Di-invoice', 'job.wf.paid': 'Lunas',
   'job.ps.unpaid': 'Belum dibayar', 'job.ps.partial': 'Dibayar sebagian', 'job.ps.paid': 'Lunas',
-  'job.state.estimate': 'Estimasi', 'job.state.closed': 'Ditutup', 'job.state.paid': 'Lunas', 'job.state.overdue': 'Lewat jatuh tempo', 'job.state.partial': 'Dibayar sebagian', 'job.state.unpaid': 'Belum dibayar',
+  'job.state.estimate': 'Estimasi', 'job.state.closed': 'Ditutup', 'job.state.invoiced': 'Diinvoice', 'job.state.paid': 'Lunas', 'job.state.overdue': 'Lewat jatuh tempo', 'job.state.partial': 'Dibayar sebagian', 'job.state.unpaid': 'Belum dibayar',
 
   // Invoice
   'job.stillPending': '{n} servis masih perlu keputusan: {names}. Catat persetujuan dulu.', 'job.noneApproved': 'Setujui minimal satu servis sebelum membuat invoice.',

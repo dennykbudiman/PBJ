@@ -4,6 +4,7 @@ import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { fmtDateTime, num, rp } from '../../lib/format'
 import { categoryPath } from './useCatalogData'
+import { sysText } from '../../lib/jobs'
 
 const MONEY = ['cost', 'price', 'core_cost', 'flat_price', 'max_amount', 'price_override']
 const COST_FIELDS = ['cost', 'markup_pct']
@@ -92,7 +93,7 @@ export default function History({ entityType, entityId, data, showCost, stock })
       const q = Number(m.qty_change)
       return <>
         <div><b style={{ color: q < 0 ? 'var(--red)' : 'var(--green)' }}>{q > 0 ? '+' : ''}{num(q, 2)}</b> {t('cat.hist.stock')} · {t(`cat.reason.${m.reason}`)}</div>
-        {m.note && !(m.reason === 'opening' && m.note === t('cat.openingNote')) && <div className="muted">{m.note}</div>}
+        {m.note && !(m.reason === 'opening' && m.note === t('cat.openingNote')) && <div className="muted">{sysText(m.note, t)}</div>}
       </>
     }
     const r = e.r

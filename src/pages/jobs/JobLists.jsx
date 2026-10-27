@@ -8,7 +8,7 @@ import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, invoiceNo, jobNo, rp, sumOf } from '../../lib/format'
 import { shopToday, vehicleName } from '../../lib/customers'
-import { STATE_COLOR, WORKFLOW_COLOR, jobState } from '../../lib/jobs'
+import { STATE_COLOR, WORKFLOW_COLOR, jobState, sysText } from '../../lib/jobs'
 import { selectAll } from '../customers/useCustomerData'
 import { MoreMenu } from './common'
 import { AddToJobModal, DismissModal } from './Deferred'
@@ -237,7 +237,7 @@ function PaymentsList() {
                     <td>{names.customer[p.customer_id]?.display_name || '—'}</td>
                     <td>{p.payback ? <Badge color="gray">{t('jobs.creditPaidBack')}</Badge> : <Link className="rowlink" to={to} onClick={(e) => e.stopPropagation()}>{j?.invoice_number ? invoiceNo(j.invoice_number) : j ? `#${jobNo(j.job_number)}` : '—'}</Link>}</td>
                     <td>{p.method ? t(`job.pay.${p.method}`) : '—'}{p.payback ? null : p.source === 'void_credit' ? <> <Badge color="gray">{t('jobs.movedToCredit')}</Badge></> : p.kind === 'refund' && <> <Badge color="red">{t('job.kind.refund')}</Badge></>}</td>
-                    <td className="wide-only muted">{[p.reference, p.receipt_number].filter(Boolean).join(' · ') || '—'}</td>
+                    <td className="wide-only muted">{[sysText(p.reference, t), p.receipt_number].filter(Boolean).join(' · ') || '—'}</td>
                     <td className="num" style={{ color: p.kind === 'refund' ? 'var(--red)' : undefined }}><b>{p.kind === 'refund' ? '-' : ''}{rp(p.amount)}</b></td>
                   </tr>
                 )
@@ -386,15 +386,18 @@ export function JobsFor({ customerId, vehicleId }) {
   const today = shopToday(timezone)
   const [rows, setRows] = useState(null)
   const [plates, setPlates] = useState({})
+  const [failed, setFailed] = useState(null)
   useEffect(() => {
+    setFailed(null)
     selectAll(() => {
       const q = supabase.from('repair_orders').select(JOB_COLS)
       return (vehicleId ? q.eq('vehicle_id', vehicleId) : q.eq('customer_id', customerId)).order('created_at', { ascending: false }).order('id')
-    }).then((r) => setRows(r.data || []))
+    }).then((r) => { if (r.error) setFailed(r.error); setRows(r.data || []) })
     if (!vehicleId) {
       supabase.from('vehicles').select('id, plate').eq('customer_id', customerId).then(({ data }) => setPlates(Object.fromEntries((data || []).map((v) => [v.id, v.plate]))))
     }
   }, [customerId, vehicleId])
+  if (failed) return <Notice kind="err">{errorText(failed, t)}</Notice>
   if (!rows) return <div className="muted">{t('common.loading')}</div>
   if (!rows.length) return <Empty icon="wrench" title={t('jobs.noJobsYet')}>{t('jobs.noJobsYetText')}</Empty>
   return (
@@ -434,11 +437,14 @@ export function VehicleInspections({ vehicleId }) {
       const ins = ids.length ? await supabase.from('ro_inspections').select('*').in('ro_id', ids).order('created_at', { ascending: false }) : { data: [] }
       const insIds = (ins.data || []).map((x) => x.id)
       const res = insIds.length ? await supabase.from('ro_inspection_results').select('*').in('inspection_id', insIds).order('id') : { data: [] }
+      const bad = [jobs, ins, res].find((r) => r.error)
+      if (bad) { if (live) setData({ error: bad.error }); return }
       if (live) setData({ jobs: Object.fromEntries((jobs.data || []).map((j) => [j.id, j])), ins: ins.data || [], res: res.data || [] })
     })()
     return () => { live = false }
   }, [vehicleId])
   if (!data) return <div className="muted">{t('common.loading')}</div>
+  if (data.error) return <Notice kind="err">{errorText(data.error, t)}</Notice>
   if (!data.ins.length) return <Empty icon="clipboard" title={t('jobs.noVehicleInsp')}>{t('jobs.noVehicleInspText')}</Empty>
   return (
     <div className="lines">

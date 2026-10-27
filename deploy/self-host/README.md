@@ -254,4 +254,4 @@ sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw allow 443/udp &&
   - a fingerprint of the table layout.
 
   A restore empties the app and login tables and loads everything with triggers off (`session_replication_role = replica`), in one transaction, so it is all or nothing. It then re-uploads the files.
-- The app is built inside Docker (`node:20-alpine`, `npm run build`), with `VITE_SUPABASE_URL` set to your address and this server's anon key. It is served by `caddy:2.10-alpine`. The same paths as supabase.co (`/auth/v1`, `/rest/v1`, `/storage/v1`, `/functions/v1`…) are forwarded to the Supabase gateway, so the app code is unchanged.
+- The app is built inside Docker (`node:22-alpine`, `npm run build`), with `VITE_SUPABASE_URL` set to your address and this server's anon key. It is served by `caddy:2.10-alpine`. The same paths as supabase.co (`/auth/v1`, `/rest/v1`, `/storage/v1`, `/functions/v1`…) are forwarded to the Supabase gateway, so the app code is unchanged.

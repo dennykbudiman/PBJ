@@ -20,11 +20,12 @@ export const PAYMENT_COLOR = { unpaid: 'amber', partial: 'blue', paid: 'green' }
 export function jobState(j, today) {
   if (j.closed_at) return 'closed'
   if (j.order_status !== 'invoice') return 'estimate'
+  if (j.payment_status == null) return 'invoiced'   // payment kept back for this person (migration 132)
   if (j.payment_status === 'paid') return 'paid'
   if (j.due_date && j.due_date < today && Number(j.balance) > 0) return 'overdue'
   return j.payment_status === 'partial' ? 'partial' : 'unpaid'
 }
-export const STATE_COLOR = { estimate: 'gray', closed: 'gray', paid: 'green', overdue: 'red', partial: 'blue', unpaid: 'amber' }
+export const STATE_COLOR = { estimate: 'gray', closed: 'gray', invoiced: 'blue', paid: 'green', overdue: 'red', partial: 'blue', unpaid: 'amber' }
 
 // A shop-local date (YYYY-MM-DD) at midday, as a timestamp, so it never slips a day across time zones.
 export function shopDateToTimestamp(dateStr, tz) {
@@ -86,10 +87,36 @@ export function autoFeesFor(item, qty, data) {
   return out
 }
 
-// Money each line brings in, as the database works it out (rounded like Postgres round()).
-export const lineAmount = (l) => Math.round(Number(l.price) * Number(l.qty))
+// Money each line brings in, as the database works it out: exact decimal maths, halves rounded away from zero like
+// Postgres round(). Floating point would give 2,3 × 12.345 = 28.393 where the database (and the invoice total) has
+// 28.394, so prices, quantities (2 decimals) and percentages (2 decimals) are worked in whole numbers.
+const hundredths = (v) => BigInt(Math.round((Number(v) || 0) * 100))
+function roundDiv(a, d) {   // a / d rounded half away from zero, as a Number
+  const neg = a < 0n
+  const x = neg ? -a : a
+  const q = (2n * x + d) / (2n * d)
+  return Number(neg ? -q : q)
+}
+export const lineAmount = (l) => roundDiv(BigInt(Math.round(Number(l.price) || 0)) * hundredths(l.qty), 100n)
 export function lineDiscount(l) {
-  if (Number(l.discount_pct) > 0) return Math.round(Number(l.price) * Number(l.qty) * Number(l.discount_pct) / 100)
+  if (Number(l.discount_pct) > 0) return roundDiv(BigInt(Math.round(Number(l.price) || 0)) * hundredths(l.qty) * hundredths(l.discount_pct), 1000000n)
   return Number(l.discount_amount) || 0
 }
 export const lineNet = (l) => lineAmount(l) - lineDiscount(l)
+
+// Texts the database writes into records in English (credit reasons, payment references, stock notes), shown in the
+// person's language. Anything else (what people typed) is shown as it is.
+export function sysText(text, t) {
+  if (!text) return text
+  let m
+  if ((m = text.match(/^(.*) \(part\)$/))) return `${sysText(m[1], t)} (${t('sys.part')})`
+  if ((m = text.match(/^(.*) \(refunded part\)$/))) return `${sysText(m[1], t)} (${t('sys.refundedPart')})`
+  if ((m = text.match(/^(.*) \(released, job total lower\)$/))) return `${sysText(m[1], t)} (${t('sys.released')})`
+  if (text === 'Credit') return t('job.credit')
+  if ((m = text.match(/^Payments on voided (.+)$/))) return t('sys.paymentsOnVoided', { no: m[1] })
+  if ((m = text.match(/^Moved to company credit \(voided (.+)\)$/))) return t('sys.movedToCredit', { no: m[1] })
+  if ((m = text.match(/^Invoice (.+) voided$/))) return t('sys.invoiceVoided', { no: m[1] })
+  if (text === 'Line removed after void') return t('sys.lineRemoved')
+  return text
+}
+

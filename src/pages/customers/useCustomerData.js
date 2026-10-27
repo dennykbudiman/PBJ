@@ -3,14 +3,18 @@ import { supabase, errorText } from '../../lib/supabase'
 import { monthStart, zonedMidnightUtc } from '../../lib/customers'
 import { useAuth } from '../../context/AuthContext'
 
-// Supabase returns at most 1000 rows per request, so read big tables page by page.
+// Supabase returns at most 1000 rows per request (its "Max rows" setting), so read big tables page by page. If that
+// setting is ever lowered, a page comes back shorter than asked; a round-numbered short page is then read on from
+// where it ended instead of being taken as the end of the list.
 export async function selectAll(build, pageSize = 1000) {
   const rows = []
-  for (let from = 0; ; from += pageSize) {
+  for (let from = 0; ;) {
     const { data, error } = await build().range(from, from + pageSize - 1)
     if (error) return { data: rows.length ? rows : null, error }
+    const n = data?.length ?? 0
     rows.push(...(data ?? []))
-    if (!data || data.length < pageSize) return { data: rows, error: null }
+    if (n === 0 || (n < pageSize && n % 100 !== 0)) return { data: rows, error: null }
+    from += n
   }
 }
 

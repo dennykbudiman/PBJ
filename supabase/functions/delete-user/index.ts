@@ -11,7 +11,7 @@
 // The caller's sign-in token is checked here (auth.getUser), so the function works with the platform's JWT check on
 // or off. Deploy with it off (--no-verify-jwt): the platform check doesn't understand Supabase's new API keys.
 
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -78,6 +78,8 @@ Deno.serve(async (req) => {
     const target = people?.find((p) => p.id === userId)
     const roleOf = (p: any) => (Array.isArray(p?.roles) ? p.roles[0]?.name : p?.roles?.name)
 
+    // a login with no profile can't be checked for its role: only an Owner may remove it
+    if (!target && roleOf(me) !== 'Owner') return json({ error: 'Only an Owner can remove a login without a profile.' }, 403)
     if (target && roleOf(target) === 'Owner') {
       if (roleOf(me) !== 'Owner') return json({ error: 'Only an Owner can remove an Owner.' }, 403)
       if (target.status === 'active') {

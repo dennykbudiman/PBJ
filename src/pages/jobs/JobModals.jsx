@@ -5,7 +5,7 @@ import { useShop } from '../../context/ShopContext'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, num, parseDecimal, readAmount, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
-import { APPROVAL_METHODS, PAY_METHODS, shopDateToTimestamp } from '../../lib/jobs'
+import { APPROVAL_METHODS, PAY_METHODS, shopDateToTimestamp, sysText } from '../../lib/jobs'
 import { discountState } from '../catalog/DiscountsTab'
 
 // Record the company's decision (approve, defer, decline) for one or more services.
@@ -28,6 +28,9 @@ export function ApprovalModal({ open, onClose, job, preselect, run, busy }) {
 
   async function save() {
     if (!picked.length) return setErr(t('job.pickServices'))
+    // completed work can't be declined or deferred (migration 132)
+    const done = job.services.filter((s) => picked.includes(s.id) && s.work_status === 'completed')
+    if (['declined', 'deferred'].includes(decision) && done.length) return setErr(t('job.completedNoDecline', { names: done.map((s) => s.name).join(', ') }))
     const c = job.contacts.find((x) => x.id === contact)
     const who = c ? c.name : name.trim() || null
     if (method !== 'internal' && !who) return setErr(t('job.whoApproved'))
@@ -90,6 +93,34 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const cash = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
   const overpaid = Math.max(0, cash - Number(ro.total))
   const blocked = pending.length > 0 || approved.length === 0 || noKmOut || kmBelow || noTech.length > 0 || overpaid > 0
+  // Warnings only (the invoice can still be made): parts that would go below zero on the shelf, the company's credit
+  // limit, and companies that aren't on account (pay at pickup).
+  const [check, setCheck] = useState({ short: [], owed: null })
+  useEffect(() => {
+    if (!open) return
+    let gone = false
+    const ids = approved.map((s) => s.id)
+    const need = {}
+    for (const l of job.items) {
+      if (ids.includes(l.service_id) && l.item_type === 'part' && l.catalog_item_id && !l.stock_deducted) need[l.catalog_item_id] = (need[l.catalog_item_id] || 0) + Number(l.qty)
+    }
+    const partIds = Object.keys(need)
+    Promise.all([
+      partIds.length ? supabase.from('catalog_items').select('id, name, qty_on_hand, track_inventory').in('id', partIds) : { data: [] },
+      job.customer?.id ? supabase.from('customer_balances').select('balance_due').eq('customer_id', job.customer.id).maybeSingle() : { data: null },
+    ]).then(([items, bal]) => {
+      if (gone) return
+      const short = (items.data || []).filter((x) => x.track_inventory && Number(x.qty_on_hand) - need[x.id] < 0)
+        .map((x) => t('job.stockShort', { name: x.name, have: num(x.qty_on_hand, 2), need: num(need[x.id], 2) }))
+      setCheck({ short, owed: bal.data ? Number(bal.data.balance_due) : null })
+    })
+    return () => { gone = true }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const limit = job.customer?.credit_limit == null ? null : Number(job.customer.credit_limit)
+  // what this invoice adds: its total less payments and credits already on it (the job's balance)
+  const afterThis = check.owed == null || ro.balance == null ? null : check.owed + Math.max(Number(ro.balance), 0)
+  const overLimit = limit != null && afterThis != null && afterThis > limit
+  const notOnAccount = job.customer && job.customer.charge_account === false
   async function go() {
     let no = null
     const ok = await run(async () => {
@@ -108,6 +139,9 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
       {kmBelow && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.kmOutBelow')}</Notice>}
       {noTech.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needTech', { names: noTech.map((s) => s.name).join(', ') })}</Notice>}
       {overpaid > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overpaidFirst', { amount: rp(overpaid) })}</Notice>}
+      {check.short.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.stockShortIntro')} {check.short.join('; ')}</Notice>}
+      {overLimit && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overCreditLimit', { owed: rp(afterThis), limit: rp(limit) })}</Notice>}
+      {notOnAccount && <Notice kind="info" style={{ marginBottom: 10 }}>{t('job.notOnAccount')}</Notice>}
       <div className="kvlist">
         <div><span>{t('job.billTo')}</span><b>{job.customer?.legal_name || job.customer?.display_name}</b></div>
         <div><span>{t('job.approvedServices')}</span><b>{approved.length}</b></div>
@@ -208,7 +242,7 @@ export function CreditModal({ open, onClose, job, canApply, canIssue, canUnapply
         <div className="checklist">
           {job.appliedCredits.map((c) => (
             <div key={c.id} className="checkrow">
-              <span>{c.reason || t('job.credit')}</span>
+              <span>{sysText(c.reason, t) || t('job.credit')}</span>
               <span className="muted small">{fmtDate(c.applied_at, lang, timezone)}</span>
               <b>{rp(c.amount)}</b>
               {canApply && (ro.order_status !== 'invoice' || canUnapplyInvoiced) && (
@@ -223,7 +257,7 @@ export function CreditModal({ open, onClose, job, canApply, canIssue, canUnapply
         <div className="checklist">
           {job.availableCredits.map((c) => (
             <div key={c.id} className="checkrow" style={{ flexWrap: 'wrap' }}>
-              <span>{c.reason || t('job.credit')}</span>
+              <span>{sysText(c.reason, t) || t('job.credit')}</span>
               <b>{rp(c.amount)}</b>
               {canApply && !closed && (
                 <>

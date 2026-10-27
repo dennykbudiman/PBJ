@@ -1,10 +1,10 @@
 [build]
   # The release check stops a build that would point Axle v2 at the old v1 database, or the live site at staging.
-  command = "node scripts/check-release.mjs && npm run build"
+  command = "node scripts/check-release.mjs && npm run build && node scripts/write-headers.mjs"
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
 
 # Previews and branch builds talk to the STAGING Supabase project ("Axle v2 staging"). These values are public by
 # design (the publishable key only works through the database's access rules) and override the Netlify UI, so a
@@ -31,8 +31,8 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
     X-Frame-Options = "SAMEORIGIN"
-    # The page may only load its own code, Google Fonts, and talk to Supabase; no plugins, no framing by other sites.
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    # The Content-Security-Policy (own code, Google Fonts, and only this build's Supabase project) is written to
+    # dist/_headers by scripts/write-headers.mjs after each build, because the project address differs per build.
     Strict-Transport-Security = "max-age=31536000"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
 

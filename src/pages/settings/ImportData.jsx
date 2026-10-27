@@ -39,16 +39,16 @@ export default function ImportData({ id }) {
   // What Axle already has, to find the companies, vehicles, suppliers and parts that rows point at.
   async function context() {
     const q = (table, cols) => selectAll(() => supabase.from(table).select(cols).order('id'))
-    const [customers, vehicles, suppliers, categories, items, templates, schedules, stock] = await Promise.all([
-      q('customers', 'id, display_name'), q('vehicles', 'id, plate, vin'), q('suppliers', 'id, name'), q('categories', 'id, name'),
+    const [customers, vehicles, suppliers, categories, items, templates, schedules, stock, contacts] = await Promise.all([
+      q('customers', 'id, display_name'), q('vehicles', 'id, plate, vin, customer_id'), q('suppliers', 'id, name'), q('categories', 'id, name'),
       q('catalog_items', 'id, item_type, name, code, track_inventory'), q('service_templates', 'id, name'), q('service_schedules', 'id, vehicle_id, name'),
-      q('stock_movements', 'catalog_item_id, reason, qty_change'),
+      q('stock_movements', 'catalog_item_id, reason, qty_change'), q('customer_contacts', 'customer_id, name, is_primary'),
     ])
-    const failed = [customers, vehicles, suppliers, categories, items, templates, schedules, stock].find((r) => r.error)
+    const failed = [customers, vehicles, suppliers, categories, items, templates, schedules, stock, contacts].find((r) => r.error)
     if (failed) throw failed.error
     return {
       customers: customers.data, vehicles: vehicles.data, suppliers: suppliers.data, categories: categories.data, items: items.data,
-      templates: templates.data, schedules: schedules.data,
+      templates: templates.data, schedules: schedules.data, contacts: contacts.data,
       stockMoves: stock.data.reduce((m, x) => { (m[x.catalog_item_id] ||= []).push(x); return m }, {}),
       settings, today: shopToday(timezone),
     }

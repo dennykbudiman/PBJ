@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext'
 import { ShopProvider } from './context/ShopContext'
 import { LangProvider } from './lib/i18n'
 import { ToastProvider } from './components/ui'
+import ErrorBoundary from './components/ErrorBoundary'
 import './styles.css'
 import { applyTheme, storedTheme } from './lib/theme'
 
@@ -19,7 +20,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ShopProvider>
           <LangProvider>
             <ToastProvider>
-              <App />
+              <ErrorBoundary>
+                <App />
+              </ErrorBoundary>
             </ToastProvider>
           </LangProvider>
         </ShopProvider>

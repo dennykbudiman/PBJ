@@ -19,6 +19,7 @@ import BoardPage from './pages/board/BoardPage'
 import CalendarPage from './pages/calendar/CalendarPage'
 import InventoryArea from './pages/inventory/InventoryArea'
 import PrintPo from './pages/print/PrintPo'
+import PrintHistory from './pages/print/PrintHistory'
 
 // Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
 function VehiclesRedirect() {
@@ -37,6 +38,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="print/po/*" element={<PrintPo />} />
+      <Route path="print/history" element={<PrintHistory />} />
       <Route path="print/*" element={<PrintJob />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />

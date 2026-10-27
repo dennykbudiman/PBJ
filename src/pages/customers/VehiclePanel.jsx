@@ -81,6 +81,7 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
         <div className="spacer" />
         <div className="row" style={{ gap: 6 }}>
           {can('edit_jobs') && vehicle.status !== 'sold' && <Button size="sm" variant="primary" icon="plus" onClick={() => navigate(`/jobs/new?vehicle=${vehicle.id}`)}>{t('create.job')}</Button>}
+          <Button size="sm" icon="print" onClick={() => navigate(`/print/history?vehicle=${vehicle.id}`)}>{t('fh.ui.history')}</Button>
           {canEdit && <Button size="sm" icon="edit" onClick={onEdit}>{t('common.edit')}</Button>}
         </div>
       </div>

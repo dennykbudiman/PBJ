@@ -1,7 +1,7 @@
 # Builds the Axle app and packs it into a small Caddy web server image.
 # Built by `axle.sh install` / `axle.sh update` (docker compose build web); the build context is the app folder.
 
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi

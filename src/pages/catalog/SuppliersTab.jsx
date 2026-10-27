@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { Badge, Input, Select, Textarea, Toggle, useToast } from '../../components/ui'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, StatusSelect, RowLink, deleteErrorText, statusMatch } from './common'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
 import History from './History'
 import { useT } from '../../lib/i18n'
 
@@ -75,6 +76,9 @@ export default function SuppliersTab({ data, id, canEdit, reload, go }) {
 
 function SupplierEditor({ supplier, data, canEdit, onClose, onSaved, onDeleted }) {
   const { t } = useT()
+  const { can } = useAuth()
+  // the bank account is only shown to people who see costs or pay supplier bills (migration 132)
+  const seeAccount = can('view_costs') || can('pay_supplier_bills')
   const toast = useToast()
   const isNew = !supplier
   const s = supplier || {}
@@ -102,14 +106,12 @@ function SupplierEditor({ supplier, data, canEdit, onClose, onSaved, onDeleted }
     if (Object.keys(e).length) return
     const row = {
       name: f.name.trim(), type: f.type, contact_name: f.contact_name.trim() || null, phone: f.phone.trim() || null,
-      email: f.email.trim() || null, address: f.address.trim() || null, account_number: f.account_number.trim() || null,
+      email: f.email.trim() || null, address: f.address.trim() || null, ...(seeAccount ? { account_number: f.account_number.trim() || null } : {}),
       payment_terms_days: terms, pinned_notes: f.pinned_notes.trim() || null, active: f.active,
     }
     setBusy(true)
     setMsg(null)
-    const res = isNew
-      ? await supabase.from('suppliers').insert(row).select().single()
-      : await supabase.from('suppliers').update(row).eq('id', supplier.id).select().single()
+    const res = await writeRow('suppliers', row, isNew ? null : supplier.id)
     if (res.error) { setBusy(false); return setMsg(errorText(res.error, t)) }
     toast(t('cat.saved', { name: res.data.name }))
     await onSaved(res.data)
@@ -142,7 +144,7 @@ function SupplierEditor({ supplier, data, canEdit, onClose, onSaved, onDeleted }
           <Input label={t('settings.phone')} value={f.phone} onChange={set('phone')} disabled={dis} inputMode="tel" />
           <Input fieldClass="span2" label={t('settings.email')} value={f.email} onChange={set('email')} disabled={dis} type="email" error={errors.email} />
           <Textarea fieldClass="span2" label={t('settings.address')} value={f.address} onChange={set('address')} disabled={dis} rows={2} />
-          <Input fieldClass="span2" label={t('cat.accountNo')} value={f.account_number} onChange={set('account_number')} disabled={dis} hint={t('cat.accountHint')} />
+          {seeAccount && <Input fieldClass="span2" label={t('cat.accountNo')} value={f.account_number} onChange={set('account_number')} disabled={dis} hint={t('cat.accountHint')} />}
         </div>
       </Section>
       <Section title={t('cat.settings')}>

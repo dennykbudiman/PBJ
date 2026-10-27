@@ -222,7 +222,16 @@ export function checkRows(type, records, ctx) {
       if (exempt === undefined) err(r, 'yesNo', { col: 'tax_exempt' })
       if (dupInFile(r, key(r.name))) continue
       if (errors.length > before) continue
-      if (ctx.customers.some((x) => key(x.display_name) === key(r.name))) { skipped++; continue }
+      const have = ctx.customers.find((x) => key(x.display_name) === key(r.name))
+      if (have) {
+        // Already loaded. Its contact is still added if it has none by that name (e.g. an earlier load stopped after
+        // saving the companies but before their contacts).
+        const missing = r.contact_name && !(ctx.contacts || []).some((c) => c.customer_id === have.id && key(c.name) === key(r.contact_name))
+        const hasPrimary = (ctx.contacts || []).some((c) => c.customer_id === have.id && c.is_primary)
+        if (missing) ready.push({ existing: have.id, contact: { name: r.contact_name, phone: r.contact_phone || null, email: r.contact_email || null, is_primary: !hasPrimary } })
+        else skipped++
+        continue
+      }
       ready.push({
         row: { display_name: r.name.trim(), legal_name: r.legal_name || null, npwp: r.npwp ? r.npwp.trim() : null, type: typ, billing_address: r.billing_address || null, phone: r.phone || null,
           email: r.email || null, payment_terms_days: terms, credit_limit: limit, charge_account: charge, tax_exempt: exempt },
@@ -247,7 +256,12 @@ export function checkRows(type, records, ctx) {
       if (dupInFile(r, normalizePlate(r.plate))) continue
       if (vin && dupInFile(r, 'vin:' + vin)) continue
       if (errors.length > before) continue
-      if (ctx.vehicles.some((x) => normalizePlate(x.plate) === normalizePlate(r.plate))) { skipped++; continue }
+      const sameplate = ctx.vehicles.find((x) => normalizePlate(x.plate) === normalizePlate(r.plate))
+      if (sameplate && sameplate.customer_id && sameplate.customer_id !== cust.id) {
+        err(r, 'plateOther', { value: plate, company: ctx.customers.find((x) => x.id === sameplate.customer_id)?.display_name || '?' })
+        continue
+      }
+      if (sameplate) { skipped++; continue }
       if (vin && ctx.vehicles.some((x) => x.vin && normalizeVin(x.vin) === vin)) { err(r, 'vinTaken'); continue }
       ready.push({ customer_id: cust.id, plate, make: r.make || null, model: r.model || null, year: yr, vin, type: vt || null, fuel_type: fuel || null,
         mileage_km: km, notes: r.notes || null, status: 'active' })
@@ -281,7 +295,9 @@ export function checkRows(type, records, ctx) {
       const codeKey = r.code ? 'code:' + key(r.code) : 'name:' + typ + ':' + key(r.name)
       if (dupInFile(r, codeKey)) continue
       if (errors.length > before) continue
-      const exists = r.code ? ctx.items.some((x) => x.code && key(x.code) === key(r.code)) : ctx.items.some((x) => x.item_type === typ && key(x.name) === key(r.name))
+      const sameCode = r.code ? ctx.items.find((x) => x.code && key(x.code) === key(r.code)) : null
+      if (sameCode && (sameCode.item_type !== typ || key(sameCode.name) !== key(r.name))) { err(r, 'codeTaken', { value: r.code, name: sameCode.name }); continue }
+      const exists = r.code ? !!sameCode : ctx.items.some((x) => x.item_type === typ && key(x.name) === key(r.name))
       if (exists) { skipped++; continue }
       ready.push({
         category: r.category ? r.category.trim() : null,
@@ -358,10 +374,11 @@ export async function loadRows(supabase, type, rows, ctx, onProgress) {
   if (type === 'stock') return inBatches(rows.map(({ _name, ...r }) => r), 50, (p) => supabase.from('stock_movements').insert(p), onProgress)
   if (type === 'companies') {
     return inBatches(rows, 50, async (p) => {
-      const ins = await supabase.from('customers').insert(p.map((x) => x.row)).select('id, display_name')
+      const fresh = p.filter((x) => !x.existing)
+      const ins = fresh.length ? await supabase.from('customers').insert(fresh.map((x) => x.row)).select('id, display_name') : { data: [] }
       if (ins.error) return ins
       const idByName = Object.fromEntries((ins.data || []).map((c) => [key(c.display_name), c.id]))
-      const contacts = p.filter((x) => x.contact).map((x) => ({ ...x.contact, customer_id: idByName[key(x.row.display_name)] }))
+      const contacts = p.filter((x) => x.contact).map((x) => ({ ...x.contact, customer_id: x.existing || idByName[key(x.row.display_name)] }))
       return contacts.length ? supabase.from('customer_contacts').insert(contacts) : {}
     }, onProgress)
   }

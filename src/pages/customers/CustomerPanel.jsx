@@ -140,6 +140,8 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
               {can('edit_jobs') && <Button variant="primary" icon="plus" onClick={() => navigate(`/jobs/new?customer=${customer.id}`)}>{t('create.job')}</Button>}
               <Button disabled title={t('cust.calendarSoon')}>{t('cust.appointment')}</Button>
               {canEdit && <Button onClick={onAddVehicle}>{t('cust.addVehicle')}</Button>}
+              <Button icon="list" onClick={() => navigate(`/print/history?company=${customer.id}&doc=list`)}>{t('fh.ui.list')}</Button>
+              <Button icon="print" onClick={() => navigate(`/print/history?company=${customer.id}&doc=fleet`)}>{t('fh.ui.fleet')}</Button>
               {can('issue_credits') && <Button onClick={() => setCreditOpen(true)}>{t('cust.creditMemo')}</Button>}
               {can('refund_payments') && Number(s.credit) > 0 && <Button onClick={() => setPayBackOpen(true)}>{t('credit.payBack')}</Button>}
             </div>

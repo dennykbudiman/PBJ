@@ -57,10 +57,15 @@ export function AuthProvider({ children }) {
     if (refresh && (error || !p || typeof staff !== 'boolean')) return // a failed background refresh keeps what we had
     let permissions = []
     if (p?.role_id && staff) {
-      const { data: perms } = await supabase.from('role_permissions').select('permission_key').eq('role_id', p.role_id)
-      permissions = (perms ?? []).map((r) => r.permission_key)
+      const { data: perms, error: permErr } = await supabase.from('role_permissions').select('permission_key').eq('role_id', p.role_id)
+      if (refresh && permErr) return // keep the permissions we had
+      permissions = (perms ?? []).map((r) => r.permission_key).sort()
     }
-    setLoaded({ userId, profile: p ?? null, permissions, staff: staff === true })
+    // Nothing changed: keep the same objects, so open forms (e.g. the profile dialog) aren't reset by a background check.
+    setLoaded((old) => {
+      const next = { userId, profile: p ?? null, permissions, staff: staff === true }
+      return JSON.stringify(old) === JSON.stringify(next) ? old : next
+    })
   }, [userId])
 
   useEffect(() => {
@@ -68,13 +73,16 @@ export function AuthProvider({ children }) {
     loadProfile()
   }, [session === undefined, loadProfile]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A role or permission change (or a new migration) reaches open tabs when the window is used again, at most once a minute.
+  // A role or permission change (or a person being disabled) reaches open tabs when the window is used again, at most
+  // once a minute, and every 5 minutes while the tab is shown (a counter PC that stays in front all day).
   useEffect(() => {
     if (!userId) return
     let last = Date.now()
-    const onFocus = () => { if (Date.now() - last > 60000) { last = Date.now(); loadProfile(true) } }
+    const refresh = () => { last = Date.now(); loadProfile(true) }
+    const onFocus = () => { if (Date.now() - last > 60000) refresh() }
+    const timer = setInterval(() => { if (document.visibilityState === 'visible' && Date.now() - last > 290000) refresh() }, 60000)
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    return () => { window.removeEventListener('focus', onFocus); clearInterval(timer) }
   }, [userId, loadProfile])
 
   const value = useMemo(() => {

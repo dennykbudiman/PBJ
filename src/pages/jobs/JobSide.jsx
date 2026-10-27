@@ -3,11 +3,12 @@ import { Badge, Button, Modal, Select, useConfirm, useToast } from '../../compon
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
+import { useAuth } from '../../context/AuthContext'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, fmtDateTime, invoiceNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { APPT_COLOR, clock, dayLabel, isActiveAppt, shopParts } from '../../lib/calendar'
-import { APPROVALS, APPROVAL_COLOR, PAYMENT_COLOR, PRIORITIES, WORKFLOW_COLOR, WORKFLOW_MANUAL, jobState, STATE_COLOR, lineNet } from '../../lib/jobs'
+import { APPROVALS, APPROVAL_COLOR, PAYMENT_COLOR, PRIORITIES, WORKFLOW_COLOR, WORKFLOW_MANUAL, jobState, STATE_COLOR, lineNet, sysText } from '../../lib/jobs'
 import { BlurInput, TotalRow } from './common'
 import { runsJobs } from './useJobData'
 
@@ -59,7 +60,7 @@ export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable,
       {invoiced && (
         <div className="small" style={{ marginTop: 8, lineHeight: 1.7 }}>
           <div><b>{invoiceNo(ro.invoice_number)}</b> · {fmtDate(ro.invoiced_at, lang, timezone)}</div>
-          <div>{t('job.dueDate')}: <b>{fmtDate(ro.due_date, lang)}</b> {state === 'overdue' && <Badge color="red">{t('job.state.overdue')}</Badge>}</div>
+          {ro.due_date && <div>{t('job.dueDate')}: <b>{fmtDate(ro.due_date, lang)}</b> {state === 'overdue' && <Badge color="red">{t('job.state.overdue')}</Badge>}</div>}
           <div className="field" style={{ marginTop: 6 }}>
             <label htmlFor="fp-no">{t('job.fakturNo')}</label>
             <BlurInput id="fp-no" value={ro.faktur_pajak_number || ''} disabled={!canFaktur || !!ro.closed_at} placeholder="010.000-26.00000001"
@@ -101,7 +102,7 @@ export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable,
 
       <div className="sectionlabel">{t('job.payment')}</div>
       <div className="row wrap" style={{ gap: 6 }}>
-        <Badge color={invoiced ? STATE_COLOR[state] : PAYMENT_COLOR[ro.payment_status]}>{invoiced ? t(`job.state.${state}`) : t(`job.ps.${ro.payment_status}`)}</Badge>
+        {(invoiced || ro.payment_status) && <Badge color={invoiced ? STATE_COLOR[state] : PAYMENT_COLOR[ro.payment_status]}>{invoiced ? t(`job.state.${state}`) : t(`job.ps.${ro.payment_status}`)}</Badge>}
         <span className="small muted">{terms === 0 ? t('job.termsCash') : t('job.termsNet', { n: terms ?? 30 })}</span>
       </div>
     </section>
@@ -191,7 +192,7 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
                 <div>
                   <b style={{ color: p.kind === 'refund' ? 'var(--red)' : undefined }}>{p.kind === 'refund' ? '-' : ''}{rp(p.amount)}</b>
                   <span className="muted small"> · {t(`job.pay.${p.method}`)} · {fmtDate(p.paid_at, lang, timezone)}</span>
-                  {(p.reference || p.receipt_number) && <div className="muted small">{[p.reference, p.receipt_number && t('job.receiptX', { no: p.receipt_number })].filter(Boolean).join(' · ')}</div>}
+                  {(p.reference || p.receipt_number) && <div className="muted small">{[sysText(p.reference, t), p.receipt_number && t('job.receiptX', { no: p.receipt_number })].filter(Boolean).join(' · ')}</div>}
                 </div>
                 {canDelete && <button type="button" className="xbtn" onClick={() => setDelPay(p)} aria-label={t('job.deletePayment')}><Icon name="trash" size={13} /></button>}
               </div>
@@ -299,7 +300,10 @@ export function AttachmentsCard({ job, canGeneral, canSlip, run }) {
   const [busy, setBusy] = React.useState(false)
   const ro = job.ro
   const list = job.attachments || []
-  const mayRemove = (a) => (a.kind === 'payment' ? canSlip : canGeneral)
+  // files on an invoiced job stay, unless the person can void invoices (migration 132)
+  const { can } = useAuth()
+  const locked = ro.order_status === 'invoice' && !can('void_invoices')
+  const mayRemove = (a) => !locked && (a.kind === 'payment' ? canSlip : canGeneral)
   if (!list.length && !canGeneral && !canSlip) return null
 
   function pick(k) { setKind(k); input.current?.click() }

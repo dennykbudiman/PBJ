@@ -110,7 +110,7 @@ function LogoPicker({ disabled }) {
 
   async function upload(file) {
     if (!file) return
-    if (!/^image\/(png|svg\+xml|jpeg|webp)$/.test(file.type)) return toast(t('settings.logoType'), 'err')
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return toast(t('settings.logoType'), 'err')
     if (file.size > 2 * 1024 * 1024) return toast(t('settings.logoSize'), 'err')
     setBusy(true)
     const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -151,7 +151,7 @@ function LogoPicker({ disabled }) {
           <div className="row">
             <Button icon="upload" loading={busy} onClick={() => fileRef.current?.click()}>{logoUrl ? t('settings.replaceLogo') : t('settings.uploadLogo')}</Button>
             {logoUrl && <Button variant="ghost" className="danger" onClick={removeLogo} disabled={busy}>{t('common.remove')}</Button>}
-            <input ref={fileRef} type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = '' }} />
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = '' }} />
           </div>
         )}
         <div className="hint">{t('settings.logoHint')}</div>

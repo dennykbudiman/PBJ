@@ -19,7 +19,7 @@
 // Note: Supabase Auth limits sign-ins per network address, and every sign-in now comes from this function, so the
 // limit applies to the whole shop. The default is plenty for a shop; it can be raised under Authentication → Rate Limits.
 
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

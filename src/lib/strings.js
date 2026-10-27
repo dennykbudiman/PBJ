@@ -7,6 +7,7 @@ import { schedulesEn, schedulesId } from './strings-schedules.js'
 import { inventoryEn, inventoryId } from './strings-inventory.js'
 import { reportsEn, reportsId } from './strings-reports.js'
 import { goliveEn, goliveId } from './strings-golive.js'
+import { historyEn, historyId } from './strings-history.js'
 
 const base = {
   en: {
@@ -16,6 +17,7 @@ const base = {
     'err.permission': 'You do not have permission to do this.',
     'err.duplicate': 'That value is already in use.',
     'err.network': 'Cannot reach the server. Check your connection and try again.',
+    'err.pageTitle': 'Something went wrong on this page', 'err.pageText': 'Nothing was lost: what was already saved stays saved. Reload the page, or go back to the dashboard. If it happens again, note what you clicked.', 'err.reload': 'Reload', 'err.home': 'Dashboard',
 
     'nav.dashboard': 'Dashboard', 'nav.board': 'Work Board', 'nav.calendar': 'Calendar', 'nav.customers': 'Customers',
     'nav.catalog': 'Catalog', 'nav.inventory': 'Inventory', 'nav.reports': 'Reports', 'nav.settings': 'Settings',
@@ -72,8 +74,8 @@ const base = {
     'settings.minMax': 'The maximum must be at least the minimum', 'settings.badEmail': 'That email address does not look right.',
     'settings.nav.shop': 'Shop profile', 'settings.nav.language': 'Language & printing', 'settings.nav.numbering': 'Invoices & numbering',
     'settings.nav.fees': 'Fees & tax', 'settings.nav.labor': 'Labor rates', 'settings.nav.users': 'Users & access',
-    'settings.uploadLogo': 'Upload logo', 'settings.replaceLogo': 'Replace logo', 'settings.logoHint': 'PNG, SVG, JPG or WebP up to 2 MB · shown in the app header and on printed documents',
-    'settings.logoType': 'Use a PNG, SVG, JPG or WebP image.', 'settings.logoSize': 'The logo must be 2 MB or smaller.', 'settings.logoSaved': 'Logo updated',
+    'settings.uploadLogo': 'Upload logo', 'settings.replaceLogo': 'Replace logo', 'settings.logoHint': 'PNG, JPG or WebP up to 2 MB · shown in the app header and on printed documents',
+    'settings.logoType': 'Use a PNG, JPG or WebP image.', 'settings.logoSize': 'The logo must be 2 MB or smaller.', 'settings.logoSaved': 'Logo updated',
     'settings.shopName': 'Shop name (app & documents)', 'settings.legalName': 'Legal name', 'settings.phone': 'Phone', 'settings.address': 'Address',
     'settings.email': 'Email', 'settings.bank': 'Bank account for invoices', 'settings.npwpHint': '15 or 16 digits',
     'settings.pkp': 'PKP status', 'settings.pkp.unknown': 'Not set', 'settings.pkp.pkp': 'PKP (charges PPN)', 'settings.pkp.non_pkp': 'Non-PKP (no PPN)',
@@ -141,6 +143,7 @@ const base = {
     'err.permission': 'Anda tidak punya izin untuk melakukan ini.',
     'err.duplicate': 'Nilai itu sudah dipakai.',
     'err.network': 'Tidak dapat terhubung ke server. Periksa koneksi lalu coba lagi.',
+    'err.pageTitle': 'Terjadi masalah di halaman ini', 'err.pageText': 'Tidak ada yang hilang: yang sudah tersimpan tetap tersimpan. Muat ulang halaman, atau kembali ke dasbor. Jika terulang, catat apa yang Anda klik.', 'err.reload': 'Muat ulang', 'err.home': 'Dasbor',
 
     'nav.dashboard': 'Dasbor', 'nav.board': 'Papan Kerja', 'nav.calendar': 'Kalender', 'nav.customers': 'Pelanggan',
     'nav.catalog': 'Katalog', 'nav.inventory': 'Inventaris', 'nav.reports': 'Laporan', 'nav.settings': 'Pengaturan',
@@ -197,8 +200,8 @@ const base = {
     'settings.minMax': 'Maksimum harus sama atau lebih besar dari minimum', 'settings.badEmail': 'Alamat email tidak valid.',
     'settings.nav.shop': 'Profil bengkel', 'settings.nav.language': 'Bahasa & cetak', 'settings.nav.numbering': 'Invoice & penomoran',
     'settings.nav.fees': 'Biaya & pajak', 'settings.nav.labor': 'Tarif jasa', 'settings.nav.users': 'Pengguna & akses',
-    'settings.uploadLogo': 'Unggah logo', 'settings.replaceLogo': 'Ganti logo', 'settings.logoHint': 'PNG, SVG, JPG atau WebP maks. 2 MB · tampil di header aplikasi dan dokumen cetak',
-    'settings.logoType': 'Gunakan gambar PNG, SVG, JPG atau WebP.', 'settings.logoSize': 'Ukuran logo maksimal 2 MB.', 'settings.logoSaved': 'Logo diperbarui',
+    'settings.uploadLogo': 'Unggah logo', 'settings.replaceLogo': 'Ganti logo', 'settings.logoHint': 'PNG, JPG atau WebP maks. 2 MB · tampil di header aplikasi dan dokumen cetak',
+    'settings.logoType': 'Gunakan gambar PNG, JPG atau WebP.', 'settings.logoSize': 'Ukuran logo maksimal 2 MB.', 'settings.logoSaved': 'Logo diperbarui',
     'settings.shopName': 'Nama bengkel (aplikasi & dokumen)', 'settings.legalName': 'Nama badan usaha', 'settings.phone': 'Telepon', 'settings.address': 'Alamat',
     'settings.email': 'Email', 'settings.bank': 'Rekening bank untuk invoice', 'settings.npwpHint': '15 atau 16 digit',
     'settings.pkp': 'Status PKP', 'settings.pkp.unknown': 'Belum diatur', 'settings.pkp.pkp': 'PKP (memungut PPN)', 'settings.pkp.non_pkp': 'Non-PKP (tanpa PPN)',
@@ -260,6 +263,6 @@ const base = {
 }
 
 export const dict = {
-  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn },
-  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId },
+  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn, ...historyEn },
+  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId, ...historyId },
 }

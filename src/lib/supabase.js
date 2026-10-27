@@ -52,6 +52,8 @@ export const READ_VIEWS = {
   service_template_items: 'service_template_items_read',
   discounts: 'discounts_read',
   customers: 'customers_read',
+  // migration 132: supplier bank account only for people who see costs or pay supplier bills
+  suppliers: 'suppliers_read',
 }
 const tableFrom = supabase.from.bind(supabase)
 supabase.from = (table) => {
@@ -102,6 +104,8 @@ export function errorText(error, t) {
 // Messages with a number or name in the middle; the captured part is passed on as {n}.
 const DB_PATTERNS = [
   [/^Only ([\d.,]+) delivered on this line can still be returned$/, 'db:returnLeft'],
+  [/^Numbers can only move forward \(current next number: (\d+)\)$/, 'db:numbersForward'],
+  [/^Unknown time zone "(.+)"\. Use a name like/, 'db:unknownTz'],
   [/^Only ([\d.,]+) in stock; you can't send back more than you have$/, 'db:returnStock'],
   [/^This part is already on PO (.+)$/, 'db:alreadyOnPo'],
   [/^Only ([\d.,]+) of this line went onto the shelf, so only that much can be taken off$/, 'db:unreceiveLine'],

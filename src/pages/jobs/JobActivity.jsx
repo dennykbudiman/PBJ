@@ -4,7 +4,7 @@ import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDateTime, invoiceNo, num, rp } from '../../lib/format'
-import { APPROVAL_COLOR } from '../../lib/jobs'
+import { APPROVAL_COLOR, sysText } from '../../lib/jobs'
 import { APPT_COLOR } from '../../lib/calendar'
 
 const MONEY = ['price', 'cost', 'discount_amount', 'core_charge', 'flat_price', 'amount', 'value_money', 'total', 'max_amount']
@@ -137,7 +137,7 @@ export default function JobActivity({ job, cat, staff, showCost }) {
           : <div>{t('job.act.deferredRestored')}: <b>{row.name}</b></div>
       case 'credit_memos':
         return add
-          ? <div>{t('job.act.creditApplied')}: <b>{rp(row.amount)}</b>{row.reason && <span className="muted"> · {row.reason}</span>}</div>
+          ? <div>{t('job.act.creditApplied')}: <b>{rp(row.amount)}</b>{row.reason && <span className="muted"> · {sysText(row.reason, t)}</span>}</div>
           : <div>{t('job.act.creditUnapplied')}: <b>{rp(row.amount)}</b></div>
       default:
         return null
@@ -206,7 +206,7 @@ export default function JobActivity({ job, cat, staff, showCost }) {
         if (!p) return null
         if (r.action === 'delete') return <div className="muted">{t('job.act.paymentDeleted')}: {rp(p.amount)}</div>
         if (r.action === 'update') return changes(r.changes)
-        return <div>{p.kind === 'refund' ? t('job.act.refund') : t('job.act.payment')}: <b>{rp(p.amount)}</b> <span className="muted">· {t(`job.pay.${p.method}`)}{p.reference ? ` · ${p.reference}` : ''}</span></div>
+        return <div>{p.kind === 'refund' ? t('job.act.refund') : t('job.act.payment')}: <b>{rp(p.amount)}</b> <span className="muted">· {t(`job.pay.${p.method}`)}{p.reference ? ` · ${sysText(p.reference, t)}` : ''}</span></div>
       }
       case 'credit_memos':
         return null

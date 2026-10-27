@@ -96,6 +96,22 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
     }))
   }, [customers, vehicles])
 
+  // Booked from a job page, the calendar's appointments aren't at hand: look up this technician's bookings then.
+  const [nearby, setNearby] = useState([])
+  const nTech = f?.technician_id
+  const nStart = f && isDate(f.startDate) && hhmmToMinutes(f.startTime) != null ? shopTimeToIso(f.startDate, hhmmToMinutes(f.startTime), timezone) : null
+  const nEnd = f && isDate(f.endDate) && hhmmToMinutes(f.endTime) != null ? shopTimeToIso(f.endDate, hhmmToMinutes(f.endTime), timezone) : null
+  useEffect(() => {
+    if (!open || others || !nTech || !nStart || !nEnd) { setNearby([]); return }
+    let gone = false
+    const tm = setTimeout(() => {
+      supabase.from('appointments').select('id, technician_id, start_time, end_time, status')
+        .eq('technician_id', nTech).lt('start_time', nEnd).gt('end_time', nStart).limit(20)
+        .then((r) => { if (!gone) setNearby(r.data || []) })
+    }, 300)
+    return () => { gone = true; clearTimeout(tm) }
+  }, [open, others, nTech, nStart, nEnd])
+
   if (!open || !f) return null
   const set = (k) => (e) => { const val = e?.target ? e.target.value : e; setF((x) => ({ ...x, [k]: val })) }
   const readOnly = !canEdit
@@ -132,7 +148,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
   const eMin = hhmmToMinutes(f.endTime)
   const startIso = isDate(f.startDate) && sMin != null ? shopTimeToIso(f.startDate, sMin, timezone) : null
   const endIso = isDate(f.endDate) && eMin != null ? shopTimeToIso(f.endDate, eMin, timezone) : null
-  const clash = (others || []).find((o) => o.id !== appointment?.id && isActiveAppt(o) && f.technician_id && o.technician_id === f.technician_id
+  const clash = (others || nearby).find((o) => o.id !== appointment?.id && isActiveAppt(o) && f.technician_id && o.technician_id === f.technician_id
     && f.status !== 'cancelled' && f.status !== 'no_show' && startIso && endIso && Date.parse(o.start_time) < Date.parse(endIso) && Date.parse(o.end_time) > Date.parse(startIso))
 
   // (Before the opening-hours setting exists, the default hours apply: Mon–Sat 08:00–17:00.)

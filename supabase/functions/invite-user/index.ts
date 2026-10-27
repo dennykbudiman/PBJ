@@ -16,7 +16,7 @@
 // The caller's sign-in token is checked here (auth.getUser), so the function works with the platform's JWT check on
 // or off. Deploy with it off (--no-verify-jwt): the platform check doesn't understand Supabase's new API keys.
 
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

@@ -1,0 +1,33 @@
+// Service history and vehicle list printouts / downloads (Oct 27, 2026).
+export const historyEn = {
+  'fh.title.history': 'SERVICE HISTORY', 'fh.title.list': 'VEHICLE LIST', 'fh.title.fleet': 'FLEET SERVICE HISTORY',
+  'fh.company': 'Company', 'fh.printedOn': 'Printed', 'fh.vehicles': 'Vehicles', 'fh.visits': 'Invoices',
+  'fh.vehicle': 'Vehicle', 'fh.nextService': 'Next service due', 'fh.or': ' or ', 'fh.jobX': 'job {no}', 'fh.billedTo': 'billed to {name}',
+  'fh.noVisits': 'No invoiced work yet.', 'fh.noVisitsVehicle': 'No invoiced work yet.', 'fh.noVehicles': 'This company has no vehicles yet.',
+  'fh.footVehicle': 'Every invoice for this vehicle, oldest first. Only approved, invoiced work is listed. Invoice totals include job fees, job discounts and tax.',
+  'fh.footCompany': 'Invoices billed to this company for its vehicles, oldest first. Only approved, invoiced work is listed. Invoice totals include job fees, job discounts and tax.',
+  'fh.col.plate': 'Plate', 'fh.col.vehicle': 'Vehicle', 'fh.col.make': 'Make', 'fh.col.model': 'Model', 'fh.col.year': 'Year', 'fh.col.vin': 'VIN',
+  'fh.col.type': 'Type', 'fh.col.fuel': 'Fuel', 'fh.col.km': 'Km', 'fh.col.status': 'Status', 'fh.col.next': 'Next service due',
+  'fh.col.date': 'Date', 'fh.col.invoice': 'Invoice', 'fh.col.job': 'Job', 'fh.col.billedTo': 'Billed to', 'fh.col.service': 'Service',
+  'fh.col.tech': 'Technician', 'fh.col.itemType': 'Line type', 'fh.col.item': 'Part / work', 'fh.col.qty': 'Qty', 'fh.col.amount': 'Amount',
+  'fh.col.invoiceTotal': 'Invoice total', 'fh.col.work': 'Work done',
+  'fh.type.part': 'part', 'fh.type.labor': 'labor', 'fh.type.sublet': 'sublet', 'fh.type.fee': 'fee', 'fh.type.discount': 'discount', 'fh.serviceDiscount': 'Service discount',
+  'fh.ui.list': 'Vehicle list', 'fh.ui.fleet': 'Vehicles + service history', 'fh.ui.prices': 'Include prices', 'fh.ui.download': 'Download (Excel CSV)',
+  'fh.ui.history': 'Service history', 'fh.ui.back': 'Back', 'fh.nothing': 'Pick a vehicle or a company first.', 'fh.noVehicle': 'Vehicle not found.',
+}
+export const historyId = {
+  'fh.title.history': 'RIWAYAT SERVIS', 'fh.title.list': 'DAFTAR KENDARAAN', 'fh.title.fleet': 'RIWAYAT SERVIS ARMADA',
+  'fh.company': 'Perusahaan', 'fh.printedOn': 'Dicetak', 'fh.vehicles': 'Kendaraan', 'fh.visits': 'Invoice',
+  'fh.vehicle': 'Kendaraan', 'fh.nextService': 'Servis berikutnya', 'fh.or': ' atau ', 'fh.jobX': 'pekerjaan {no}', 'fh.billedTo': 'ditagihkan ke {name}',
+  'fh.noVisits': 'Belum ada pekerjaan yang diinvoice.', 'fh.noVisitsVehicle': 'Belum ada pekerjaan yang diinvoice.', 'fh.noVehicles': 'Perusahaan ini belum punya kendaraan.',
+  'fh.footVehicle': 'Semua invoice untuk kendaraan ini, dari yang terlama. Hanya pekerjaan yang disetujui dan diinvoice yang dicantumkan. Total invoice sudah termasuk biaya, diskon pekerjaan, dan pajak.',
+  'fh.footCompany': 'Invoice yang ditagihkan ke perusahaan ini untuk kendaraannya, dari yang terlama. Hanya pekerjaan yang disetujui dan diinvoice yang dicantumkan. Total invoice sudah termasuk biaya, diskon pekerjaan, dan pajak.',
+  'fh.col.plate': 'Plat', 'fh.col.vehicle': 'Kendaraan', 'fh.col.make': 'Merek', 'fh.col.model': 'Model', 'fh.col.year': 'Tahun', 'fh.col.vin': 'No. rangka',
+  'fh.col.type': 'Jenis', 'fh.col.fuel': 'Bahan bakar', 'fh.col.km': 'Km', 'fh.col.status': 'Status', 'fh.col.next': 'Servis berikutnya',
+  'fh.col.date': 'Tanggal', 'fh.col.invoice': 'Invoice', 'fh.col.job': 'Pekerjaan', 'fh.col.billedTo': 'Ditagihkan ke', 'fh.col.service': 'Layanan',
+  'fh.col.tech': 'Teknisi', 'fh.col.itemType': 'Jenis baris', 'fh.col.item': 'Suku cadang / jasa', 'fh.col.qty': 'Jml', 'fh.col.amount': 'Jumlah',
+  'fh.col.invoiceTotal': 'Total invoice', 'fh.col.work': 'Pekerjaan',
+  'fh.type.part': 'suku cadang', 'fh.type.labor': 'jasa', 'fh.type.sublet': 'sublet', 'fh.type.fee': 'biaya', 'fh.type.discount': 'diskon', 'fh.serviceDiscount': 'Diskon layanan',
+  'fh.ui.list': 'Daftar kendaraan', 'fh.ui.fleet': 'Kendaraan + riwayat servis', 'fh.ui.prices': 'Tampilkan harga', 'fh.ui.download': 'Unduh (CSV Excel)',
+  'fh.ui.history': 'Riwayat servis', 'fh.ui.back': 'Kembali', 'fh.nothing': 'Pilih kendaraan atau perusahaan dulu.', 'fh.noVehicle': 'Kendaraan tidak ditemukan.',
+}
