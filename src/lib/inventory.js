@@ -26,7 +26,8 @@ export function lineAmount(cost, core, qty, taxable, rate) {
 }
 
 export const openQty = (l) => Math.max(n(l.qty_ordered) - n(l.qty_delivered) - n(l.qty_cancelled), 0)
-export const owedQty = (l) => Math.max(n(l.qty_delivered) - n(l.qty_paid), 0)
+// Still to pay the supplier: delivered, minus parts sent back (migration 131), minus what was already paid.
+export const owedQty = (l) => Math.max(n(l.qty_delivered) - n(l.qty_returned) - n(l.qty_paid), 0)
 export const lineOwed = (l, po) => lineAmount(l.cost, l.core_cost, owedQty(l), l.taxable, po?.tax_rate)
 
 // "Waiting", "Part delivered", "Delivered" or "Cancelled" for one PO line.

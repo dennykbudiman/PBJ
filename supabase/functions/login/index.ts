@@ -27,6 +27,18 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// API keys: Supabase's new keys (SUPABASE_PUBLISHABLE_KEYS / SUPABASE_SECRET_KEYS, JSON by name) when the project
+// has them, else the legacy anon / service_role keys (still used by self-hosted setups; retired on Supabase's servers
+// by the end of 2026).
+function apiKey(kind: 'public' | 'secret'): string {
+  const [list, legacy] = kind === 'public' ? ['SUPABASE_PUBLISHABLE_KEYS', 'SUPABASE_ANON_KEY'] : ['SUPABASE_SECRET_KEYS', 'SUPABASE_SERVICE_ROLE_KEY']
+  try {
+    const keys = JSON.parse(Deno.env.get(list) || '{}')
+    if (typeof keys.default === 'string' && keys.default) return keys.default
+  } catch { /* not set or not JSON: use the legacy key */ }
+  return Deno.env.get(legacy)!
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
@@ -56,8 +68,8 @@ Deno.serve(async (req) => {
     const ip = (req.headers.get(IP_HEADER) ?? '').split(',')[0].trim().slice(0, 100) || null
 
     const url = Deno.env.get('SUPABASE_URL')!
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const anonKey = apiKey('public')
+    const serviceKey = apiKey('secret')
     const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
     const { data: attempt, error: limitErr } = await admin.rpc('login_begin', { p_key: login, p_ip: ip })

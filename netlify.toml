@@ -7,21 +7,22 @@
   NODE_VERSION = "20"
 
 # Previews and branch builds talk to the STAGING Supabase project ("Axle v2 staging"). These values are public by
-# design (the anon key only works through the database's access rules) and override the Netlify UI, so a preview can
-# never reach live data.
+# design (the publishable key only works through the database's access rules) and override the Netlify UI, so a
+# preview can never reach live data. VITE_SUPABASE_ANON_KEY holds the project's publishable key (sb_publishable_…);
+# Supabase retires the old JWT "anon" keys by the end of 2026.
 #
 # Release setting: production builds take VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from the site's environment
 # variables (Netlify → Site configuration → Environment variables). Before Axle v2 goes onto the live site, set those
-# to the PRODUCTION Supabase project; scripts/check-release.mjs refuses the build while they still point at the v1
-# database or at staging.
+# to the PRODUCTION Supabase project's address and publishable key; scripts/check-release.mjs refuses the build while
+# they still point at the v1 database or at staging, or the key is a secret key or another project's key.
 
 [context.deploy-preview.environment]
   VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"
-  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2FiaHd2bnpobGNjdHh3cGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODI0MTAsImV4cCI6MjEwNjc1ODQxMH0.cXKhovsB-JYtO5ubGi3Nxnp8WMuCYXkqalzdChcnK7g"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_-_zjjaw1WoAoLOFVy6MsZQ_JYmVpITy"
 
 [context.branch-deploy.environment]
   VITE_SUPABASE_URL = "https://wuwabhwvnzhlcctxwpda.supabase.co"
-  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1d2FiaHd2bnpobGNjdHh3cGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExODI0MTAsImV4cCI6MjEwNjc1ODQxMH0.cXKhovsB-JYtO5ubGi3Nxnp8WMuCYXkqalzdChcnK7g"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_-_zjjaw1WoAoLOFVy6MsZQ_JYmVpITy"
 
 # The same safety headers as the self-hosted setup (deploy/self-host/web/Caddyfile).
 [[headers]]

@@ -19,6 +19,11 @@ export default function SalesReport() {
   const voids = useReport('report_voids', { p_from: period.from, p_to: period.to }, [period.from, period.to], period.valid)
   const [company, setCompany] = useCompany(rows)
   const voidList = (voids.rows || []).filter((v) => !company || v.customer_id === company)
+  // Voided invoices that concern this period: issued in it (so missing from these totals), or issued earlier and
+  // voided in it. A reissued invoice counts in the month it was reissued.
+  const issuedHere = voidList.filter((v) => v.invoiced_on >= period.from && v.invoiced_on <= period.to)
+  const voidedHere = voidList.filter((v) => !(v.invoiced_on >= period.from && v.invoiced_on <= period.to))
+  const sumTotal = (vs) => vs.reduce((a, v) => a + Number(v.total), 0)
   const list = useMemo(() => (rows || []).filter((r) => !company || r.customer_id === company), [rows, company])
   const tot = sumBy(list, MONEY)
   // Long periods group by month, short ones by day.
@@ -57,12 +62,16 @@ export default function SalesReport() {
       <ReportError error={error} />
       {voidList.length > 0 && (
         <Notice kind="warn" style={{ marginBottom: 12 }}>
-          {t('rep.sales.voids', { n: voidList.length, amount: rp(voidList.reduce((a, v) => a + Number(v.total), 0)) })}{' '}
+          {issuedHere.length > 0 && <div>{t('rep.sales.voidsIssued', { n: issuedHere.length, amount: rp(sumTotal(issuedHere)) })}</div>}
+          {voidedHere.length > 0 && <div>{t('rep.sales.voidsEarlier', { n: voidedHere.length, amount: rp(sumTotal(voidedHere)) })}</div>}
           <button type="button" className="linkbtn" onClick={() => setShowVoids((x) => !x)} aria-expanded={showVoids}>{showVoids ? t('rep.hide') : t('rep.show')}</button>
           {showVoids && (
             <ul className="voidlist">
               {voidList.map((v) => (
-                <li key={v.id}><Link to={`/jobs/${v.ro_id}`}>{invoiceNo(v.invoice_number)}</Link> · {v.company || '—'} · {rp(v.total)} · {t('rep.sales.voidedOn', { date: fmtDate(v.voided_on, lang), issued: fmtDate(v.invoiced_on, lang) })} · <i>{v.reason}</i></li>
+                <li key={v.id}>
+                  <Link to={`/jobs/${v.ro_id}`}>{invoiceNo(v.invoice_number)}</Link> · {v.company || '—'} · {rp(v.total)} · {t('rep.sales.voidedOn', { date: fmtDate(v.voided_on, lang), issued: fmtDate(v.invoiced_on, lang) })}
+                  {v.reissued_number ? <> · {t('rep.sales.reissued', { no: invoiceNo(v.reissued_number), date: fmtDate(v.reissued_on, lang) })}</> : null} · <i>{v.reason}</i>
+                </li>
               ))}
             </ul>
           )}

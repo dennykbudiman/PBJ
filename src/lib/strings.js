@@ -91,7 +91,7 @@ const base = {
     'settings.ssMin': 'Minimum', 'settings.ssMax': 'Maximum', 'settings.ssTaxable': 'Shop supplies fee is taxable',
     'settings.ssHint': 'New jobs copy this rate; it can be changed on each job. Open estimates still on the old default follow a change here.',
     'settings.ssExample': 'Example: on {base} of parts and labor, {rate}% gives {fee}.',
-    'settings.tax': 'Tax', 'settings.taxName': 'Tax name', 'settings.taxRate': 'Rate', 'settings.newItems': 'New catalog items',
+    'settings.tax': 'Tax', 'settings.taxName': 'Tax name', 'settings.taxRate': 'Rate', 'settings.newItems': 'New catalog items and typed-in job lines',
     'settings.notTaxable': 'Not taxable', 'settings.taxable': 'Taxable',
     'settings.nonPkpNote': 'The shop is set to Non-PKP, so no PPN is charged on any job, whatever the rate above.',
     'tz.Asia/Jakarta': 'WIB · Asia/Jakarta', 'tz.Asia/Makassar': 'WITA · Asia/Makassar', 'tz.Asia/Jayapura': 'WIT · Asia/Jayapura',
@@ -216,7 +216,7 @@ const base = {
     'settings.ssMin': 'Minimum', 'settings.ssMax': 'Maksimum', 'settings.ssTaxable': 'Biaya bahan habis pakai kena pajak',
     'settings.ssHint': 'Pekerjaan baru menyalin tarif ini; bisa diubah per pekerjaan. Estimasi terbuka yang masih memakai tarif lama ikut berubah.',
     'settings.ssExample': 'Contoh: dari {base} suku cadang dan jasa, {rate}% menjadi {fee}.',
-    'settings.tax': 'Pajak', 'settings.taxName': 'Nama pajak', 'settings.taxRate': 'Tarif', 'settings.newItems': 'Item katalog baru',
+    'settings.tax': 'Pajak', 'settings.taxName': 'Nama pajak', 'settings.taxRate': 'Tarif', 'settings.newItems': 'Item katalog baru dan baris pekerjaan yang diketik',
     'settings.notTaxable': 'Tidak kena pajak', 'settings.taxable': 'Kena pajak',
     'settings.nonPkpNote': 'Bengkel diatur sebagai Non-PKP, jadi tidak ada PPN di pekerjaan mana pun, berapa pun tarif di atas.',
 

@@ -5,7 +5,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, num, rp } from '../../lib/format'
-import { openQty, poTotals } from '../../lib/inventory'
+import { openQty, owedQty, poTotals } from '../../lib/inventory'
 import { SearchBox } from '../catalog/common'
 import { JobRef, PayBadge, PoBadge } from './bits'
 
@@ -35,7 +35,7 @@ export default function PurchaseOrdersTab({ data, reload, go, canEdit, showCost 
       return { po, lines, tot: poTotals(po, lines), sup: data.supplierById[po.supplier_id] }
     }).filter(({ po, lines, sup: s }) => {
       if (show === 'open' && !OPEN.includes(po.status)) return false
-      if (show === 'unpaid' && !(po.payment_status !== 'paid' && lines.some((l) => Number(l.qty_delivered) > Number(l.qty_paid || 0)))) return false
+      if (show === 'unpaid' && !(po.payment_status !== 'paid' && lines.some((l) => owedQty(l) > 0))) return false
       if (show !== 'all' && show !== 'open' && show !== 'unpaid' && po.status !== show) return false
       if (sup && po.supplier_id !== sup) return false
       if (part && !lines.some((l) => l.catalog_item_id === part && openQty(l) > 0)) return false

@@ -44,8 +44,9 @@ h1, h2, h3 { margin: 0; }
 .mainnav { display: flex; gap: 2px; flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
 .mainnav::-webkit-scrollbar { display: none; }
 .navlink { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 10px; border-radius: 8px; color: #fff; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
-.navlink:hover { color: #fff; background: rgba(255,255,255,.1); }
-.navlink.active { background: rgba(255,255,255,.18); font-weight: 800; }
+/* darker, not lighter, so white text keeps at least 4.5:1 on any accent; the white bar marks the current page */
+.navlink:hover { color: #fff; background: rgba(0,0,0,.12); }
+.navlink.active { background: rgba(0,0,0,.24); box-shadow: inset 0 -3px 0 rgba(255,255,255,.9); font-weight: 800; }
 .topright { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .topsearch { display: flex; align-items: center; gap: 7px; background: rgba(255,255,255,.95); border-radius: 8px; padding: 7px 12px; width: 240px; }
 .topsearch input { border: none; outline: none; background: transparent; width: 100%; font-size: 12px; }

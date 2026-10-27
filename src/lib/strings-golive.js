@@ -22,7 +22,7 @@ export const goliveEn = {
   'imp.columns': 'Columns: {cols} (* = required)',
   'imp.order': 'Load in this order: suppliers, companies, vehicles, catalog, service schedules, opening stock (later files point at earlier ones by name, plate or part code).',
   'imp.noBalances': 'Unpaid invoices from before Axle are not imported; the shop starts fresh.',
-  'imp.excelTip': 'In Excel, set the phone, NPWP and part code columns to Text before typing, otherwise Excel drops leading zeros (0812… becomes 812…). Save as "CSV UTF-8".',
+  'imp.excelTip': 'In Excel, set the phone, NPWP and part code columns to Text before typing, otherwise Excel drops leading zeros (0812… becomes 812…). Write quantities, hours and percentages with a decimal comma (4,25) and no thousands separator. Save as "CSV UTF-8".',
   'imp.tooBig': 'The file is larger than 5 MB.', 'imp.empty': 'The file is empty.', 'imp.noRows': 'The file has a header row but no records.',
   'imp.missingColumns': 'Required columns are missing: {cols}. Start from the template.',
   'imp.unknownColumns': 'These columns are not used and will be ignored: {cols}',
@@ -38,6 +38,7 @@ export const goliveEn = {
   'imp.err.vinTaken': 'Another vehicle already has this VIN', 'imp.err.trackPartsOnly': 'Only parts can be kept in stock',
   'imp.err.intervalNeeded': 'Give interval_km, interval_months or both', 'imp.err.date': '{col} must be a date like 2026-10-24 or 24/10/2026',
   'imp.err.futureDate': '{col} can\'t be in the future', 'imp.err.hasStock': '{value} already has stock entries; correct its count with Adjust stock in the catalog', 'imp.err.notTracked': '{value} isn\'t kept in stock (track_inventory is off)',
+  'imp.err.ambiguous': '{col} "{value}" can be read two ways: write it without a thousands separator, e.g. 4250, or with a decimal comma, e.g. 4,25',
   'imp.help.suppliers': 'Supplier name|internal (default) or sublet|days to pay, e.g. 30|bank account|contact person|phone|email|address|notes',
   'imp.help.companies': 'Company name as shown in Axle|legal name (PT …)|NPWP, 15 or 16 digits|fleet_internal (default), fleet_external or regular|billing address|phone|email|days to pay (empty = shop default)|credit limit in rupiah|yes (default) or no|yes or no (default)|main contact name|contact phone|contact email',
   'imp.help.vehicles': 'Company name, exactly as in Axle|plate, e.g. B 1234 XYZ|make|model|year|VIN|car, pickup, van, truck, bus, motorcycle or other|petrol, diesel, electric, hybrid or other|odometer in km|notes',
@@ -47,6 +48,9 @@ export const goliveEn = {
   // Database messages
   'db:The faktur pajak number is entered once the invoice is issued': 'The faktur pajak number is entered once the invoice is issued',
   'db:The faktur pajak number is too long': 'The faktur pajak number is too long',
+  'db:This job has payments from its company. Ask someone who records payments to change the company': 'This job has payments from its company. Ask someone who records payments (Cashier, Owner or Admin) to change the company.',
+  'db:A job on this vehicle has a deposit from the current company. Refund it before transferring the vehicle': 'A job on this vehicle has a deposit from the current company. Refund the deposit before transferring the vehicle.',
+  'db:This job is invoiced. Void the invoice to change its approvals': 'This job is invoiced. Void the invoice to change its approvals.',
 }
 
 export const goliveId = {
@@ -68,7 +72,7 @@ export const goliveId = {
   'imp.columns': 'Kolom: {cols} (* = wajib)',
   'imp.order': 'Muat dengan urutan ini: pemasok, perusahaan, kendaraan, katalog, jadwal servis, stok awal (berkas berikutnya merujuk ke yang sebelumnya lewat nama, plat, atau kode suku cadang).',
   'imp.noBalances': 'Invoice yang belum dibayar dari sebelum Axle tidak diimpor; bengkel mulai dari awal.',
-  'imp.excelTip': 'Di Excel, ubah kolom telepon, NPWP, dan kode suku cadang menjadi Text sebelum mengetik, agar angka nol di depan tidak hilang (0812… menjadi 812…). Simpan sebagai "CSV UTF-8".',
+  'imp.excelTip': 'Di Excel, ubah kolom telepon, NPWP, dan kode suku cadang menjadi Text sebelum mengetik, agar angka nol di depan tidak hilang (0812… menjadi 812…). Tulis jumlah, jam, dan persen dengan koma desimal (4,25) tanpa pemisah ribuan. Simpan sebagai "CSV UTF-8".',
   'imp.tooBig': 'Berkas lebih besar dari 5 MB.', 'imp.empty': 'Berkas kosong.', 'imp.noRows': 'Berkas punya baris judul tetapi tidak ada data.',
   'imp.missingColumns': 'Kolom wajib tidak ada: {cols}. Mulailah dari templat.',
   'imp.unknownColumns': 'Kolom ini tidak dipakai dan akan diabaikan: {cols}',
@@ -84,6 +88,7 @@ export const goliveId = {
   'imp.err.vinTaken': 'Kendaraan lain sudah memakai VIN ini', 'imp.err.trackPartsOnly': 'Hanya suku cadang yang bisa disimpan sebagai stok',
   'imp.err.intervalNeeded': 'Isi interval_km, interval_months, atau keduanya', 'imp.err.date': '{col} harus tanggal seperti 2026-10-24 atau 24/10/2026',
   'imp.err.futureDate': '{col} tidak boleh di masa depan', 'imp.err.hasStock': '{value} sudah punya catatan stok; perbaiki jumlahnya lewat Sesuaikan stok di katalog', 'imp.err.notTracked': '{value} tidak disimpan sebagai stok (track_inventory mati)',
+  'imp.err.ambiguous': '{col} "{value}" bisa dibaca dua cara: tulis tanpa pemisah ribuan, mis. 4250, atau dengan koma desimal, mis. 4,25',
   'imp.help.suppliers': 'Nama pemasok|internal (bawaan) atau sublet|hari pembayaran, mis. 30|rekening bank|nama kontak|telepon|email|alamat|catatan',
   'imp.help.companies': 'Nama perusahaan seperti di Axle|nama resmi (PT …)|NPWP, 15 atau 16 digit|fleet_internal (bawaan), fleet_external, atau regular|alamat penagihan|telepon|email|hari pembayaran (kosong = bawaan bengkel)|batas kredit dalam rupiah|yes (bawaan) atau no|yes atau no (bawaan)|nama kontak utama|telepon kontak|email kontak',
   'imp.help.vehicles': 'Nama perusahaan, persis seperti di Axle|plat, mis. B 1234 XYZ|merek|model|tahun|VIN|car, pickup, van, truck, bus, motorcycle, atau other|petrol, diesel, electric, hybrid, atau other|odometer dalam km|catatan',
@@ -92,4 +97,7 @@ export const goliveId = {
   'imp.help.stock': 'Kode (atau nama) suku cadang, seperti di Axle|jumlah di rak hari ini|catatan',
   'db:The faktur pajak number is entered once the invoice is issued': 'No. faktur pajak diisi setelah invoice diterbitkan',
   'db:The faktur pajak number is too long': 'No. faktur pajak terlalu panjang',
+  'db:This job has payments from its company. Ask someone who records payments to change the company': 'Pekerjaan ini sudah ada pembayaran dari perusahaannya. Minta orang yang mencatat pembayaran (Kasir, Pemilik, atau Admin) untuk mengganti perusahaan.',
+  'db:A job on this vehicle has a deposit from the current company. Refund it before transferring the vehicle': 'Ada pekerjaan untuk kendaraan ini dengan uang muka dari perusahaan saat ini. Kembalikan uang muka itu sebelum memindahkan kendaraan.',
+  'db:This job is invoiced. Void the invoice to change its approvals': 'Pekerjaan ini sudah diinvoice. Batalkan invoice untuk mengubah persetujuannya.',
 }

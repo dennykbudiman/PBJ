@@ -12,7 +12,8 @@ export async function signInThroughServer(login, password) {
   try {
     res = await fetch(`${url}/functions/v1/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+      // New publishable keys (sb_publishable_…) go only in `apikey`; a legacy anon key (a JWT) also as the bearer token.
+      headers: { 'Content-Type': 'application/json', apikey: anonKey, ...(anonKey.startsWith('sb_') ? {} : { Authorization: `Bearer ${anonKey}` }) },
       body: JSON.stringify({ login, password }),
     })
   } catch (e) {

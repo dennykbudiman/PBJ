@@ -1,4 +1,4 @@
--- Axle v2 · empty the STAGING database for a fresh rehearsal (migration 129 release tools)
+-- Axle v2 · empty the STAGING database for a fresh rehearsal (migration 129 release tools; guard from 131)
 --
 -- Removes every company, vehicle, job, invoice, payment, credit, appointment, schedule, catalog item, supplier, purchase
 -- order, return, core, stock entry, notification and history entry, and starts the job, invoice and PO numbers again
@@ -8,9 +8,12 @@
 -- How to run (Supabase → the STAGING project "Axle v2 staging" → SQL Editor):
 --   1. Paste this whole file.
 --   2. Change REPLACE-ME on the first line below to the staging project's reference: wuwabhwvnzhlcctxwpda
---      (it is in the address bar: supabase.com/dashboard/project/<reference>). This stops the script from ever being
---      run on the live database by accident: it only runs when the reference you type is the staging one.
+--      (it is in the address bar: supabase.com/dashboard/project/<reference>).
 --   3. Run. It says "Staging emptied" when done.
+-- It also only runs on a database marked as staging (migration 131), so pasting it into the live project's SQL Editor
+-- by mistake does nothing. Staging is marked once, after migration 131:
+--   insert into public.app_environment (name) values ('staging');
+-- The live project is marked 'production' at go-live, and a marker can't be changed afterwards.
 -- Files attached to jobs (bucket "attachments") are not removed by SQL: delete the "jobs" and "payments" folders in
 -- Storage → attachments if you want those gone too.
 
@@ -21,8 +24,12 @@ begin
   if current_setting('axle.reset_project', true) is distinct from 'wuwabhwvnzhlcctxwpda' then
     raise exception 'Not run: type the staging project reference (wuwabhwvnzhlcctxwpda) in place of REPLACE-ME on the first line.';
   end if;
-  if not exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'notification_reads') then
-    raise exception 'Not run: this database does not have migration 129 yet.';
+  if to_regclass('public.app_environment') is null then
+    raise exception 'Not run: this database does not have migration 131 yet.';
+  end if;
+  if not exists (select 1 from public.app_environment where name = 'staging') then
+    raise exception 'Not run: this database is not marked as staging (it is marked %). Only the staging project can be emptied.',
+      coalesce((select name from public.app_environment), 'as nothing');
   end if;
 
   -- TRUNCATE skips the row rules (invoiced jobs can't be deleted one by one), and CASCADE follows every link.
@@ -46,7 +53,7 @@ begin
   raise notice 'Staging emptied';
 end $$;
 
-select 'Staging emptied' as result,
+select case when exists (select 1 from public.app_environment where name = 'staging') then 'Staging emptied' else 'Not run' end as result,
        (select count(*) from public.repair_orders) as jobs_left,
        (select count(*) from public.customers) as companies_left,
        (select count(*) from public.profiles) as people_kept,

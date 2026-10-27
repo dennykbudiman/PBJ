@@ -146,8 +146,21 @@ export function readInt(v) {
   if (n === null || n === undefined) return n
   return Number.isInteger(n) ? n : undefined
 }
-// Quantities and hours.
-export const readDecimal = readNumber
+// Quantities, hours and percentages, which often have decimals. One comma is always the decimal mark here
+// ("4,250" litres = 4,25, as Indonesian Excel writes it). One dot followed by exactly three digits ("4.250") could
+// be 4250 or 4,25, so it is refused (NaN) rather than guessed; the row says to write it without separators.
+export function readDecimal(v) {
+  const s = String(v ?? '').trim().replace(/[\s ]/g, '')
+  const m = s.match(/^(-?)(\d+)([.,])(\d+)$/)
+  if (m) {
+    if (m[3] === ',') return Number(m[1] + m[2] + '.' + m[4])
+    if (m[4].length === 3 && /^0+$/.test(m[2])) return Number(m[1] + '0.' + m[4])   // "0.750": can't be thousands
+    if (m[4].length === 3 && m[2].length <= 3) return NaN
+  }
+  return readNumber(v)
+}
+// The error for a readDecimal result that isn't usable: 'ambiguous' for "4.250", otherwise the caller's own code.
+export const decimalProblem = (n, code) => (Number.isNaN(n) ? 'ambiguous' : code)
 // Dates: 2026-10-24, 24/10/2026, 24-10-2026.
 export function readDate(v) {
   const s = String(v ?? '').trim()
@@ -255,13 +268,16 @@ export function checkRows(type, records, ctx) {
       if (track === undefined) err(r, 'yesNo', { col: 'track_inventory' })
       if (track && typ !== 'part') err(r, 'trackPartsOnly')
       const reorder = readDecimal(r.reorder_point)
-      if (reorder === undefined || (reorder !== null && reorder < 0)) err(r, 'number', { col: 'reorder_point' })
+      if (reorder === undefined || Number.isNaN(reorder) || (reorder !== null && reorder < 0)) err(r, decimalProblem(reorder, 'number'), { col: 'reorder_point', value: r.reorder_point })
       const hours = readDecimal(r.labor_hours)
-      if (hours === undefined || (hours !== null && (hours < 0 || hours > 1000))) err(r, 'number', { col: 'labor_hours' })
+      if (hours === undefined || Number.isNaN(hours) || (hours !== null && (hours < 0 || hours > 1000))) err(r, decimalProblem(hours, 'number'), { col: 'labor_hours', value: r.labor_hours })
       const feeKind = key(r.fee_kind) || 'fixed'
       if (typ === 'fee' && !['fixed', 'percent'].includes(feeKind)) err(r, 'oneOf', { col: 'fee_kind', list: 'fixed, percent' })
-      const feeValue = readDecimal(r.fee_value)
-      if (feeValue === undefined || (feeValue !== null && feeValue < 0)) err(r, 'number', { col: 'fee_value' })
+      // a fixed fee is rupiah ("2.500" = 2500, as cost and price); a percent fee can have decimals ("2,5")
+      const feeValue = feeKind === 'percent' ? readDecimal(r.fee_value) : readInt(r.fee_value)
+      if (feeKind !== 'percent' && (feeValue === undefined || (feeValue !== null && feeValue < 0))) err(r, 'amount', { col: 'fee_value' })
+      else if (feeValue === undefined || Number.isNaN(feeValue) || (feeValue !== null && feeValue < 0)) err(r, decimalProblem(feeValue, 'number'), { col: 'fee_value', value: r.fee_value })
+      else if (typ === 'fee' && feeKind === 'percent' && feeValue > 100) err(r, 'range', { col: 'fee_value', min: 0, max: 100 })
       const codeKey = r.code ? 'code:' + key(r.code) : 'name:' + typ + ':' + key(r.name)
       if (dupInFile(r, codeKey)) continue
       if (errors.length > before) continue
@@ -300,6 +316,7 @@ export function checkRows(type, records, ctx) {
       if (!r.part) err(r, 'required', { col: 'part' })
       const qty = readDecimal(r.qty)
       if (qty === null) err(r, 'required', { col: 'qty' })
+      else if (Number.isNaN(qty)) err(r, 'ambiguous', { col: 'qty', value: r.qty })
       else if (qty === undefined || qty <= 0 || qty > 100000) err(r, 'range', { col: 'qty', min: 0, max: 100000 })
       if (errors.length > before) continue
       const parts = ctx.items.filter((x) => x.item_type === 'part')

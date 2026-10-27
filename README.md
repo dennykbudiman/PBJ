@@ -21,11 +21,12 @@ staging. **Do not merge this branch into `main`** until the planned cut-over (se
 8. **Service schedules** ✓ (built before stage 7): schedules per vehicle by km and/or months, Customers → Service due, due work on open estimates, bundles that start their own schedule on completion, service-due and overdue-invoice reminders in the bell, next service on the invoice
 9. **Dashboard & reports** ✓: 9a dashboard (today's work, money, needs attention, 6-month chart) and Reports → Sales, Receivables aging, Payments received; 9b Profit, Technicians, Fleet spend, Inventory, Service compliance. Every report has CSV download
 10. **Go-live update (migration 129)** ✓: money kept back by the database (cost prices only for people who see costs; job money only for people who handle money and the technicians on that job), Cashier pays supplier bills, enters the faktur pajak number and attaches transfer slips, files on jobs, sign-in through the server (`login` function), per-person notification read, Invited status on Users, one default labor rate, Settings → Import data (CSV templates), staging reset script and release check
+11. **Audit fixes (migration 131)** ✓: see `supabase/migrations/131_audit_fixes.sql`
 
 ## Run locally
 
 ```bash
-cp .env.example .env.local   # then paste the staging anon key
+cp .env.example .env.local   # then paste the staging publishable key (sb_publishable_…)
 npm install
 npm run dev
 ```
@@ -39,10 +40,10 @@ npm run dev
 - `src/components` — app layout (top bar), shared UI pieces
 - `src/pages` — screens; `pages/settings` is the Settings page
 - `src/pages/customers`, `src/pages/catalog`, `src/pages/jobs`, `src/pages/board`, `src/pages/calendar`, `src/pages/inventory`, `src/pages/reports` — Customers & vehicles, Catalog, Jobs, Work board, Calendar, Inventory, Reports
-- `supabase/migrations` — database migrations 100–130 (130: storage limits, price list and void copies hidden like other money, faktur only via `set_faktur_pajak`, race-proof sign-in limits; 129: see the file's header — money kept back by the database through `<table>_read` views, `pay_supplier_bills`, `set_faktur_pajak`, attachments of kind `payment`, `notification_reads`, `user_logins`, `login_attempts`; 128 adds the Cashier role — payments, deposits, refunds and paying company credit back, while the Service advisor works a job up to the invoice — plus fixes from the October full review: `customer_balances` respects row security again, profiles and role permissions can't be changed around the Owner, payments on closed jobs and future-dated payments are refused, an issued invoice's due date is Owner/Admin only)
-- `supabase/functions/invite-user` — invites a person; `supabase/functions/delete-user` removes a login; `supabase/functions/login` — signs people in by username or email (deploy with JWT verification off: `supabase functions deploy login --no-verify-jwt`)
+- `supabase/migrations` — database migrations 100–131 (131: fixes from the October 25 audit — a service schedule moves back when its service is un-completed or deleted, percent fees at most 100%, PPN on flat-price services with no priced lines, typed-in job lines follow the shop's taxable setting, payments can't follow a job to another company, approvals locked with the invoice, supplier bills leave out returned parts, voided invoices also listed in the month they were issued, `app_environment` marker for the staging reset; 130: storage limits, price list and void copies hidden like other money, faktur only via `set_faktur_pajak`, race-proof sign-in limits; 129: see the file's header — money kept back by the database through `<table>_read` views, `pay_supplier_bills`, `set_faktur_pajak`, attachments of kind `payment`, `notification_reads`, `user_logins`, `login_attempts`; 128 adds the Cashier role — payments, deposits, refunds and paying company credit back, while the Service advisor works a job up to the invoice — plus fixes from the October full review: `customer_balances` respects row security again, profiles and role permissions can't be changed around the Owner, payments on closed jobs and future-dated payments are refused, an issued invoice's due date is Owner/Admin only)
+- `supabase/functions/invite-user` — invites a person; `supabase/functions/delete-user` removes a login; `supabase/functions/login` — signs people in by username or email. Deploy all three with the platform JWT check off (`supabase functions deploy <name> --no-verify-jwt`): each checks the caller itself, and the platform check doesn't understand Supabase's new API keys. They use the new keys (`SUPABASE_PUBLISHABLE_KEYS` / `SUPABASE_SECRET_KEYS`) when the project has them, else the legacy anon / service_role keys
 - `scripts/check-release.mjs` — the release check Netlify runs before each build
-- `deploy/staging-reset.sql` — empties the staging database for a fresh rehearsal (keeps people, roles, shop settings and labor rates)
+- `deploy/staging-reset.sql` — empties the staging database for a fresh rehearsal (keeps people, roles, shop settings and labor rates). It only runs on a database marked as staging (`app_environment`, migration 131)
 - `deploy/self-host` — kit for running Axle on your own Linux server (self-hosted Supabase + the app + HTTPS, backups, moving data from supabase.co). Start with `deploy/self-host/README.md`. Netlify ignores this folder.
 
 ## Rules the screens rely on
@@ -58,7 +59,13 @@ npm run dev
 
 ## Going live (summary)
 
-1. New Supabase Pro project (Singapore). Turn on pg_cron, then run migrations 100–129 in order. Deploy `invite-user`, `delete-user` and `login` (`--no-verify-jwt` for `login`). Raise Authentication → Rate Limits → sign-ins (all sign-ins now come from the `login` function's address); after the first sign-ins, check `login_attempts.ip` is filled (the function reads `cf-connecting-ip`; set the function secret `AXLE_CLIENT_IP_HEADER` if Supabase uses another header). Authentication: sign-ups off, Site URL and Redirect URLs for the shop's own domain, custom SMTP with the company mail server.
-2. Netlify (live site): set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to the production project, add the domain, then merge this branch into `main`. The release check refuses the build until the variables point at the new project.
-3. First Owner: invite yourself, choose a password, set the profile to Owner (one SQL update), then invite the team.
+1. New Supabase Pro project (Singapore). Turn on pg_cron, then run every file in `supabase/migrations` in name order (100 … 107, 107b, 108 … 131), each in its own SQL Editor run. Then mark the project as production (this can't be changed later, and stops the staging reset from ever running there): `insert into public.app_environment (name) values ('production');`. Deploy `invite-user`, `delete-user` and `login`, all with `--no-verify-jwt`. Raise Authentication → Rate Limits → sign-ins (all sign-ins now come from the `login` function's address); after the first sign-ins, check `login_attempts.ip` is filled (the function reads `cf-connecting-ip`; set the function secret `AXLE_CLIENT_IP_HEADER` if Supabase uses another header). Authentication: sign-ups off, Site URL and Redirect URLs for the shop's own domain, custom SMTP with the company mail server.
+2. Netlify (live site): set `VITE_SUPABASE_URL` to the production project's address and `VITE_SUPABASE_ANON_KEY` to its **publishable** key (`sb_publishable_…`, Project Settings → API Keys; not the secret key, and not the legacy anon key, which Supabase retires by the end of 2026), add the domain, then merge this branch into `main`. The release check refuses the build until the variables point at the new project.
+3. First Owner: in Supabase → Authentication → Users, invite yourself and choose a password from the email. Then, in the SQL Editor (change the email, name and username):
+   ```sql
+   update public.profiles
+   set role_id = (select id from public.roles where name = 'Owner'), status = 'active', name = 'Your Name', username = 'yourname'
+   where id = (select id from auth.users where email = 'you@company.co.id');
+   ```
+   Sign in, then invite the team from Settings → Users.
 4. Settings → Import data: suppliers, companies, vehicles, catalog, service schedules, opening stock.

@@ -7,6 +7,9 @@
 //   * only an Owner can remove an Owner, and the last active Owner can't be removed;
 //   * a person who has done anything in Axle (jobs, payments, stock, history…) can't be
 //     removed, so records always show who did them. Disable them instead.
+//
+// The caller's sign-in token is checked here (auth.getUser), so the function works with the platform's JWT check on
+// or off. Deploy with it off (--no-verify-jwt): the platform check doesn't understand Supabase's new API keys.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -14,6 +17,18 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+// API keys: Supabase's new keys (SUPABASE_PUBLISHABLE_KEYS / SUPABASE_SECRET_KEYS, JSON by name) when the project
+// has them, else the legacy anon / service_role keys (still used by self-hosted setups; retired on Supabase's servers
+// by the end of 2026).
+function apiKey(kind: 'public' | 'secret'): string {
+  const [list, legacy] = kind === 'public' ? ['SUPABASE_PUBLISHABLE_KEYS', 'SUPABASE_ANON_KEY'] : ['SUPABASE_SECRET_KEYS', 'SUPABASE_SERVICE_ROLE_KEY']
+  try {
+    const keys = JSON.parse(Deno.env.get(list) || '{}')
+    if (typeof keys.default === 'string' && keys.default) return keys.default
+  } catch { /* not set or not JSON: use the legacy key */ }
+  return Deno.env.get(legacy)!
 }
 
 function json(body: unknown, status = 200) {
@@ -45,11 +60,11 @@ Deno.serve(async (req) => {
     if (!authHeader) return json({ error: 'Not signed in.' }, 401)
 
     const url = Deno.env.get('SUPABASE_URL')!
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const anonKey = apiKey('public')
+    const serviceKey = apiKey('secret')
 
     const caller = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } })
-    const { data: who, error: whoErr } = await caller.auth.getUser()
+    const { data: who, error: whoErr } = await caller.auth.getUser(authHeader.replace(/^Bearer\s+/i, ''))
     if (whoErr || !who?.user) return json({ error: 'Not signed in.' }, 401)
     const { data: allowed, error: permErr } = await caller.rpc('has_permission', { perm: 'manage_users' })
     if (permErr || !allowed) return json({ error: 'You do not have permission to remove people.' }, 403)
