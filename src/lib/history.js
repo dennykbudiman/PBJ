@@ -106,13 +106,13 @@ export function historyCsv(data, doc, t, lang, prices, tz) {
       v.mileage_km ?? '', t(`veh.st.${v.status}`), nextText(next, lang)])
     return { head, rows }
   }
-  const head = [...vehHead, t('fh.col.date'), t('fh.col.invoice'), t('fh.col.job'), t('fh.col.km'), t('fh.col.billedTo'), t('fh.col.service'), t('fh.col.tech'),
+  const head = [...vehHead, t('fh.col.date'), t('fh.col.km'), t('fh.col.invoice'), t('fh.col.job'), t('fh.col.billedTo'), t('fh.col.service'), t('fh.col.tech'),
     t('fh.col.itemType'), t('fh.col.item'), t('fh.col.qty'), ...(prices ? [t('fh.col.amount'), t('fh.col.invoiceTotal')] : [])]
   const rows = []
   for (const { v, jobs } of data.vehicles) {
     if (!jobs.length) { rows.push([...vehCells(v), ...Array(head.length - vehHead.length).fill('')]); continue }
     for (const { ro, billedTo, services } of jobs) {
-      const jobCells = [fmtDate(ro.invoiced_at, lang, tz), invoiceNo(ro.invoice_number), jobNo(ro.job_number), ro.odometer_out ?? ro.odometer_in ?? '', billedTo || '']
+      const jobCells = [fmtDate(ro.invoiced_at, lang, tz), ro.odometer_out ?? ro.odometer_in ?? '', invoiceNo(ro.invoice_number), jobNo(ro.job_number), billedTo || '']
       // the invoice total goes on the invoice's first row only, so adding up the column gives the right sum
       let total = prices && ro.total != null ? Number(ro.total) : ''
       const takeTotal = () => { const x = total; total = ''; return x }

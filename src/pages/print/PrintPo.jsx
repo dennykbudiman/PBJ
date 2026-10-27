@@ -67,7 +67,8 @@ export default function PrintPo() {
           <div className="doc-shop">
             {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
             <div>
-              <div className="doc-shopname">{shop.legal_name || shop.shop_name || 'Axle'}</div>
+              <div className="doc-shopname">{shop.shop_name || shop.legal_name || 'Axle'}</div>
+              {shop.legal_name && shop.legal_name !== shop.shop_name && <div>{shop.legal_name}</div>}
               {shop.address && <div className="pre">{shop.address}</div>}
               <div>{[shop.phone, shop.email].filter(Boolean).join(' · ')}</div>
               {shop.npwp && <div>NPWP {shop.npwp}</div>}

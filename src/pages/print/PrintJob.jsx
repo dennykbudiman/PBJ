@@ -73,7 +73,8 @@ export default function PrintJob() {
           <div className="doc-shop">
             {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
             <div>
-              <div className="doc-shopname">{shop.legal_name || shop.shop_name || 'Axle'}</div>
+              <div className="doc-shopname">{shop.shop_name || shop.legal_name || 'Axle'}</div>
+              {shop.legal_name && shop.legal_name !== shop.shop_name && <div>{shop.legal_name}</div>}
               {shop.address && <div className="pre">{shop.address}</div>}
               <div>{[shop.phone, shop.email].filter(Boolean).join(' · ')}</div>
               {shop.npwp && <div>NPWP {shop.npwp}</div>}
@@ -105,7 +106,8 @@ export default function PrintJob() {
         <section className="doc-parties">
           <div>
             <div className="doc-label">{doc === 'invoice' ? t('pr.billTo') : t('pr.customer')}</div>
-            <b>{bill.legal_name || bill.display_name}</b>
+            <b>{bill.display_name || bill.legal_name}</b>
+            {bill.legal_name && bill.legal_name !== bill.display_name && <div>{bill.legal_name}</div>}
             {bill.billing_address && <div className="pre">{bill.billing_address}</div>}
             {bill.npwp && <div>NPWP {bill.npwp}</div>}
             {bill.contact && <div>{t('pr.attn', { name: bill.contact })}</div>}
@@ -222,7 +224,7 @@ export default function PrintJob() {
         {terms && <section className="doc-terms pre">{terms}</section>}
 
         <section className="doc-sign">
-          <div><div className="sign-line" />{doc === 'invoice' ? t('pr.receivedBy') : t('pr.approvedBy')}<div className="small muted">{bill.legal_name || bill.display_name}</div></div>
+          <div><div className="sign-line" />{doc === 'invoice' ? t('pr.receivedBy') : t('pr.approvedBy')}<div className="small muted">{bill.display_name || bill.legal_name}</div></div>
           <div><div className="sign-line" />{t('pr.shopSign')}<div className="small muted">{advisor ? `${advisor} · ` : ''}{shop.shop_name || shop.legal_name}</div></div>
         </section>
         <footer className="doc-foot">{doc === 'estimate' ? t('pr.estimateFoot') : t('pr.invoiceFoot')}</footer>

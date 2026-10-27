@@ -4,7 +4,7 @@ import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
 import { useT, translate } from '../../lib/i18n'
 import { errorText } from '../../lib/supabase'
-import { fmtDate, invoiceNo, jobNo, km, num, rp } from '../../lib/format'
+import { fmtDate, invoiceNo, km, num, rp } from '../../lib/format'
 import { shopToday, vehicleName } from '../../lib/customers'
 import { downloadCsv } from '../../lib/reports'
 import { historyCsv, loadHistory, serviceMoney } from '../../lib/history'
@@ -49,7 +49,7 @@ export default function PrintHistory() {
   const shop = settings
   const back = vehicleId ? `/customers/vehicles/${vehicleId}` : `/customers/${companyId}`
   const title = t(`fh.title.${doc}`)
-  const who = data.customer?.legal_name || data.customer?.display_name || '—'
+  const who = data.customer?.display_name || data.customer?.legal_name || '—'
   const today = shopToday(timezone)
   const fileBase = vehicleId ? `axle-history-${(data.vehicles[0].v.plate || '').replace(/\s+/g, '')}` : `axle-${doc === 'list' ? 'vehicles' : 'fleet-history'}-${(data.customer?.display_name || 'company').replace(/[^A-Za-z0-9]+/g, '-')}`
   function csv() {
@@ -87,7 +87,8 @@ export default function PrintHistory() {
           <div className="doc-shop">
             {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
             <div>
-              <div className="doc-shopname">{shop.legal_name || shop.shop_name || 'Axle'}</div>
+              <div className="doc-shopname">{shop.shop_name || shop.legal_name || 'Axle'}</div>
+              {shop.legal_name && shop.legal_name !== shop.shop_name && <div>{shop.legal_name}</div>}
               {shop.address && <div className="pre">{shop.address}</div>}
               <div>{[shop.phone, shop.email].filter(Boolean).join(' · ')}</div>
             </div>
@@ -170,15 +171,15 @@ function VehicleHistory({ x, t, lang, tz, prices, single }) {
       ) : (
         <table className="doc-lines">
           <thead>
-            <tr><th>{t('fh.col.date')}</th><th>{t('fh.col.work')}</th><th className="num">{t('fh.col.qty')}</th>{prices && <th className="num">{t('fh.col.amount')}</th>}</tr>
+            <tr><th>{t('fh.col.date')}</th><th className="num">{t('fh.col.km')}</th><th>{t('fh.col.work')}</th><th className="num">{t('fh.col.qty')}</th>{prices && <th className="num">{t('fh.col.amount')}</th>}</tr>
           </thead>
           {jobs.map(({ ro, billedTo, services }) => (
             <tbody key={ro.id} className="doc-svc">
               <tr className="svc-row">
                 <td className="nowrap"><b>{fmtDate(ro.invoiced_at, lang, tz)}</b></td>
+                <td className="num"><b>{(ro.odometer_out ?? ro.odometer_in) != null ? km(ro.odometer_out ?? ro.odometer_in) : '—'}</b></td>
                 <td>
-                  <b>{invoiceNo(ro.invoice_number)}</b> · {t('fh.jobX', { no: jobNo(ro.job_number) })}
-                  {(ro.odometer_out ?? ro.odometer_in) != null && <> · {km(ro.odometer_out ?? ro.odometer_in)}</>}
+                  <b>{invoiceNo(ro.invoice_number)}</b>
                   {billedTo && <span className="muted"> · {t('fh.billedTo', { name: billedTo })}</span>}
                 </td>
                 <td />
@@ -189,14 +190,14 @@ function VehicleHistory({ x, t, lang, tz, prices, single }) {
                 return (
                   <React.Fragment key={s.id}>
                     <tr>
-                      <td />
+                      <td /><td />
                       <td className="ind"><b>{s.name}</b>{tech && <span className="muted"> · {tech}</span>}</td>
                       <td />
                       {prices && <td className="num">{m.head != null ? rp(m.head) : ''}</td>}
                     </tr>
                     {items.map((i) => (
                       <tr key={i.id} className="small">
-                        <td />
+                        <td /><td />
                         <td className="ind" style={{ paddingLeft: 28 }}>{i.name} <span className="muted">({t(`fh.type.${i.item_type}`)})</span></td>
                         <td className="num">{num(i.qty, 2)}</td>
                         {prices && <td className="num">{m.line(i) != null ? rp(m.line(i)) : ''}</td>}
@@ -204,7 +205,7 @@ function VehicleHistory({ x, t, lang, tz, prices, single }) {
                     ))}
                     {prices && m.discount != null && (
                       <tr className="small">
-                        <td />
+                        <td /><td />
                         <td className="ind" style={{ paddingLeft: 28 }}>{t('fh.serviceDiscount')}</td>
                         <td />
                         <td className="num">-{rp(-m.discount)}</td>
