@@ -5,21 +5,21 @@ import { applyTheme, rememberTheme } from '../lib/theme'
 
 const ShopContext = createContext(null)
 
-// Shop-wide settings (single row). Loaded once a staff member is signed in;
+// Shop-wide settings (single row). Loaded once a staff member or a customer's fleet manager is signed in;
 // everyone else just sees the defaults.
 export function ShopProvider({ children }) {
-  const { isStaff, user } = useAuth()
+  const { isStaff, isFleet, user } = useAuth()
   const [settings, setSettings] = useState(null)
 
   const refresh = useCallback(async () => {
-    if (!isStaff) {
+    if (!isStaff && !isFleet) {
       setSettings(null)
       return
     }
     const { data, error } = await supabase.from('shop_settings').select('*').maybeSingle()
     if (error) console.error('shop settings load failed', error)
     setSettings(data ?? null)
-  }, [isStaff, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isStaff, isFleet, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     refresh()

@@ -4,7 +4,7 @@ import Icon from './Icon'
 import { usePopover } from './ui'
 import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
-import { fmtDate, invoiceNo, km, rp, timeAgo } from '../lib/format'
+import { fmtDate, invoiceNo, jobNo, km, rp, timeAgo } from '../lib/format'
 
 // Read state is kept by the database for each person, also for shop-wide notifications (migration 129), so it
 // follows the person to every device. The old per-browser list is no longer used.
@@ -37,6 +37,12 @@ function textOf(n, t, lang) {
     return {
       title: t('rem.invoiceOverdue', { no: invoiceNo(d.invoice_number) }),
       body: [d.company, rp(d.balance), d.due_date ? t('rem.wasDue', { date: fmtDate(d.due_date, lang) }) : null].filter(Boolean).join(' · '),
+    }
+  }
+  if (n.type === 'fleet_decision' && d) {
+    return {
+      title: t(`rem.fleetDecision.${d.decision}`, { no: jobNo(d.job_number), by: d.by, n: d.count }),
+      body: [d.company, n.body].filter(Boolean).join(' · '),
     }
   }
   return { title: n.title, body: n.body }

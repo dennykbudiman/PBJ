@@ -12,6 +12,7 @@ import { shopToday } from '../../lib/customers'
 import { LINE_COLOR, lineState } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, discountText, parseDiscount } from './common'
 import { worksOnJobs } from './useJobData'
+import { useAuth } from '../../context/AuthContext'
 
 const nextPos = (rows) => rows.reduce((m, r) => Math.max(m, Number(r.position) || 0), -1) + 1
 
@@ -132,6 +133,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   const inspection = job.inspections.find((x) => x.service_id === s.id)
   const template = s.template_id ? cat.templates.find((x) => x.id === s.template_id) : null
   const schedule = s.service_schedule_id ? (job.schedules || []).find((x) => x.id === s.service_schedule_id) : null
+  const { isFleet } = useAuth()
   const tech = staff.find((p) => p.id === s.technician_id)
   const upd = (patch, okText) => run(() => supabase.from('ro_services').update(patch).eq('id', s.id), okText)
   const updLine = (id, patch) => run(() => supabase.from('ro_service_items').update(patch).eq('id', id))
@@ -196,7 +198,8 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
         <button type="button" className="badgebtn" disabled={!editable} onClick={() => openApproval([s.id])} title={editable ? t('job.recordApproval') : undefined}>
           <Badge color={APPROVAL_COLOR[s.approval_status]}>{t(`job.appr.${s.approval_status}`)}</Badge>
         </button>
-        <label className="techpick" title={t('job.technician')}>
+        {/* A fleet manager doesn't see the shop's staff, so there's no technician to show (migration 133). */}
+        {!isFleet && <label className="techpick" title={t('job.technician')}>
           {tech ? <Avatar name={tech.name} size={24} /> : <span className="avatar noone"><Icon name="user" size={13} /></span>}
           <select className="select bare" value={s.technician_id || ''} disabled={!workEditable} aria-label={t('job.technician')}
             onChange={(e) => upd({ technician_id: e.target.value || null })}>
@@ -204,7 +207,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
             <option value="" disabled={job.ro.order_status === 'invoice' && s.approval_status === 'approved' && !!s.technician_id}>{t('job.noTechnician')}</option>
             {staff.filter((p) => worksOnJobs(p) || p.id === s.technician_id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-        </label>
+        </label>}
         <select className="select bare work" value={s.work_status} disabled={!workEditable} aria-label={t('job.workStatus')}
           onChange={(e) => upd({ work_status: e.target.value })}>
           {WORK_STATUS.map((w) => <option key={w} value={w}>{t(`job.work.${w}`)}</option>)}

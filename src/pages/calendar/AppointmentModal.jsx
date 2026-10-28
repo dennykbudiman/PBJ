@@ -12,7 +12,7 @@ import { APPT_COLOR, APPT_STATUSES, addDays, daysBetween, hhmmToMinutes, isActiv
 import { selectAll } from '../customers/useCustomerData'
 import { bookingProblem, dayHours, hhmm24, hoursText } from '../../lib/hours'
 import { Picker } from '../jobs/common'
-import { useStaff } from '../jobs/useJobData'
+import { useStaff, worksOnJobs } from '../jobs/useJobData'
 
 const MAX_DAYS = 14
 
@@ -317,7 +317,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
         )}
 
         <Select label={t('board.technician')} value={f.technician_id} onChange={set('technician_id')} disabled={readOnly}
-          options={[{ value: '', label: t('appt.unassigned') }, ...staff.map((s) => ({ value: s.id, label: s.name }))]} />
+          options={[{ value: '', label: t('appt.unassigned') }, ...staff.filter((s) => worksOnJobs(s) || s.id === f.technician_id).map((s) => ({ value: s.id, label: s.name }))]} />
         <div className="field">
           <label htmlFor="ap-status">{t('appt.status')}</label>
           <select id="ap-status" className="select" value={f.status} onChange={set('status')} disabled={readOnly}>

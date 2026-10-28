@@ -24,7 +24,7 @@ function mustSetPassword(user) {
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined) // undefined = still loading
-  const [loaded, setLoaded] = useState({ userId: undefined, profile: null, permissions: [], staff: false })
+  const [loaded, setLoaded] = useState({ userId: undefined, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [] })
   const [recovery, setRecovery] = useState(LINK.type === 'recovery' || LINK.type === 'invite')
   const [linkError, setLinkError] = useState(LINK.error)
 
@@ -45,16 +45,24 @@ export function AuthProvider({ children }) {
 
   const loadProfile = useCallback(async (refresh = false) => {
     if (!userId) {
-      setLoaded({ userId: null, profile: null, permissions: [], staff: false })
+      setLoaded({ userId: null, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [] })
       return
     }
-    const [{ data: p, error }, { data: staff }] = await Promise.all([
+    const [{ data: p, error }, { data: staff }, { data: fleet }] = await Promise.all([
       supabase.from('profiles').select('id, name, username, phone, status, language, role_id, roles(name)').eq('id', userId).maybeSingle(),
       // The database's own answer to "may this person use the app?" (active and not a Fleet manager).
       supabase.rpc('is_staff'),
+      // A customer's fleet manager: sees only the companies linked to the login (migration 133).
+      supabase.rpc('is_fleet'),
     ])
     if (error) console.error('profile load failed', error)
     if (refresh && (error || !p || typeof staff !== 'boolean')) return // a failed background refresh keeps what we had
+    let fleetCompanies = []
+    if (fleet === true && !staff) {
+      const { data: links, error: linkErr } = await supabase.from('fleet_manager_companies').select('customer_id').eq('user_id', userId)
+      if (refresh && linkErr) return
+      fleetCompanies = (links ?? []).map((r) => r.customer_id).sort()
+    }
     let permissions = []
     if (p?.role_id && staff) {
       const { data: perms, error: permErr } = await supabase.from('role_permissions').select('permission_key').eq('role_id', p.role_id)
@@ -63,7 +71,7 @@ export function AuthProvider({ children }) {
     }
     // Nothing changed: keep the same objects, so open forms (e.g. the profile dialog) aren't reset by a background check.
     setLoaded((old) => {
-      const next = { userId, profile: p ?? null, permissions, staff: staff === true }
+      const next = { userId, profile: p ?? null, permissions, staff: staff === true, fleet: fleet === true && staff !== true, fleetCompanies }
       return JSON.stringify(old) === JSON.stringify(next) ? old : next
     })
   }, [userId])
@@ -89,6 +97,7 @@ export function AuthProvider({ children }) {
     const profile = loaded.userId === (userId ?? null) ? loaded.profile : undefined
     const isStaff = loaded.userId === userId && loaded.staff
     const permissions = isStaff ? loaded.permissions : []
+    const isFleet = loaded.userId === userId && loaded.fleet
     return {
       session,
       user: session?.user ?? null,
@@ -96,6 +105,9 @@ export function AuthProvider({ children }) {
       roleName: profile?.roles?.name ?? null,
       permissions,
       isStaff,
+      // Fleet manager: read-only view of the linked companies, plus approving waiting work (fleet_decide).
+      isFleet,
+      fleetCompanies: isFleet ? loaded.fleetCompanies : [],
       can: (key) => isStaff && permissions.includes(key),
       // Still loading until the profile we hold belongs to the person signed in.
       loading: session === undefined || (Boolean(session) && loaded.userId !== userId),

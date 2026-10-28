@@ -35,7 +35,7 @@ const TABS = ['contact', 'vehicles', 'jobs', 'deferred', 'finances']
 
 export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEdit, onReload, onClose, onAddVehicle, onOpenVehicle, onDeleted }) {
   const navigate = useNavigate()
-  const { can } = useAuth()
+  const { can, isFleet } = useAuth()
   const [creditOpen, setCreditOpen] = useState(false)
   const [payBackOpen, setPayBackOpen] = useState(false)
   const { t, lang } = useT()
@@ -100,7 +100,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
               <Field label="NPWP">{customer.npwp}</Field>
               <Field label={t('cust.terms')}>{termsLabel}{customer.payment_terms_days == null && <span className="muted small"> · {t('cust.shopDefault')}</span>}</Field>
               <Field label={t('cust.billingAddress')}><span style={{ whiteSpace: 'pre-line' }}>{customer.billing_address}</span></Field>
-              <Field label={t('cust.creditLimit')}>{customer.credit_limit == null ? null : rp(customer.credit_limit)}</Field>
+              {!isFleet && <Field label={t('cust.creditLimit')}>{customer.credit_limit == null ? null : rp(customer.credit_limit)}</Field>}
               <Field label={t('settings.phone')}>{customer.phone}</Field>
               <Field label={t('settings.email')}>{customer.email && <a href={`mailto:${customer.email}`}>{customer.email}</a>}</Field>
             </div>
@@ -138,7 +138,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
 
             <div className="row wrap" style={{ marginTop: 14 }}>
               {can('edit_jobs') && <Button variant="primary" icon="plus" onClick={() => navigate(`/jobs/new?customer=${customer.id}`)}>{t('create.job')}</Button>}
-              <Button disabled title={t('cust.calendarSoon')}>{t('cust.appointment')}</Button>
+              {can('edit_jobs') && <Button icon="calendar" onClick={() => navigate(`/calendar?new=1&customer=${customer.id}`)}>{t('cust.appointment')}</Button>}
               {canEdit && <Button onClick={onAddVehicle}>{t('cust.addVehicle')}</Button>}
               <Button icon="list" onClick={() => navigate(`/print/history?company=${customer.id}&doc=list`)}>{t('fh.ui.list')}</Button>
               <Button icon="print" onClick={() => navigate(`/print/history?company=${customer.id}&doc=fleet`)}>{t('fh.ui.fleet')}</Button>
@@ -188,13 +188,13 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
               <Field label={t('cust.overdue')}><span style={{ color: s.overdue > 0 ? 'var(--red)' : undefined }}>{rp(s.overdue)}</span></Field>
               <Field label={t('cust.openInvoices')}>{s.openInvoices ?? 0}</Field>
               <Field label={t('cust.availableCreditLabel')}>{rp(s.credit)}</Field>
-              <Field label={t('cust.creditLimit')}>{customer.credit_limit == null ? t('cust.noLimit') : rp(customer.credit_limit)}</Field>
+              {!isFleet && <Field label={t('cust.creditLimit')}>{customer.credit_limit == null ? t('cust.noLimit') : rp(customer.credit_limit)}</Field>}
               <Field label={t('cust.terms')}>{termsLabel}</Field>
             </div>
             {customer.credit_limit != null && s.balance > Number(customer.credit_limit) && (
               <Notice kind="err" style={{ marginTop: 12 }}>{t('cust.overLimit')}</Notice>
             )}
-            <div className="hint" style={{ marginTop: 12 }}>{t('cust.financesSoon')}</div>
+            <div className="hint" style={{ marginTop: 12 }}>{t('cust.financesWhere')}</div>
           </>
         )}
 

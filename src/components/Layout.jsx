@@ -125,15 +125,22 @@ function UserMenu() {
   )
 }
 
+// A Fleet manager sees its own fleet only: the dashboard and its companies (vehicles, work orders, invoices).
+const FLEET_NAV = [
+  { to: '/', key: 'nav.dashboard', icon: 'layout-dashboard', end: true },
+  { to: '/customers', key: 'nav.myFleet', icon: 'users' },
+]
+
 export default function Layout() {
   const { t } = useT()
-  const { can } = useAuth()
+  const { can, isFleet } = useAuth()
+  const nav = isFleet ? FLEET_NAV : NAV.filter((n) => !n.perm || can(n.perm))
   return (
     <div className="app">
       <header className="topnav">
         <Brand />
         <nav className="mainnav" aria-label={t('nav.main')}>
-          {NAV.filter((n) => !n.perm || can(n.perm)).map((n) => (
+          {nav.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `navlink ${isActive ? 'active' : ''}`}>
               <Icon name={n.icon} size={19} color="#fff" stroke={1.9} />
               {t(n.key)}
@@ -146,10 +153,12 @@ export default function Layout() {
             <Icon name="search" size={20} color="#fff" />
           </NavLink>
           <CreateMenu />
-          <NavLink to="/settings" className="iconbtn" aria-label={t('nav.settings')} title={t('nav.settings')}>
-            <Icon name="gear" size={20} color="#fff" />
-          </NavLink>
-          <NotificationBell />
+          {!isFleet && (
+            <NavLink to="/settings" className="iconbtn" aria-label={t('nav.settings')} title={t('nav.settings')}>
+              <Icon name="gear" size={20} color="#fff" />
+            </NavLink>
+          )}
+          {!isFleet && <NotificationBell />}
           <LangToggle />
           <UserMenu />
         </div>

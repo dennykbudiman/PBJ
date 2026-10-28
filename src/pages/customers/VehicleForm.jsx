@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Button, Input, Modal, Notice, Select, Textarea, useConfirm } from '../../components/ui'
 import { confirmKm } from '../../lib/mileage'
-import { supabase, errorText } from '../../lib/supabase'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { jobNo, km as kmText, num, readAmount } from '../../lib/format'
 import { FUEL_TYPES, VEHICLE_TYPES, formatPlate, normalizePlate, normalizeVin } from '../../lib/customers'
@@ -65,9 +65,10 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
     if (editing && km != null && km !== Number(vehicle.mileage_km ?? -1)
       && !(await confirmKm({ value: km, vehicleId: vehicle.id, confirm, t, fmt: kmText, jobNo }))) { setBusy(false); return }
     setMsg(null)
+    // read back through the view (the table keeps the vehicle notes to itself, migration 133)
     const res = editing
-      ? await supabase.from('vehicles').update(row).eq('id', vehicle.id).select().single()
-      : await supabase.from('vehicles').insert({ ...row, customer_id: f.customer_id }).select().single()
+      ? await writeRow('vehicles', row, vehicle.id)
+      : await writeRow('vehicles', { ...row, customer_id: f.customer_id })
     setBusy(false)
     if (res.error) return setMsg(errorText(res.error, t))
     onSaved(res.data)

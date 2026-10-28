@@ -23,8 +23,9 @@ export async function selectAll(build, pageSize = 1000) {
 // counting happen in the browser.
 export function useCustomerData(timezone) {
   // Company money (balances, sales) is only given to people who handle money (migration 129); others see "—".
-  const { can } = useAuth()
-  const money = can('view_reports') || can('record_payments')
+  // A fleet manager sees its own companies' money (migration 133).
+  const { can, isFleet } = useAuth()
+  const money = can('view_reports') || can('record_payments') || isFleet
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 

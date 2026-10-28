@@ -120,7 +120,7 @@ export const reportsEn = {
   'rep.svc.emptySchedulesTitle': 'No service schedules yet', 'rep.svc.emptyNoneTitle': 'Every vehicle has a schedule', 'rep.svc.emptySchedules': 'No service schedules yet. Add them on a vehicle (Customers → vehicle → Service schedule).',
   'rep.svc.emptyAttention': 'Nothing is overdue or due soon.', 'rep.svc.emptyDone': 'No scheduled services were completed in this period.',
   'rep.svc.emptyNone': 'Every vehicle in use has a service schedule.', 'rep.svc.periodNote': 'The period only applies to "Done in the period".',
-  'rep.svc.hint': 'Status is as of today, with the same "due soon" settings as the reminders (Settings → Shop). Sold and inactive vehicles are left out. On time / late is recorded when a scheduled service is completed, from this update on: late means it was done after its due date or past its due km; done exactly at the due point counts as on time.',
+  'rep.svc.hint': 'Status is as of today, with the same "due soon" settings as the reminders (Settings → Invoices & numbering). Sold and inactive vehicles are left out. On time / late is recorded when a scheduled service is completed, from this update on: late means it was done after its due date or past its due km; done exactly at the due point counts as on time.',
 }
 
 export const reportsId = {
@@ -237,5 +237,5 @@ export const reportsId = {
   'rep.svc.emptySchedulesTitle': 'Belum ada jadwal servis', 'rep.svc.emptyNoneTitle': 'Semua kendaraan punya jadwal', 'rep.svc.emptySchedules': 'Belum ada jadwal servis. Tambahkan di kendaraan (Pelanggan → kendaraan → Jadwal servis).',
   'rep.svc.emptyAttention': 'Tidak ada yang terlambat atau segera.', 'rep.svc.emptyDone': 'Tidak ada servis berkala yang selesai di periode ini.',
   'rep.svc.emptyNone': 'Semua kendaraan yang dipakai punya jadwal servis.', 'rep.svc.periodNote': 'Periode hanya berlaku untuk "Dikerjakan di periode".',
-  'rep.svc.hint': 'Status per hari ini, dengan pengaturan "segera" yang sama dengan pengingat (Pengaturan → Bengkel). Kendaraan terjual dan nonaktif tidak dihitung. Tepat waktu / terlambat dicatat saat servis berkala diselesaikan, mulai pembaruan ini: terlambat berarti dikerjakan setelah tanggal jatuh tempo atau melewati km jatuh tempo; tepat di titik jatuh tempo dihitung tepat waktu.',
+  'rep.svc.hint': 'Status per hari ini, dengan pengaturan "segera" yang sama dengan pengingat (Pengaturan → Invoice & penomoran). Kendaraan terjual dan nonaktif tidak dihitung. Tepat waktu / terlambat dicatat saat servis berkala diselesaikan, mulai pembaruan ini: terlambat berarti dikerjakan setelah tanggal jatuh tempo atau melewati km jatuh tempo; tepat di titik jatuh tempo dihitung tepat waktu.',
 }

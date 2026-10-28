@@ -12,7 +12,7 @@ import { APPROVALS, APPROVAL_COLOR, PAYMENT_COLOR, PRIORITIES, WORKFLOW_COLOR, W
 import { BlurInput, TotalRow } from './common'
 import { runsJobs } from './useJobData'
 
-export function ApprovalsCard({ job, editable, onRecord }) {
+export function ApprovalsCard({ job, editable, onRecord, fleetCanDecide, onFleetDecide }) {
   const { t, lang } = useT()
   const { timezone } = useShop()
   const counts = Object.fromEntries(APPROVALS.map((a) => [a, job.services.filter((s) => s.approval_status === a).length]))
@@ -24,6 +24,8 @@ export function ApprovalsCard({ job, editable, onRecord }) {
         {APPROVALS.map((a) => <div key={a}><span className="muted">{t(`job.appr.${a}`)}</span> <b style={{ color: counts[a] && a === 'pending' ? 'var(--amber)' : undefined }}>{counts[a]}</b></div>)}
       </div>
       {editable && <Button variant="primary" className="block" onClick={onRecord} disabled={!job.services.length}>{t('job.recordApproval')}</Button>}
+      {fleetCanDecide && counts.pending > 0 && <Button variant="primary" className="block" onClick={onFleetDecide}>{t('fleet.decideButton', { n: counts.pending })}</Button>}
+      {fleetCanDecide && counts.pending === 0 && job.services.length > 0 && <div className="hint">{t('fleet.allDecided')}</div>}
       {recent.length > 0 && (
         <div className="appr-recent">
           {recent.map((a) => {
@@ -32,6 +34,7 @@ export function ApprovalsCard({ job, editable, onRecord }) {
               <div key={a.id} className="small">
                 <Badge color={APPROVAL_COLOR[a.decision]}>{t(`job.appr.${a.decision}`)}</Badge> {svc?.name || '—'}
                 <div className="muted">{[a.approved_by_name, t(`job.via.${a.method}`), fmtDateTime(a.decided_at, lang, timezone)].filter(Boolean).join(' · ')}</div>
+                {a.note && <div className="small" style={{ fontStyle: 'italic' }}>“{a.note}”</div>}
               </div>
             )
           })}
@@ -43,6 +46,7 @@ export function ApprovalsCard({ job, editable, onRecord }) {
 
 export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable, canVoid, run, onInvoice, onVoid }) {
   const { t, lang } = useT()
+  const { isFleet } = useAuth()
   const { timezone } = useShop()
   const ro = job.ro
   const invoiced = ro.order_status === 'invoice'
@@ -88,11 +92,11 @@ export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable,
       )}
 
       <div className="grid2" style={{ marginTop: 4 }}>
-        <div>
+        {!isFleet && <div>
           <div className="sectionlabel">{t('job.advisor')}</div>
           <Select value={ro.service_advisor_id || ''} disabled={!canEdit || !!ro.closed_at} onChange={(e) => upd({ service_advisor_id: e.target.value || null })} aria-label={t('job.advisor')}
             options={[{ value: '', label: '—' }, ...staff.filter((s) => runsJobs(s) || s.id === ro.service_advisor_id).map((s) => ({ value: s.id, label: s.name }))]} />
-        </div>
+        </div>}
         <div>
           <div className="sectionlabel">{t('job.priority')}</div>
           <Select value={ro.priority} disabled={!canEdit || !!ro.closed_at} onChange={(e) => upd({ priority: e.target.value })} aria-label={t('job.priority')}

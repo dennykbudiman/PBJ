@@ -24,14 +24,14 @@ import { addBundleService } from './ServicesTab'
 import AppointmentModal from '../calendar/AppointmentModal'
 import OrderModal from '../inventory/OrderModal'
 import { PartsOrdersCard, partCandidates } from './JobParts'
-import { ApprovalModal, CreditModal, DiscountModal, FeeModal, InvoiceModal, PayBackCreditModal, PaymentModal, ReasonModal } from './JobModals'
+import { ApprovalModal, CreditModal, DiscountModal, FeeModal, FleetDecisionModal, InvoiceModal, PayBackCreditModal, PaymentModal, ReasonModal } from './JobModals'
 
 const TABS = ['services', 'concerns', 'inspections', 'activity']
 
 export default function JobPage({ id }) {
   const { t } = useT()
   const navigate = useNavigate()
-  const { can } = useAuth()
+  const { can, isFleet } = useAuth()
   const { settings } = useShop()
   const { job, error, missing, reload } = useJobData(id)
   const { data: cat, reload: reloadCat } = useCatalogData()
@@ -103,7 +103,8 @@ export default function JobPage({ id }) {
     return run(() => supabase.from('repair_orders').update({ [field]: n }).eq('id', ro.id))
   }
 
-  const tabs = <SubTabs tabs={TABS.map((x) => ({ value: x, label: t(`job.tab.${x}`) + (x === 'concerns' && job.concerns.length ? ` (${job.concerns.length})` : '') }))} active={tab} onChange={setTab} />
+  // A fleet manager sees the work, concerns and inspections; the shop's activity log stays internal.
+  const tabs = <SubTabs tabs={TABS.filter((x) => !(isFleet && x === 'activity')).map((x) => ({ value: x, label: t(`job.tab.${x}`) + (x === 'concerns' && job.concerns.length ? ` (${job.concerns.length})` : '') }))} active={tab} onChange={setTab} />
 
   return (
     <Page>
@@ -128,8 +129,8 @@ export default function JobPage({ id }) {
                 <MoreMenu label={t('job.more')} items={menu} />
               </div>
             </div>
-            {closed && <Notice kind="warn" style={{ marginTop: 12 }}>{t('job.closedNotice', { reason: ro.close_reason || '' })}</Notice>}
-            {invoiced && <Notice kind="info" style={{ marginTop: 12 }}>{t('job.invoicedNotice')}</Notice>}
+            {closed && <Notice kind="warn" style={{ marginTop: 12 }}>{t(isFleet ? 'fleet.closedNotice' : 'job.closedNotice', { reason: ro.close_reason || '' })}</Notice>}
+            {invoiced && !isFleet && <Notice kind="info" style={{ marginTop: 12 }}>{t('job.invoicedNotice')}</Notice>}
             <div className="jobhead-grid">
               <div className="jobhead-who">
                 <div className="muted small">{t('job.customer')}</div>
@@ -154,11 +155,11 @@ export default function JobPage({ id }) {
                 )}
                 {editable && <button type="button" className="linkbtn small" onClick={() => setTab('concerns')}>{job.concerns.length ? t('job.editConcerns') : t('job.addConcern')}</button>}
               </div>
-              <div className="notebox">
+              {!isFleet && <div className="notebox">
                 <div className="sectionlabel" style={{ marginTop: 0 }}>{t('job.shopNotes')}</div>
                 <BlurInput multiline rows={3} className="textarea bare" disabled={!canEdit} value={ro.shop_notes || ''} placeholder={t('job.shopNotesHint')} aria-label={t('job.shopNotes')}
                   onCommit={(val) => run(() => supabase.from('repair_orders').update({ shop_notes: val.trim() || null }).eq('id', ro.id))} />
-              </div>
+              </div>}
             </div>
           </section>
 
@@ -175,7 +176,12 @@ export default function JobPage({ id }) {
           {tab === 'inspections' && <JobInspections job={job} cat={cat} staff={staff} editable={editable} run={run} busy={busy} />}
           {tab === 'activity' && <JobActivity job={job} cat={cat} staff={staff} showCost={showCost} />}
 
-          {(editable || invoiced) && (
+          {isFleet ? ro.recommendations && (
+            <section className="card" style={{ marginTop: 16 }}>
+              <div className="sectionlabel" style={{ marginTop: 0 }}>{t('job.recommendations')}</div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{ro.recommendations}</div>
+            </section>
+          ) : (editable || invoiced) && (
             <section className="card" style={{ marginTop: 16 }}>
               <div className="sectionlabel" style={{ marginTop: 0 }}>{t('job.recommendations')}</div>
               <BlurInput multiline rows={2} disabled={!editable} value={ro.recommendations || ''} placeholder={t('job.recommendationsHint')} aria-label={t('job.recommendations')}
@@ -185,15 +191,16 @@ export default function JobPage({ id }) {
         </div>
 
         <aside className="jobside">
-          <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')} />
+          <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')}
+            fleetCanDecide={isFleet && !invoiced && !closed} onFleetDecide={() => open('fleet')} />
           <AppointmentsCard job={job} staff={staff} canBook={editable} onOpen={(a) => open('appt', { appointment: a })} onNew={() => open('appt', {})} />
-          <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')} />
+          {!isFleet && <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')} />}
           <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} canFaktur={canEdit || canPay} editable={editable} canVoid={canVoid && invoiced}
             run={run} onInvoice={() => open('invoice')} onVoid={() => open('void')} />
           <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canRefund} canFixPaid={canVoid} canCredit={canPay || canIssue || canRefund}
             run={run} onPayment={() => open('payment')} onCredit={() => open('credit')} onFee={() => open('fee')} onDiscount={() => open('discount')} />
           {showCost && <ProfitCard job={job} />}
-          <AttachmentsCard job={job} canGeneral={canEdit && !closed} canSlip={canPay && !closed} run={run} />
+          {!isFleet && <AttachmentsCard job={job} canGeneral={canEdit && !closed} canSlip={canPay && !closed} run={run} />}
         </aside>
       </div>
 
@@ -209,6 +216,7 @@ export default function JobPage({ id }) {
           else toast(made.length === 1 ? t('inv.order.madeOne', { no: made[0].po_number || '' }) : t('inv.order.madeMany', { n: made.length }))
         }} />
       <ApprovalModal open={modal?.kind === 'approval'} onClose={close} job={job} preselect={modal?.preselect} run={run} busy={busy} />
+      {isFleet && <FleetDecisionModal open={modal?.kind === 'fleet'} onClose={close} job={job} run={run} busy={busy} />}
       <InvoiceModal open={modal?.kind === 'invoice'} onClose={close} job={job} settings={settings} staff={staff} run={runStock} busy={busy} />
       <PaymentModal open={modal?.kind === 'payment'} onClose={close} job={job} canRefund={!invoiced || canRefund} run={run} busy={busy} />
       <CreditModal open={modal?.kind === 'credit'} onClose={close} job={job} canApply={canPay} canIssue={canIssue} canUnapplyInvoiced={canVoid}

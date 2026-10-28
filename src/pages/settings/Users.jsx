@@ -10,7 +10,7 @@ import { timeAgo } from '../../lib/format'
 const ROLE_ORDER = ['Owner', 'Admin', 'Service advisor', 'Cashier', 'Technician', 'Viewer', 'Fleet manager']
 const STATUS_COLOR = { active: 'green', invited: 'amber', disabled: 'gray' }
 
-const BLANK = { name: '', email: '', username: '', phone: '', role_id: '' }
+const BLANK = { name: '', email: '', username: '', phone: '', role_id: '', companies: [] }
 // Invites can't create Owners; an Owner promotes someone afterwards.
 
 export default function Users({ id }) {
@@ -26,14 +26,23 @@ export default function Users({ id }) {
   const [error, setError] = useState(null)
   const [savingId, setSavingId] = useState(null)
   const [confirm, setConfirm] = useState(null) // { person, patch | remove, text }
+  const [links, setLinks] = useState({}) // Fleet manager id → [company ids] (migration 133)
+  const [companies, setCompanies] = useState([])
+  const [linking, setLinking] = useState(null) // { person, picked }
 
   const load = useCallback(async () => {
-    const [p, r, l] = await Promise.all([
+    const [p, r, l, f, c] = await Promise.all([
       supabase.from('profiles').select('id, name, username, phone, status, role_id, roles(name)').order('name'),
       supabase.from('roles').select('id, name'),
       manage ? supabase.rpc('user_logins') : { data: [] },
+      manage ? supabase.from('fleet_manager_companies').select('user_id, customer_id') : { data: [] },
+      manage ? supabase.from('customers').select('id, display_name, active').order('display_name') : { data: [] },
     ])
     setLogins(Object.fromEntries((l.data ?? []).map((x) => [x.id, x])))
+    const byUser = {}
+    for (const x of f.data ?? []) (byUser[x.user_id] ||= []).push(x.customer_id)
+    setLinks(byUser)
+    setCompanies(c.data ?? [])
     if (p.error) toast(errorText(p.error, t), 'err')
     setPeople(p.data ?? [])
     const sorted = (r.data ?? []).slice().sort((a, b) => ROLE_ORDER.indexOf(a.name) - ROLE_ORDER.indexOf(b.name))
@@ -49,6 +58,18 @@ export default function Users({ id }) {
   const canTouch = (p) => manage && p.id !== user?.id && (p.role_id !== ownerRoleId || myRole === 'Owner')
   const ownerLocked = (p) => p.role_id === ownerRoleId && p.status === 'active' && activeOwners <= 1
   const choosable = myRole === 'Owner' ? roleOptions : roleOptions.filter((o) => o.value !== ownerRoleId)
+  const fleetRoleId = roles.find((r) => r.name === 'Fleet manager')?.id
+  const companyName = Object.fromEntries(companies.map((c) => [c.id, c.display_name]))
+
+  // Which companies a Fleet manager login sees: add the new links, remove the dropped ones.
+  async function saveLinks(personId, picked) {
+    const had = links[personId] || []
+    const add = picked.filter((x) => !had.includes(x)).map((customer_id) => ({ user_id: personId, customer_id }))
+    const drop = had.filter((x) => !picked.includes(x))
+    const r1 = add.length ? await supabase.from('fleet_manager_companies').insert(add) : { error: null }
+    const r2 = drop.length ? await supabase.from('fleet_manager_companies').delete().eq('user_id', personId).in('customer_id', drop) : { error: null }
+    return r1.error || r2.error || null
+  }
 
   function askChange(person, patch) {
     if (ownerLocked(person) && (patch.status === 'disabled' || (patch.role_id && patch.role_id !== ownerRoleId))) {
@@ -94,13 +115,19 @@ export default function Users({ id }) {
     if (!f.name || !f.email || !f.username || !f.role_id) return setError(t('users.inviteRequired'))
     if (!/^\S+@\S+\.\S+$/.test(f.email)) return setError(t('settings.badEmail'))
     if (!/^[a-z0-9._-]{3,30}$/.test(f.username)) return setError(t('users.usernameRule'))
+    const isFleetRole = f.role_id === fleetRoleId
+    if (isFleetRole && !f.companies.length) return setError(t('users.fleetPickCompany'))
     setBusy(true)
     const { data, error: err } = await supabase.functions.invoke('invite-user', {
       body: { name: f.name, email: f.email, username: f.username, phone: f.phone || null, roleId: f.role_id, redirectTo: `${window.location.origin}/set-password` },
     })
     setBusy(false)
     const message = await functionError(data, err)
-    if (message) return setError(message)
+    if (message) { setBusy(false); return setError(message) }
+    if (isFleetRole && data?.userId) {
+      const linkErr = await saveLinks(data.userId, f.companies)
+      if (linkErr) toast(errorText(linkErr, t), 'err')
+    }
     setInvite(null)
     toast(t('users.invited', { email: f.email }))
     load()
@@ -145,6 +172,12 @@ export default function Users({ id }) {
                           {(choosable.some((o) => o.value === p.role_id) ? choosable : [...roleOptions.filter((o) => o.value === p.role_id), ...choosable]).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                       ) : (roleName ? t(`role.${roleName}`) : '—')}
+                      {roleName === 'Fleet manager' && manage && (
+                        <div className="small" style={{ marginTop: 4 }}>
+                          <span className="muted">{(links[p.id] || []).map((x) => companyName[x]).filter(Boolean).join(', ') || t('users.fleetNone')}</span>
+                          {canTouch(p) && <> · <button type="button" className="linkbtn small" onClick={() => setLinking({ person: p, picked: links[p.id] || [] })}>{t('users.fleetEdit')}</button></>}
+                        </div>
+                      )}
                     </td>
                     <td style={{ minWidth: 170 }}>
                       <div className="row">
@@ -205,6 +238,27 @@ export default function Users({ id }) {
       </Modal>
 
       <Modal
+        open={!!linking}
+        onClose={() => setLinking(null)}
+        title={t('users.fleetTitle', { name: linking?.person.name || '' })}
+        footer={<>
+          <Button onClick={() => setLinking(null)}>{t('common.cancel')}</Button>
+          <Button variant="primary" loading={savingId === linking?.person.id} onClick={async () => {
+            const l = linking
+            setSavingId(l.person.id)
+            const err = await saveLinks(l.person.id, l.picked)
+            setSavingId(null)
+            if (err) return toast(errorText(err, t), 'err')
+            setLinking(null)
+            toast(t('users.updated', { name: l.person.name }))
+            load()
+          }}>{t('common.save')}</Button>
+        </>}
+      >
+        {linking && <CompanyPicker companies={companies} picked={linking.picked} onChange={(picked) => setLinking({ ...linking, picked })} />}
+      </Modal>
+
+      <Modal
         open={!!invite}
         onClose={() => setInvite(null)}
         title={t('users.invite')}
@@ -223,9 +277,32 @@ export default function Users({ id }) {
             <Select fieldClass="span2" label={t('users.role')} value={invite.role_id} onChange={(e) => setInvite({ ...invite, role_id: e.target.value })}
               options={[{ value: '', label: t('users.pickRole'), disabled: true }, ...choosable]} />
           </div>
+          {invite.role_id && invite.role_id === fleetRoleId && (
+            <CompanyPicker companies={companies} picked={invite.companies} onChange={(companies2) => setInvite({ ...invite, companies: companies2 })} />
+          )}
           <div className="hint" style={{ marginTop: 0 }}>{t('users.inviteHint')}</div>
         </>}
       </Modal>
     </Card>
+  )
+}
+
+// The companies a Fleet manager login may see (only their vehicles, work orders and invoices).
+function CompanyPicker({ companies, picked, onChange }) {
+  const { t } = useT()
+  const shown = companies.filter((c) => c.active !== false || picked.includes(c.id))
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className="sectionlabel" style={{ marginTop: 0 }}>{t('users.fleetCompanies')}</div>
+      <div className="checklist" style={{ maxHeight: 260, overflow: 'auto' }}>
+        {shown.map((c) => (
+          <label key={c.id} className="checkrow">
+            <input type="checkbox" checked={picked.includes(c.id)} onChange={(e) => onChange(e.target.checked ? [...picked, c.id] : picked.filter((x) => x !== c.id))} />
+            <span>{c.display_name}</span>
+          </label>
+        ))}
+      </div>
+      <div className="hint">{t('users.fleetHint')}</div>
+    </div>
   )
 }

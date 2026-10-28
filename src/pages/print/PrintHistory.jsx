@@ -21,11 +21,11 @@ export default function PrintHistory() {
   const companyId = params.get('company')
   const doc = vehicleId ? 'history' : params.get('doc') === 'list' ? 'list' : 'fleet'
   const { t: tUi } = useT()
-  const { can } = useAuth()
+  const { can, isFleet } = useAuth()
   const { settings, logoUrl, timezone } = useShop()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
-  const mayPrice = can('view_reports')
+  const mayPrice = can('view_reports') || isFleet
   const prices = mayPrice && params.get('prices') !== '0' && doc !== 'list'
   const lang = params.get('lang') || settings?.default_print_language || 'id'
   const t = (key, vars) => translate(lang, key, vars)

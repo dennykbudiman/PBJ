@@ -16,7 +16,7 @@ export default function ScheduleSection({ vehicle }) {
   const { t, lang } = useT()
   const navigate = useNavigate()
   const toast = useToast()
-  const { can } = useAuth()
+  const { can, isFleet } = useAuth()
   const { settings, timezone } = useShop()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
@@ -113,14 +113,14 @@ export default function ScheduleSection({ vehicle }) {
                   {canJob && s.active && vehicle.status !== 'sold' && (st.status === 'overdue' || st.status === 'due_soon') && (
                     <Button size="sm" onClick={() => setBooking(s)}>{t('board.book')}</Button>
                   )}
-                  <MoreMenu label={t('sch.menu', { name: s.name })} items={[
+                  {!isFleet && <MoreMenu label={t('sch.menu', { name: s.name })} items={[
                     canJob && s.active && vehicle.status !== 'sold' && { label: t('board.book'), icon: 'calendar', onClick: () => setBooking(s) },
                     canJob && s.active && vehicle.status !== 'sold' && { label: t('sch.startJob'), icon: 'wrench', onClick: () => navigate(`/jobs/new?vehicle=${vehicle.id}&schedule=${s.id}`) },
                     canEdit && { label: t('common.edit'), icon: 'edit', onClick: () => setForm(s) },
                     canEdit && { label: s.active ? t('sch.switchOff') : t('sch.switchOn'), icon: 'clock', onClick: () => toggle(s) },
                     { label: history?.id === s.id ? t('cat.hist.hide') : t('cat.hist.show'), icon: 'clock', onClick: () => (history?.id === s.id ? setHistory(null) : showHistory(s)) },
                     canEdit && { label: t('sch.delete'), icon: 'trash', danger: true, onClick: () => remove(s) },
-                  ]} />
+                  ]} />}
                 </div>
               </div>
             ))}

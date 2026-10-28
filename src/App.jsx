@@ -20,6 +20,7 @@ import CalendarPage from './pages/calendar/CalendarPage'
 import InventoryArea from './pages/inventory/InventoryArea'
 import PrintPo from './pages/print/PrintPo'
 import PrintHistory from './pages/print/PrintHistory'
+import FleetDashboard from './pages/FleetDashboard'
 
 // Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
 function VehiclesRedirect() {
@@ -28,11 +29,12 @@ function VehiclesRedirect() {
 }
 
 export default function App() {
-  const { session, loading, needsPasswordSetup, isStaff } = useAuth()
+  const { session, loading, needsPasswordSetup, isStaff, isFleet } = useAuth()
 
   if (loading) return <FullPageSpinner />
   if (!session) return <Login />
   if (needsPasswordSetup) return <SetPassword />
+  if (isFleet) return <FleetRoutes />
   if (!isStaff) return <AccountPending />
 
   return (
@@ -54,6 +56,27 @@ export default function App() {
         <Route path="settings" element={<Settings />} />
         <Route path="set-password" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFound />} />
+      </Route>
+    </Routes>
+  )
+}
+
+// A customer's fleet manager: their companies, vehicles, work orders and invoices, read-only, plus approving waiting
+// work on the job page. Everything else of the shop (board, calendar, catalog, stock, reports, settings) isn't there.
+function FleetRoutes() {
+  return (
+    <Routes>
+      <Route path="print/history" element={<PrintHistory />} />
+      <Route path="print/po/*" element={<Navigate to="/" replace />} />
+      <Route path="print/*" element={<PrintJob />} />
+      <Route element={<Layout />}>
+        <Route index element={<FleetDashboard />} />
+        <Route path="customers/*" element={<CustomersArea />} />
+        <Route path="vehicles/*" element={<VehiclesRedirect />} />
+        <Route path="jobs/*" element={<JobsArea />} />
+        <Route path="search" element={<SearchPage />} />
+        <Route path="set-password" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   )

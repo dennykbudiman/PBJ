@@ -104,7 +104,8 @@ export default function CalendarPage() {
   // "+ New appointment" from the top bar arrives as ?new=1.
   useEffect(() => {
     if (params.get('new') !== '1') return
-    if (canEdit) setModal({ defaults: {} })
+    // from a company's page: ?customer=<id> pre-fills the company
+    if (canEdit) setModal({ defaults: params.get('customer') ? { customer_id: params.get('customer') } : {} })
     go(view, date)
   }, [location.search]) // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -54,6 +54,8 @@ export const READ_VIEWS = {
   customers: 'customers_read',
   // migration 132: supplier bank account only for people who see costs or pay supplier bills
   suppliers: 'suppliers_read',
+  // migration 133: the shop's own vehicle notes stay internal (Fleet managers read their vehicles without them)
+  vehicles: 'vehicles_read',
 }
 const tableFrom = supabase.from.bind(supabase)
 supabase.from = (table) => {

@@ -5,6 +5,8 @@ import { useT } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
 import { WORK_STATUS } from '../../lib/jobs'
 import { BlurInput, MoreMenu } from './common'
+import { worksOnJobs } from './useJobData'
+import { useAuth } from '../../context/AuthContext'
 
 const COLORS = ['green', 'yellow', 'red']
 const BADGE = { green: 'green', yellow: 'amber', red: 'red' }
@@ -60,6 +62,7 @@ export default function JobInspections({ job, cat, staff, editable, run, busy })
 }
 
 function InspectionCard({ ins, job, cat, staff, editable, canConcern, run }) {
+  const { isFleet } = useAuth()
   const { t } = useT()
   const results = job.results.filter((r) => r.inspection_id === ins.id)
   const cl = cat.checklists.find((c) => c.id === ins.checklist_id)
@@ -87,10 +90,10 @@ function InspectionCard({ ins, job, cat, staff, editable, canConcern, run }) {
         {svc && <span className="muted small">· {svc.name}</span>}
         <div className="spacer" />
         {COLORS.map((c) => counts[c] > 0 && <Badge key={c} color={BADGE[c]}>{counts[c]} {t(`cat.flag.${c}`)}</Badge>)}
-        <select className="select bare" value={ins.technician_id || ''} disabled={!editable} onChange={(e) => updIns({ technician_id: e.target.value || null })} aria-label={t('job.technician')}>
+        {!isFleet && <select className="select bare" value={ins.technician_id || ''} disabled={!editable} onChange={(e) => updIns({ technician_id: e.target.value || null })} aria-label={t('job.technician')}>
           <option value="">{t('job.noTechnician')}</option>
-          {staff.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+          {staff.filter((p) => worksOnJobs(p) || p.id === ins.technician_id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>}
         <select className="select bare work" value={ins.status} disabled={!editable} onChange={(e) => updIns({ status: e.target.value })} aria-label={t('job.inspStatus')}>
           {WORK_STATUS.map((w) => <option key={w} value={w}>{t(`job.work.${w}`)}</option>)}
         </select>

@@ -73,6 +73,60 @@ export function ApprovalModal({ open, onClose, job, preselect, run, busy }) {
   )
 }
 
+// A customer's fleet manager decides on work that is still waiting (migration 133: fleet_decide). Once saved the
+// decision is final for them; the shop can change it (Catat persetujuan), e.g. put it back to waiting.
+export function FleetDecisionModal({ open, onClose, job, run, busy }) {
+  const { t } = useT()
+  const waiting = job.services.filter((s) => s.approval_status === 'pending')
+  const [picked, setPicked] = useState([])
+  const [decision, setDecision] = useState('approved')
+  const [note, setNote] = useState('')
+  const [err, setErr] = useState(null)
+  useEffect(() => {
+    if (!open) return
+    setPicked(waiting.map((s) => s.id)); setDecision('approved'); setNote(''); setErr(null)
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save() {
+    if (!picked.length) return setErr(t('job.pickServices'))
+    const done = waiting.filter((s) => picked.includes(s.id) && s.work_status === 'completed')
+    if (decision !== 'approved' && done.length) return setErr(t('job.completedNoDecline', { names: done.map((s) => s.name).join(', ') }))
+    const ok = await run(() => supabase.rpc('fleet_decide', { p_services: picked, p_decision: decision, p_note: note.trim() || null }),
+      t('fleet.decided', { n: picked.length }))
+    if (ok) onClose()
+  }
+  const sum = waiting.filter((s) => picked.includes(s.id)).reduce((a, s) => a + Number(s.service_net || 0), 0)
+  return (
+    <Modal open={open} title={t('fleet.decideTitle')} onClose={onClose} wide
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" onClick={save} loading={busy}>{t(`fleet.save.${decision}`)}</Button></>}>
+      {err && <Notice kind="err" style={{ marginBottom: 10 }}>{err}</Notice>}
+      <div className="sectionlabel" style={{ marginTop: 0 }}>{t('fleet.waitingWork')}</div>
+      <div className="checklist">
+        {waiting.map((s) => (
+          <label key={s.id} className="checkrow">
+            <input type="checkbox" checked={picked.includes(s.id)} onChange={(e) => setPicked((xs) => (e.target.checked ? [...xs, s.id] : xs.filter((x) => x !== s.id)))} />
+            <span>{s.name}</span>
+            <span className="muted small">{rp(s.service_net)}</span>
+          </label>
+        ))}
+      </div>
+      <div className="hint">{t('fleet.pickedSum', { n: picked.length, amount: rp(sum) })}</div>
+      <div className="sectionlabel">{t('job.decision')}</div>
+      <div className="seg" role="radiogroup" aria-label={t('job.decision')}>
+        {['approved', 'deferred', 'declined'].map((d) => (
+          <button key={d} type="button" role="radio" aria-checked={decision === d} className={`seg-btn ${decision === d ? 'on' : ''} d-${d}`} onClick={() => setDecision(d)}>
+            {t(`fleet.decide.${d}`)}
+          </button>
+        ))}
+      </div>
+      <div className="hint">{t(`fleet.decideHint.${decision}`)}</div>
+      <Textarea fieldClass="span2" label={t('fleet.note')} value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500}
+        placeholder={t(decision === 'approved' ? 'fleet.notePhApprove' : 'fleet.notePhOther')} />
+      <Notice kind="warn" style={{ marginTop: 12 }}>{t('fleet.final')}</Notice>
+    </Modal>
+  )
+}
+
 // Turn the estimate into an invoice. The database refuses if any service is still undecided.
 export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, onDone }) {
   const { t, lang } = useT()
