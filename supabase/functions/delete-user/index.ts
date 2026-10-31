@@ -94,14 +94,14 @@ Deno.serve(async (req) => {
       const { count, error } = await admin.from(table).select('*', { count: 'exact', head: true }).eq(column, userId)
       if (error) return json({ error: `Could not check ${table}: ${error.message}` }, 500)
       if ((count ?? 0) > 0) {
-        return json({ error: 'This person has work recorded in Axle, so they can\'t be removed. Disable them instead; their name stays on past records.', code: 'has_history' }, 409)
+        return json({ error: 'This person has work recorded in the system, so they can\'t be removed. Disable them instead; their name stays on past records.', code: 'has_history' }, 409)
       }
     }
 
     const { error: delErr } = await admin.auth.admin.deleteUser(userId)
     if (delErr) {
       return json({ error: /foreign key|violates|Database error/i.test(delErr.message)
-        ? 'This person has work recorded in Axle, so they can\'t be removed. Disable them instead.'
+        ? 'This person has work recorded in the system, so they can\'t be removed. Disable them instead.'
         : delErr.message, code: 'delete_failed' }, 409)
     }
     return json({ ok: true })

@@ -21,7 +21,6 @@ export default function PrintPo() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    document.title = 'Axle'
     let live = true
     ;(async () => {
       const po = await supabase.from('purchase_orders').select('*').eq('id', id).maybeSingle()
@@ -67,7 +66,7 @@ export default function PrintPo() {
           <div className="doc-shop">
             {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
             <div>
-              <div className="doc-shopname">{shop.shop_name || shop.legal_name || 'Axle'}</div>
+              <div className="doc-shopname">{shop.shop_name || shop.legal_name}</div>
               {shop.legal_name && shop.legal_name !== shop.shop_name && <div>{shop.legal_name}</div>}
               {shop.address && <div className="pre">{shop.address}</div>}
               <div>{[shop.phone, shop.email].filter(Boolean).join(' · ')}</div>

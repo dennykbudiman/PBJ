@@ -39,7 +39,6 @@ export default function PrintHistory() {
       .catch((e) => { if (live) setError(e) })
     return () => { live = false }
   }, [vehicleId, companyId, doc])
-  useEffect(() => { document.title = 'Axle' }, [])
 
   if (!vehicleId && !companyId) return <div className="print-msg">{tUi('fh.nothing')}</div>
   if (error) return <div className="print-msg">{errorText(error, tUi)}</div>
@@ -87,7 +86,7 @@ export default function PrintHistory() {
           <div className="doc-shop">
             {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
             <div>
-              <div className="doc-shopname">{shop.shop_name || shop.legal_name || 'Axle'}</div>
+              <div className="doc-shopname">{shop.shop_name || shop.legal_name}</div>
               {shop.legal_name && shop.legal_name !== shop.shop_name && <div>{shop.legal_name}</div>}
               {shop.address && <div className="pre">{shop.address}</div>}
               <div>{[shop.phone, shop.email].filter(Boolean).join(' · ')}</div>

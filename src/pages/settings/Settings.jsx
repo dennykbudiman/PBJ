@@ -172,7 +172,9 @@ export default function Settings() {
   const [busy, setBusy] = useState(false)
   // Appearance (colour theme) is only for people who can change settings (Owner, Admin).
   // Import data is for Owner and Admin (they also hold the permissions each kind of row needs).
-  const SECTIONS = editable ? ALL_SECTIONS : ALL_SECTIONS.filter((x) => x !== 'appearance' && x !== 'import')
+  // Users & access: Owner and Admin only (manage_users; Oct 31, Denny).
+  const manageUsers = can('manage_users')
+  const SECTIONS = ALL_SECTIONS.filter((x) => (editable || (x !== 'appearance' && x !== 'import')) && (manageUsers || x !== 'users'))
   const [active, go] = useScrollSpy(SECTIONS, { prefix: 'set-' })
   const navRef = useRef(null)
 
@@ -365,7 +367,7 @@ export default function Settings() {
           </Card>
 
           <LaborRates id="set-labor" />
-          <Users id="set-users" />
+          {manageUsers && <Users id="set-users" />}
           {editable && <ImportData id="set-import" />}
 
           {editable && dirty && (

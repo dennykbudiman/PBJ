@@ -23,6 +23,7 @@ export const loginsEn = {
   'logins.noEmail': 'no email',
   'logins.tempNotChanged': 'Temporary password not changed yet',
   'logins.setTextTemp': 'You signed in with a temporary password. Choose your own password to continue.',
+  'logins.changedSignIn': 'Your new password is saved. Sign in with it now.',
   'logins.forgotNoEmail': 'No email on your account? Ask the shop\'s Owner or Admin to reset your password.',
 }
 
@@ -50,5 +51,6 @@ export const loginsId = {
   'logins.noEmail': 'tanpa email',
   'logins.tempNotChanged': 'Kata sandi sementara belum diganti',
   'logins.setTextTemp': 'Anda masuk dengan kata sandi sementara. Buat kata sandi Anda sendiri untuk melanjutkan.',
+  'logins.changedSignIn': 'Kata sandi baru Anda tersimpan. Silakan masuk dengan kata sandi itu.',
   'logins.forgotNoEmail': 'Akun Anda tanpa email? Minta Pemilik atau Admin bengkel mengatur ulang kata sandi Anda.',
 }

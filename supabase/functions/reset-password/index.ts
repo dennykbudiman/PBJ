@@ -13,7 +13,8 @@
 // It also confirms the login (an invite that was never opened can then be used: the invite itself already trusted that
 // address), records the temporary password (mark_temp_password; the database clears it when the password changes),
 // clears that person's failed sign-in count so the "too many tries" pause doesn't block the new password, and writes
-// who reset whose password to the activity log.
+// who reset whose password to the activity log. The person is signed out on every device (end_user_sessions,
+// migration 135).
 //
 // The caller's sign-in token is checked here (auth.getUser), so the function works with the platform's JWT check on
 // or off. Deploy with it off (--no-verify-jwt): the platform check doesn't understand Supabase's new API keys.
@@ -84,6 +85,8 @@ Deno.serve(async (req) => {
     const { error: markErr } = await admin.rpc('mark_temp_password', { p_user: userId, p_by: who.user.id })
     if (markErr) return json({ error: `The password was set, but couldn't be marked as temporary: ${markErr.message}` }, 500)
     await admin.from('activity_log').insert({ entity_type: 'profile', entity_id: userId, user_id: who.user.id, action: 'password_reset_temp', changes: { username: target.username } })
+    // Sign the person out on every device, so only the new temporary password works from now on (migration 135).
+    await admin.rpc('end_user_sessions', { p_user: userId })
 
     // Clear the failed sign-in count for this person's username and email (best effort).
     const keys = [target.username, found.user.email].filter(Boolean).map((k) => String(k).toLowerCase())

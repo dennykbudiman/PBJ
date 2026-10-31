@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { supabase, publicFileUrl, LOGO_BUCKET } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { applyTheme, rememberTheme } from '../lib/theme'
+import { setBranding, useBranding } from '../lib/branding'
 
 const ShopContext = createContext(null)
 
@@ -10,6 +11,7 @@ const ShopContext = createContext(null)
 export function ShopProvider({ children }) {
   const { isStaff, isFleet, user } = useAuth()
   const [settings, setSettings] = useState(null)
+  const brand = useBranding()
 
   const refresh = useCallback(async () => {
     if (!isStaff && !isFleet) {
@@ -25,6 +27,11 @@ export function ShopProvider({ children }) {
     refresh()
   }, [refresh])
 
+  // The shop's name and logo: top bar, sign-in page, tab title and icon (kept for the next visit too).
+  useEffect(() => {
+    if (settings) setBranding({ name: settings.shop_name, logoPath: settings.logo_path })
+  }, [settings?.shop_name, settings?.logo_path]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // The shop's colour theme applies to everyone once settings load.
   useEffect(() => {
     if (!settings?.theme) return
@@ -35,13 +42,13 @@ export function ShopProvider({ children }) {
   const value = useMemo(
     () => ({
       settings,
-      shopName: settings?.shop_name || 'Axle',
-      logoUrl: settings?.logo_path ? `${publicFileUrl(LOGO_BUCKET, settings.logo_path)}` : null,
+      shopName: settings?.shop_name || brand.name,
+      logoUrl: settings ? (settings.logo_path ? `${publicFileUrl(LOGO_BUCKET, settings.logo_path)}` : null) : brand.logoUrl,
       timezone: settings?.timezone || 'Asia/Jakarta',
       refresh,
       setSettings,
     }),
-    [settings, refresh],
+    [settings, refresh, brand],
   )
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>

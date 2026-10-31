@@ -21,7 +21,6 @@ export default function PrintJob() {
   const { job, error, missing } = useJobData(id)
   const staff = useStaff()
 
-  useEffect(() => { document.title = 'Axle' }, [])
   if (missing) return <div className="print-msg">{tUi('job.notFound')} · <Link to="/customers/repair-orders">{tUi('job.backToList')}</Link></div>
   if (!job || !settings) return <div className="print-msg">{error ? errorText(error, tUi) : tUi('common.loading')}</div>
 
@@ -73,7 +72,7 @@ export default function PrintJob() {
           <div className="doc-shop">
             {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
             <div>
-              <div className="doc-shopname">{shop.shop_name || shop.legal_name || 'Axle'}</div>
+              <div className="doc-shopname">{shop.shop_name || shop.legal_name}</div>
               {shop.legal_name && shop.legal_name !== shop.shop_name && <div>{shop.legal_name}</div>}
               {shop.address && <div className="pre">{shop.address}</div>}
               <div>{[shop.phone, shop.email].filter(Boolean).join(' · ')}</div>

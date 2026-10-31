@@ -1,17 +1,18 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Input, Notice } from '../components/ui'
-import { AuthShell } from './Login'
+import { AuthShell, PW_CHANGED_KEY } from './Login'
 import { useAuth } from '../context/AuthContext'
 import { useT } from '../lib/i18n'
 import { supabase, errorText } from '../lib/supabase'
 
-// Shown after an invite or password-reset link: the person is signed in by the
-// link but still has to choose a password.
+// Shown after an invite or password-reset link, or a sign-in with a temporary password: the person is signed in but
+// still has to choose a password. After saving it they are signed out and sign in again with the new password.
 export default function SetPassword() {
   const { t } = useT()
   const navigate = useNavigate()
-  const { profile, completePasswordSetup, signOut, tempPassword, refreshProfile } = useAuth()
+  const { profile, completePasswordSetup, tempPassword } = useAuth()
+  const signOut = () => supabase.auth.signOut({ scope: 'local' })
   const [a, setA] = useState('')
   const [b, setB] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,7 +27,11 @@ export default function SetPassword() {
     // password_set tells the app this login has finished its invite; the database clears a temporary password itself.
     const { error: err } = await supabase.auth.updateUser({ password: a, data: { password_set: true } })
     if (err) { setBusy(false); return setError(errorText(err, t)) }
-    await refreshProfile()
+    // Then sign out everywhere, so the person signs in again with the new password (Oct 31, Denny). The sign-in page
+    // shows that the password was saved and fills in the username.
+    try { sessionStorage.setItem(PW_CHANGED_KEY, profile?.username || '1') } catch { /* private window: no notice */ }
+    const { error: outErr } = await supabase.auth.signOut({ scope: 'global' })
+    if (outErr) await supabase.auth.signOut({ scope: 'local' })
     setBusy(false)
     completePasswordSetup()
     navigate('/', { replace: true })

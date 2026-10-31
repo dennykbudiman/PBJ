@@ -3,9 +3,12 @@ import { Button, Input, Notice } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useT } from '../lib/i18n'
 import { errorText } from '../lib/supabase'
+import { useBranding } from '../lib/branding'
+import { initials } from '../lib/format'
 
 export function AuthShell({ children }) {
   const { lang, setLang } = useT()
+  const { name, logoUrl } = useBranding() // the shop's name and logo (Settings → Shop profile)
   return (
     <div className="authwrap">
       <div style={{ width: '100%', maxWidth: 400 }}>
@@ -17,8 +20,8 @@ export function AuthShell({ children }) {
         </div>
         <div className="authcard">
           <div className="authbrand">
-            <span className="brand-mark">AX</span>
-            <span style={{ fontWeight: 800, fontSize: 17 }}>Axle</span>
+            {(logoUrl || name) && <span className="brand-mark">{logoUrl ? <img src={logoUrl} alt="" /> : initials(name)}</span>}
+            <span style={{ fontWeight: 800, fontSize: 17 }}>{name}</span>
           </div>
           {children}
         </div>
@@ -27,11 +30,18 @@ export function AuthShell({ children }) {
   )
 }
 
+// Set by SetPassword before it signs out, read once here.
+export const PW_CHANGED_KEY = 'axle.passwordChanged'
+
 export default function Login() {
   const { t } = useT()
   const { signIn, sendPasswordReset, linkError, clearLinkError } = useAuth()
   const [mode, setMode] = useState('login') // login | forgot | sent
-  const [identifier, setIdentifier] = useState('')
+  // Just chose a new password (SetPassword signs out): say so once, and fill in the username.
+  const [changed] = useState(() => {
+    try { const v = sessionStorage.getItem(PW_CHANGED_KEY); sessionStorage.removeItem(PW_CHANGED_KEY); return v } catch { return null }
+  })
+  const [identifier, setIdentifier] = useState(changed && changed !== '1' ? changed : '')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
@@ -94,10 +104,11 @@ export default function Login() {
     <AuthShell>
       <h1>{t('auth.signInTitle')}</h1>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {changed && !error && <Notice kind="ok">{t('logins.changedSignIn')}</Notice>}
         {linkError && <Notice kind="err">{t('auth.linkInvalid')}</Notice>}
         {error && <Notice kind="err">{error}</Notice>}
-        <Input label={t('auth.username')} value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus />
-        <Input type="password" label={t('auth.password')} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        <Input label={t('auth.username')} value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" autoCapitalize="none" autoFocus={!changed} />
+        <Input type="password" label={t('auth.password')} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus={!!changed} />
         <Button type="submit" variant="primary" loading={busy}>{t('auth.signIn')}</Button>
         <button type="button" className="linkbtn" style={{ alignSelf: 'center' }} onClick={() => { setMode('forgot'); setError(null) }}>{t('auth.forgot')}</button>
       </form>

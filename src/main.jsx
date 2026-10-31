@@ -9,9 +9,12 @@ import { ToastProvider } from './components/ui'
 import ErrorBoundary from './components/ErrorBoundary'
 import './styles.css'
 import { applyTheme, storedTheme } from './lib/theme'
+import { loadBranding } from './lib/branding'
 
 // Show the last theme straight away (also on the sign-in page); the shop's saved theme follows once loaded.
 applyTheme(storedTheme())
+// The shop's name, logo, tab title and tab icon, also before signing in (migration 135).
+loadBranding()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

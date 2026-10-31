@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { useAuth } from '../context/AuthContext'
 import { useShop } from '../context/ShopContext'
 import { dict } from './strings'
+import { brandName, useBranding } from './branding'
 
 const LangContext = createContext(null)
 const STORE_KEY = 'axle.lang'
@@ -20,6 +21,8 @@ function store(lang) {
 export function translate(lang, key, vars) {
   let s = dict[lang]?.[key] ?? dict.en[key] ?? key
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v))
+  // {shop}: texts that name the app use the shop's own name (Settings → Shop profile).
+  if (s.includes('{shop}')) s = s.split('{shop}').join(brandName(lang))
   return s
 }
 
@@ -28,6 +31,7 @@ export function translate(lang, key, vars) {
 export function LangProvider({ children }) {
   const { profile, isStaff, user, refreshProfile } = useAuth()
   const { settings } = useShop()
+  const { name: shopName } = useBranding()
   const [override, setOverride] = useState(null)
 
   useEffect(() => setOverride(null), [user?.id])
@@ -52,7 +56,7 @@ export function LangProvider({ children }) {
     lang,
     setLang,
     t: (key, vars) => translate(lang, key, vars),
-  }), [lang, setLang])
+  }), [lang, setLang, shopName]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>
 }

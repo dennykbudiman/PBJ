@@ -3,6 +3,7 @@ import { Button, Input, Modal, Notice, Select } from './ui'
 import { supabase, errorText } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useT } from '../lib/i18n'
+import { PW_CHANGED_KEY } from '../pages/Login'
 
 // "My profile": a person's own name, phone, language and password.
 export default function ProfileModal({ open, onClose }) {
@@ -43,6 +44,14 @@ export default function ProfileModal({ open, onClose }) {
         setBusy(false)
         return setMsg({ kind: 'err', text: errorText(pwErr, t) })
       }
+      // A new password signs you out everywhere; sign in again with it (Oct 31, Denny). The sign-in page says so.
+      setLang(form.language || null, { persist: false })
+      try { sessionStorage.setItem(PW_CHANGED_KEY, profile?.username || '1') } catch { /* private window: no notice */ }
+      const { error: outErr } = await supabase.auth.signOut({ scope: 'global' })
+      if (outErr) await supabase.auth.signOut({ scope: 'local' })
+      setBusy(false)
+      onClose()
+      return
     }
     await refreshProfile()
     setLang(form.language || null, { persist: false })

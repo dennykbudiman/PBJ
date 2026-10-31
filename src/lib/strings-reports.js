@@ -72,7 +72,7 @@ export const reportsEn = {
   'rep.profit.noCost': '{n} part or sublet line(s) on {inv} invoice(s) have no cost price, so they count as pure profit and the margin is overstated.',
   'rep.profit.noCostBadge': '{n} line(s) without cost', 'rep.profit.onlyNoCost': 'Only invoices with missing costs',
   'rep.profit.emptyText': 'No invoices were issued in this period.',
-  'rep.profit.hint': 'Cost = the cost price on each part and sublet line when the job was invoiced × quantity. Core charges are passed on at cost. Labor and fees have no cost here because wages aren\'t recorded in Axle, so gross profit is before wages, rent and other overheads. Service and job discounts lower profit. Voided invoices are left out.',
+  'rep.profit.hint': 'Cost = the cost price on each part and sublet line when the job was invoiced × quantity. Core charges are passed on at cost. Labor and fees have no cost here because wages aren\'t recorded in {shop}, so gross profit is before wages, rent and other overheads. Service and job discounts lower profit. Voided invoices are left out.',
   'rep.col.cost': 'Cost', 'rep.col.parts': 'Parts', 'rep.col.partsCost': 'Parts cost', 'rep.col.sublet': 'Sublet', 'rep.col.subletCost': 'Sublet cost', 'rep.col.noCost': 'Lines without cost',
   // Technicians
   'rep.tech.title': 'Technicians', 'rep.tech.sub': 'Work each technician did on the invoices issued in the period.',
@@ -193,7 +193,7 @@ export const reportsId = {
   'rep.profit.noCost': '{n} baris part atau sublet di {inv} invoice tidak punya harga pokok, sehingga dihitung laba penuh dan margin terlihat lebih tinggi.',
   'rep.profit.noCostBadge': '{n} baris tanpa harga pokok', 'rep.profit.onlyNoCost': 'Hanya invoice dengan harga pokok kosong',
   'rep.profit.emptyText': 'Tidak ada invoice yang terbit di periode ini.',
-  'rep.profit.hint': 'Harga pokok = harga pokok di setiap baris part dan sublet saat pekerjaan dibuatkan invoice × jumlah. Biaya core diteruskan sesuai harga pokok. Jasa dan biaya tidak punya harga pokok di sini karena gaji tidak dicatat di Axle, jadi laba kotor dihitung sebelum gaji, sewa, dan biaya operasional lain. Diskon servis dan pekerjaan mengurangi laba. Invoice yang dibatalkan tidak dihitung.',
+  'rep.profit.hint': 'Harga pokok = harga pokok di setiap baris part dan sublet saat pekerjaan dibuatkan invoice × jumlah. Biaya core diteruskan sesuai harga pokok. Jasa dan biaya tidak punya harga pokok di sini karena gaji tidak dicatat di {shop}, jadi laba kotor dihitung sebelum gaji, sewa, dan biaya operasional lain. Diskon servis dan pekerjaan mengurangi laba. Invoice yang dibatalkan tidak dihitung.',
   'rep.col.cost': 'Harga pokok', 'rep.col.parts': 'Part', 'rep.col.partsCost': 'Harga pokok part', 'rep.col.sublet': 'Sublet', 'rep.col.subletCost': 'Harga pokok sublet', 'rep.col.noCost': 'Baris tanpa harga pokok',
   'rep.tech.title': 'Teknisi', 'rep.tech.sub': 'Pekerjaan tiap teknisi pada invoice yang terbit di periode ini.',
   'rep.tech.labor': 'Jasa terjual', 'rep.tech.hoursSold': 'Jam ditagih', 'rep.tech.hoursWorked': 'Jam dikerjakan', 'rep.tech.efficiency': 'Efisiensi',
