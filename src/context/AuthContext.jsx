@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { supabase, signInThroughServer } from '../lib/supabase'
+import { supabase, signInThroughServer, signInMemory } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess ?? null)
       if (event === 'PASSWORD_RECOVERY') setRecovery(true)
-      if (event === 'SIGNED_OUT') setRecovery(false)
+      if (event === 'SIGNED_OUT') { setRecovery(false); signInMemory.password = null }
     })
     return () => sub.subscription.unsubscribe()
   }, [])
@@ -73,6 +73,8 @@ export function AuthProvider({ children }) {
       if (refresh && permErr) return // keep the permissions we had
       permissions = (perms ?? []).map((r) => r.permission_key).sort()
     }
+    // The sign-in password is kept in memory only for the "choose your own password" step after a temporary one.
+    if (temp !== true) signInMemory.password = null
     // Nothing changed: keep the same objects, so open forms (e.g. the profile dialog) aren't reset by a background check.
     setLoaded((old) => {
       const next = { userId, profile: p ?? null, permissions, staff: staff === true, fleet: fleet === true && staff !== true, fleetCompanies, tempPassword: temp === true }
@@ -127,6 +129,7 @@ export function AuthProvider({ children }) {
       signIn: async (identifier, password) => {
         const { session: s, error } = await signInThroughServer(identifier.trim(), password)
         if (error) return { error }
+        signInMemory.password = password
         return supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token })
       },
       sendPasswordReset: (email) =>

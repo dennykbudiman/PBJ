@@ -55,7 +55,7 @@ const base = {
 
     'profile.title': 'My profile', 'profile.name': 'Name', 'profile.username': 'Username', 'profile.usernameHint': 'Ask an admin to change it.',
     'profile.phone': 'Phone', 'profile.language': 'Language', 'profile.languageShop': 'Shop default', 'profile.changePassword': 'Change password',
-    'profile.passwordHint': 'Leave empty to keep your current password. After a change you are signed out everywhere and sign in again with the new password.', 'profile.nameRequired': 'Enter your name.',
+    'profile.passwordHint': 'Leave these empty to keep your password. To change it, enter your current password first. After a change you are signed out everywhere and sign in again with the new password.', 'profile.nameRequired': 'Enter your name.',
 
     'stage.foundations': 'Foundations: sign-in, app layout, settings', 'stage.customers': 'Customers & vehicles', 'stage.catalog': 'Catalog',
     'stage.jobs': 'Jobs, estimates, invoices & payments', 'stage.print': 'Printed invoices & estimates', 'stage.board': 'Work board & calendar',
@@ -181,7 +181,7 @@ const base = {
 
     'profile.title': 'Profil saya', 'profile.name': 'Nama', 'profile.username': 'Username', 'profile.usernameHint': 'Minta admin untuk mengubahnya.',
     'profile.phone': 'Telepon', 'profile.language': 'Bahasa', 'profile.languageShop': 'Sesuai bengkel', 'profile.changePassword': 'Ganti kata sandi',
-    'profile.passwordHint': 'Kosongkan jika tidak ingin mengganti kata sandi. Setelah diganti, Anda keluar dari semua perangkat dan masuk lagi dengan kata sandi baru.', 'profile.nameRequired': 'Masukkan nama Anda.',
+    'profile.passwordHint': 'Kosongkan jika tidak ingin mengganti kata sandi. Untuk menggantinya, masukkan dulu kata sandi saat ini. Setelah diganti, Anda keluar dari semua perangkat dan masuk lagi dengan kata sandi baru.', 'profile.nameRequired': 'Masukkan nama Anda.',
 
     'stage.foundations': 'Fondasi: masuk, tata letak aplikasi, pengaturan', 'stage.customers': 'Pelanggan & kendaraan', 'stage.catalog': 'Katalog',
     'stage.jobs': 'Pekerjaan, estimasi, invoice & pembayaran', 'stage.print': 'Cetak invoice & estimasi', 'stage.board': 'Papan kerja & kalender',

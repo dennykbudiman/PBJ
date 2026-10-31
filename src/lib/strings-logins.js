@@ -25,6 +25,12 @@ export const loginsEn = {
   'logins.setTextTemp': 'You signed in with a temporary password. Choose your own password to continue.',
   'logins.changedSignIn': 'Your new password is saved. Sign in with it now.',
   'logins.forgotNoEmail': 'No email on your account? Ask the shop\'s Owner or Admin to reset your password.',
+  'logins.currentPassword': 'Current password',
+  'logins.currentRequired': 'Enter your current password to change it.',
+  'logins.currentWrong': 'Your current password is not right.',
+  'logins.samePassword': 'The new password must be different from your current one.',
+  'logins.tempAgain': 'Temporary password (the one you signed in with)',
+  'logins.tempWrong': 'That temporary password is not right.',
 }
 
 export const loginsId = {
@@ -53,4 +59,10 @@ export const loginsId = {
   'logins.setTextTemp': 'Anda masuk dengan kata sandi sementara. Buat kata sandi Anda sendiri untuk melanjutkan.',
   'logins.changedSignIn': 'Kata sandi baru Anda tersimpan. Silakan masuk dengan kata sandi itu.',
   'logins.forgotNoEmail': 'Akun Anda tanpa email? Minta Pemilik atau Admin bengkel mengatur ulang kata sandi Anda.',
+  'logins.currentPassword': 'Kata sandi saat ini',
+  'logins.currentRequired': 'Masukkan kata sandi Anda saat ini untuk menggantinya.',
+  'logins.currentWrong': 'Kata sandi saat ini salah.',
+  'logins.samePassword': 'Kata sandi baru harus berbeda dari kata sandi saat ini.',
+  'logins.tempAgain': 'Kata sandi sementara (yang dipakai untuk masuk tadi)',
+  'logins.tempWrong': 'Kata sandi sementara itu salah.',
 }

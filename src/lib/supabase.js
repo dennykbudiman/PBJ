@@ -24,6 +24,28 @@ export async function signInThroughServer(login, password) {
   return { session: body.session }
 }
 
+// Checks a signed-in person's current password before they change it (Oct 31, Denny: someone at a computer left
+// signed in mustn't be able to change the password). It goes through the same `login` function as signing in, so
+// wrong guesses count towards the "too many tries" pause; the extra session it creates is ended straight away.
+// Supabase checks it again itself when "Require current password when updating" is on (Authentication → Providers →
+// Email): the app also sends it with the change. Resolves to { ok: true } or { error } like signInThroughServer.
+export async function checkCurrentPassword(login, password) {
+  const { session, error } = await signInThroughServer(login, password)
+  if (error) return { error }
+  try {
+    await fetch(`${url}/auth/v1/logout?scope=local`, { method: 'POST', headers: { apikey: anonKey, Authorization: `Bearer ${session.access_token}` } })
+  } catch { /* best effort: the sign-out everywhere after the change ends it anyway */ }
+  return { ok: true }
+}
+
+// The password typed at sign-in, kept in this page's memory only (never stored), so the "choose your own password"
+// screen after a temporary password can confirm it to Supabase without asking for it again. Cleared once used, on
+// sign-out, and as soon as the person turns out not to have a temporary password.
+export const signInMemory = { password: null }
+
+// Supabase's answer when the current password is missing or wrong (with "Require current password" on).
+export const isCurrentPasswordError = (e) => /^current_password_(mismatch|required)$/.test(e?.code || '') || /current password required/i.test(e?.message || '')
+
 if (!supabaseConfigured) {
   console.warn('Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY. Copy .env.example to .env.local and fill them in.')
 }
