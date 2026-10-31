@@ -17,14 +17,16 @@ const LINK = (() => {
 
 // An invited person must choose a password before using the app. Their login has
 // invited_at set; once they save a password we record password_set on the login,
-// so reloading the page halfway can't skip the step.
+// so reloading the page halfway can't skip the step. A login made or reset with a
+// temporary password (migration 134) is known to the server (my_temp_password) until
+// the password changes.
 function mustSetPassword(user) {
   return Boolean(user?.invited_at && !user?.user_metadata?.password_set)
 }
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined) // undefined = still loading
-  const [loaded, setLoaded] = useState({ userId: undefined, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [] })
+  const [loaded, setLoaded] = useState({ userId: undefined, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [], tempPassword: false })
   const [recovery, setRecovery] = useState(LINK.type === 'recovery' || LINK.type === 'invite')
   const [linkError, setLinkError] = useState(LINK.error)
 
@@ -45,15 +47,17 @@ export function AuthProvider({ children }) {
 
   const loadProfile = useCallback(async (refresh = false) => {
     if (!userId) {
-      setLoaded({ userId: null, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [] })
+      setLoaded({ userId: null, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [], tempPassword: false })
       return
     }
-    const [{ data: p, error }, { data: staff }, { data: fleet }] = await Promise.all([
+    const [{ data: p, error }, { data: staff }, { data: fleet }, { data: temp }] = await Promise.all([
       supabase.from('profiles').select('id, name, username, phone, status, language, role_id, roles(name)').eq('id', userId).maybeSingle(),
       // The database's own answer to "may this person use the app?" (active and not a Fleet manager).
       supabase.rpc('is_staff'),
       // A customer's fleet manager: sees only the companies linked to the login (migration 133).
       supabase.rpc('is_fleet'),
+      // Signed in with a temporary password the Owner or Admin set (migration 134): choose your own first.
+      supabase.rpc('my_temp_password'),
     ])
     if (error) console.error('profile load failed', error)
     if (refresh && (error || !p || typeof staff !== 'boolean')) return // a failed background refresh keeps what we had
@@ -71,7 +75,7 @@ export function AuthProvider({ children }) {
     }
     // Nothing changed: keep the same objects, so open forms (e.g. the profile dialog) aren't reset by a background check.
     setLoaded((old) => {
-      const next = { userId, profile: p ?? null, permissions, staff: staff === true, fleet: fleet === true && staff !== true, fleetCompanies }
+      const next = { userId, profile: p ?? null, permissions, staff: staff === true, fleet: fleet === true && staff !== true, fleetCompanies, tempPassword: temp === true }
       return JSON.stringify(old) === JSON.stringify(next) ? old : next
     })
   }, [userId])
@@ -111,7 +115,9 @@ export function AuthProvider({ children }) {
       can: (key) => isStaff && permissions.includes(key),
       // Still loading until the profile we hold belongs to the person signed in.
       loading: session === undefined || (Boolean(session) && loaded.userId !== userId),
-      needsPasswordSetup: Boolean(session) && (recovery || mustSetPassword(session?.user)),
+      needsPasswordSetup: Boolean(session) && (recovery || mustSetPassword(session?.user) || (loaded.userId === userId && loaded.tempPassword)),
+      // Signed in with a temporary password the Owner or Admin set (migration 134).
+      tempPassword: loaded.userId === userId && loaded.tempPassword,
       linkError,
       clearLinkError: () => setLinkError(null),
       completePasswordSetup: () => setRecovery(false),

@@ -79,6 +79,7 @@ export default function Login() {
       <AuthShell>
         <h1>{t('auth.forgotTitle')}</h1>
         <p className="muted" style={{ margin: 0, lineHeight: 1.55 }}>{t('auth.forgotText')}</p>
+        <p className="muted small" style={{ margin: 0, lineHeight: 1.55 }}>{t('logins.forgotNoEmail')}</p>
         <form onSubmit={sendReset} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {error && <Notice kind="err">{error}</Notice>}
           <Input type="email" label={t('auth.email')} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" autoFocus />

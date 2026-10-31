@@ -10,8 +10,16 @@ import { timeAgo } from '../../lib/format'
 const ROLE_ORDER = ['Owner', 'Admin', 'Service advisor', 'Cashier', 'Technician', 'Viewer', 'Fleet manager']
 const STATUS_COLOR = { active: 'green', invited: 'amber', disabled: 'gray' }
 
-const BLANK = { name: '', email: '', username: '', phone: '', role_id: '', companies: [] }
+const BLANK = { name: '', email: '', username: '', phone: '', role_id: '', companies: [], method: 'email', password: '' }
 // Invites can't create Owners; an Owner promotes someone afterwards.
+
+// A temporary password that is easy to read out or type: no 0/O, 1/l/I (e.g. "k7mp-x2qa-9r").
+export function tempPassword() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(10))
+  const s = Array.from(bytes, (b) => chars[b % chars.length]).join('')
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8)}`
+}
 
 export default function Users({ id }) {
   const { t, lang } = useT()
@@ -29,6 +37,13 @@ export default function Users({ id }) {
   const [links, setLinks] = useState({}) // Fleet manager id → [company ids] (migration 133)
   const [companies, setCompanies] = useState([])
   const [linking, setLinking] = useState(null) // { person, picked }
+  const [made, setMade] = useState(null) // { name, username, password, reset, copied } after a temporary password is set
+  // Closing the result empties the clipboard if we put the password there (shared counter PCs).
+  const closeMade = () => {
+    if (made?.copied) navigator.clipboard?.writeText('').catch(() => {})
+    setMade(null)
+  }
+  const [resetting, setResetting] = useState(null) // { person, password, error }
 
   const load = useCallback(async () => {
     const [p, r, l, f, c] = await Promise.all([
@@ -58,6 +73,7 @@ export default function Users({ id }) {
   const canTouch = (p) => manage && p.id !== user?.id && (p.role_id !== ownerRoleId || myRole === 'Owner')
   const ownerLocked = (p) => p.role_id === ownerRoleId && p.status === 'active' && activeOwners <= 1
   const choosable = myRole === 'Owner' ? roleOptions : roleOptions.filter((o) => o.value !== ownerRoleId)
+  const invitable = roleOptions.filter((o) => o.value !== ownerRoleId)
   const fleetRoleId = roles.find((r) => r.name === 'Fleet manager')?.id
   const companyName = Object.fromEntries(companies.map((c) => [c.id, c.display_name]))
 
@@ -112,14 +128,17 @@ export default function Users({ id }) {
   async function sendInvite() {
     setError(null)
     const f = { ...invite, name: invite.name.trim(), email: invite.email.trim().toLowerCase(), username: invite.username.trim().toLowerCase(), phone: invite.phone.trim() }
-    if (!f.name || !f.email || !f.username || !f.role_id) return setError(t('users.inviteRequired'))
-    if (!/^\S+@\S+\.\S+$/.test(f.email)) return setError(t('settings.badEmail'))
+    const byPassword = f.method === 'password'
+    if (!f.name || (!byPassword && !f.email) || !f.username || !f.role_id) return setError(t(byPassword ? 'logins.required' : 'users.inviteRequired'))
+    if (!byPassword && !/^\S+@\S+\.\S+$/.test(f.email)) return setError(t('settings.badEmail'))
     if (!/^[a-z0-9._-]{3,30}$/.test(f.username)) return setError(t('users.usernameRule'))
+    if (byPassword && (f.password.length < 8 || f.password.length > 72)) return setError(t('logins.passwordRule'))
     const isFleetRole = f.role_id === fleetRoleId
     if (isFleetRole && !f.companies.length) return setError(t('users.fleetPickCompany'))
     setBusy(true)
     const { data, error: err } = await supabase.functions.invoke('invite-user', {
-      body: { name: f.name, email: f.email, username: f.username, phone: f.phone || null, roleId: f.role_id, redirectTo: `${window.location.origin}/set-password` },
+      body: { name: f.name, email: byPassword ? null : f.email, username: f.username, phone: f.phone || null, roleId: f.role_id, redirectTo: `${window.location.origin}/set-password`,
+        method: f.method, password: byPassword ? f.password : undefined },
     })
     setBusy(false)
     const message = await functionError(data, err)
@@ -129,7 +148,22 @@ export default function Users({ id }) {
       if (linkErr) toast(errorText(linkErr, t), 'err')
     }
     setInvite(null)
-    toast(t('users.invited', { email: f.email }))
+    if (byPassword) setMade({ name: f.name, username: f.username, password: f.password })
+    else toast(t('users.invited', { email: f.email }))
+    load()
+  }
+
+  // A new temporary password for someone who forgot theirs (edge function reset-password, migration 134).
+  async function resetPassword() {
+    const r = resetting
+    if (r.password.length < 8 || r.password.length > 72) return setResetting({ ...r, error: t('logins.passwordRule') })
+    setSavingId(r.person.id)
+    const { data, error: err } = await supabase.functions.invoke('reset-password', { body: { userId: r.person.id, password: r.password } })
+    setSavingId(null)
+    const message = await functionError(data, err)
+    if (message) return setResetting({ ...r, error: message })
+    setResetting(null)
+    setMade({ name: r.person.name, username: r.person.username, password: r.password, reset: true })
     load()
   }
 
@@ -160,7 +194,13 @@ export default function Users({ id }) {
                           {p.phone && <div className="muted small">{p.phone}</div>}
                           {manage && logins[p.id] && (
                             <div className="muted small">{logins[p.id].invited ? t('users.inviteNotDone')
-                              : logins[p.id].last_sign_in_at ? t('users.lastSignIn', { when: timeAgo(logins[p.id].last_sign_in_at, lang) }) : t('users.neverSignedIn')}</div>
+                              : logins[p.id].last_sign_in_at ? t('users.lastSignIn', { when: timeAgo(logins[p.id].last_sign_in_at, lang) }) : t('users.neverSignedIn')}
+                              {logins[p.id].no_email && <> · {t('logins.noEmail')}</>}</div>
+                          )}
+                          {manage && logins[p.id]?.temp_password && <div className="small" style={{ color: 'var(--amber-text, #92400e)' }}>{t('logins.tempNotChanged')}</div>}
+                          {canTouch(p) && (roleName !== 'Fleet manager' || myRole === 'Owner') && (
+                            <button type="button" className="linkbtn small" disabled={savingId === p.id}
+                              onClick={() => setResetting({ person: p, password: tempPassword(), error: null })}>{t('logins.reset')}</button>
                           )}
                         </div>
                       </div>
@@ -264,23 +304,77 @@ export default function Users({ id }) {
         title={t('users.invite')}
         footer={<>
           <Button onClick={() => setInvite(null)}>{t('common.cancel')}</Button>
-          <Button variant="primary" icon="mail" onClick={sendInvite} loading={busy}>{t('users.sendInvite')}</Button>
+          <Button variant="primary" icon={invite?.method === 'password' ? 'check' : 'mail'} onClick={sendInvite} loading={busy}>{t(invite?.method === 'password' ? 'logins.create' : 'users.sendInvite')}</Button>
         </>}
       >
         {invite && <>
           {error && <Notice kind="err">{error}</Notice>}
+          <div className="sectionlabel" style={{ marginTop: 0 }}>{t('logins.how')}</div>
+          <div className="seg" role="radiogroup" aria-label={t('logins.how')} style={{ marginBottom: 12 }}>
+            {['email', 'password'].map((m) => (
+              <button key={m} type="button" role="radio" aria-checked={invite.method === m} className={`seg-btn ${invite.method === m ? 'on' : ''}`}
+                onClick={() => setInvite({ ...invite, method: m, password: m === 'password' && !invite.password ? tempPassword() : invite.password })}>{t(`logins.how.${m}`)}</button>
+            ))}
+          </div>
           <div className="grid2">
             <Input label={t('users.fullName')} value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} autoFocus />
-            <Input label={t('users.email')} type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} />
+            {invite.method === 'email' && <Input label={t('users.email')} type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} />}
             <Input label={t('users.username')} value={invite.username} onChange={(e) => setInvite({ ...invite, username: e.target.value })} autoCapitalize="none" hint={t('users.usernameHint')} />
             <Input label={t('users.phone')} value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} />
             <Select fieldClass="span2" label={t('users.role')} value={invite.role_id} onChange={(e) => setInvite({ ...invite, role_id: e.target.value })}
-              options={[{ value: '', label: t('users.pickRole'), disabled: true }, ...choosable]} />
+              options={[{ value: '', label: t('users.pickRole'), disabled: true }, ...invitable]} />
+            {invite.method === 'password' && (
+              <div className="span2 row" style={{ gap: 8, alignItems: 'flex-end' }}>
+                <Input fieldClass="grow" label={t('logins.tempPassword')} value={invite.password} onChange={(e) => setInvite({ ...invite, password: e.target.value })}
+                  autoComplete="off" spellCheck={false} style={{ fontFamily: 'ui-monospace, monospace' }} />
+                <Button type="button" icon="refresh" onClick={() => setInvite({ ...invite, password: tempPassword() })}>{t('logins.generate')}</Button>
+              </div>
+            )}
           </div>
           {invite.role_id && invite.role_id === fleetRoleId && (
             <CompanyPicker companies={companies} picked={invite.companies} onChange={(companies2) => setInvite({ ...invite, companies: companies2 })} />
           )}
-          <div className="hint" style={{ marginTop: 0 }}>{t('users.inviteHint')}</div>
+          <div className="hint" style={{ marginTop: 0 }}>{t(invite.method === 'password' ? 'logins.hint' : 'users.inviteHint')}</div>
+        </>}
+      </Modal>
+
+      <Modal
+        open={!!resetting}
+        onClose={() => setResetting(null)}
+        title={t('logins.resetTitle', { name: resetting?.person.name || '' })}
+        footer={<>
+          <Button onClick={() => setResetting(null)}>{t('common.cancel')}</Button>
+          <Button variant="primary" loading={savingId === resetting?.person.id} onClick={resetPassword}>{t('logins.resetSave')}</Button>
+        </>}
+      >
+        {resetting && <>
+          {resetting.error && <Notice kind="err">{resetting.error}</Notice>}
+          <div className="row" style={{ gap: 8, alignItems: 'flex-end' }}>
+            <Input fieldClass="grow" label={t('logins.tempPassword')} value={resetting.password} onChange={(e) => setResetting({ ...resetting, password: e.target.value, error: null })}
+              autoComplete="off" spellCheck={false} style={{ fontFamily: 'ui-monospace, monospace' }} />
+            <Button type="button" icon="refresh" onClick={() => setResetting({ ...resetting, password: tempPassword(), error: null })}>{t('logins.generate')}</Button>
+          </div>
+          <div className="hint">{t('logins.resetHint', { username: resetting.person.username || '' })}</div>
+        </>}
+      </Modal>
+
+      <Modal
+        open={!!made}
+        onClose={closeMade}
+        title={t(made?.reset ? 'logins.resetDoneTitle' : 'logins.madeTitle', { name: made?.name || '' })}
+        footer={<Button variant="primary" onClick={closeMade}>{t('common.close')}</Button>}
+      >
+        {made && <>
+          <div style={{ lineHeight: 1.55 }}>{t('logins.madeText', { name: made.name })}</div>
+          <div className="credbox">
+            <span className="muted">{t('users.username')}</span><b>{made.username}</b>
+            <span className="muted">{t('logins.tempPassword')}</span><b style={{ fontFamily: 'ui-monospace, monospace' }}>{made.password}</b>
+          </div>
+          <Button size="sm" icon="copy" onClick={async () => {
+            try { await navigator.clipboard.writeText(`${t('users.username')}: ${made.username}\n${t('logins.tempPassword')}: ${made.password}`); setMade({ ...made, copied: true }); toast(t('logins.copied')) }
+            catch { toast(t('logins.copyFailed'), 'err') }
+          }}>{t('logins.copy')}</Button>
+          <div className="hint">{t('logins.madeHint')}</div>
         </>}
       </Modal>
     </Card>

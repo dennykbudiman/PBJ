@@ -11,7 +11,7 @@ import { supabase, errorText } from '../lib/supabase'
 export default function SetPassword() {
   const { t } = useT()
   const navigate = useNavigate()
-  const { profile, completePasswordSetup, signOut } = useAuth()
+  const { profile, completePasswordSetup, signOut, tempPassword, refreshProfile } = useAuth()
   const [a, setA] = useState('')
   const [b, setB] = useState('')
   const [busy, setBusy] = useState(false)
@@ -23,10 +23,11 @@ export default function SetPassword() {
     if (a.length < 8) return setError(t('auth.pwTooShort'))
     if (a !== b) return setError(t('auth.pwMismatch'))
     setBusy(true)
-    // password_set tells the app this login has finished its invite.
+    // password_set tells the app this login has finished its invite; the database clears a temporary password itself.
     const { error: err } = await supabase.auth.updateUser({ password: a, data: { password_set: true } })
+    if (err) { setBusy(false); return setError(errorText(err, t)) }
+    await refreshProfile()
     setBusy(false)
-    if (err) return setError(errorText(err, t))
     completePasswordSetup()
     navigate('/', { replace: true })
   }
@@ -35,7 +36,7 @@ export default function SetPassword() {
     <AuthShell>
       <h1>{t('auth.setTitle')}</h1>
       <p className="muted" style={{ margin: 0, lineHeight: 1.55 }}>
-        {profile?.username ? t('auth.setTextUser', { username: profile.username }) : t('auth.setText')}
+        {tempPassword ? t('logins.setTextTemp') : profile?.username ? t('auth.setTextUser', { username: profile.username }) : t('auth.setText')}
       </p>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {error && <Notice kind="err">{error}</Notice>}

@@ -745,3 +745,7 @@ span.seg-btn { cursor: default; }
 @media (max-width: 600px) { .dashgrid.money { grid-template-columns: 1fr; } }
 .kpis.stale { opacity: .6; transition: opacity .15s; }
 .voidlist { margin: 8px 0 0; padding-left: 18px; line-height: 1.7; }
+
+/* Logins without email (migration 134): username + temporary password shown once to the Owner or Admin. */
+.field.grow { flex: 1; min-width: 0; }
+.credbox { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: var(--gray-bg); font-size: 14px; }
