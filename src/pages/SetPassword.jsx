@@ -14,13 +14,16 @@ import { supabase, errorText, signInMemory, isCurrentPasswordError } from '../li
 export default function SetPassword() {
   const { t } = useT()
   const navigate = useNavigate()
-  const { profile, completePasswordSetup, tempPassword } = useAuth()
+  const { profile, completePasswordSetup, tempPassword, fromLink } = useAuth()
   const signOut = () => supabase.auth.signOut({ scope: 'local' })
   const [a, setA] = useState('')
   const [b, setB] = useState('')
   const [remembered] = useState(() => signInMemory.password)
   const [cur, setCur] = useState('')
-  const askTemp = Boolean(tempPassword && !remembered)
+  // Supabase asked for the current password although the app didn't expect it (e.g. an old invite link opened
+  // after an Admin set a temporary password): show the field then.
+  const [forceAsk, setForceAsk] = useState(false)
+  const askTemp = Boolean((tempPassword && !remembered && !fromLink) || forceAsk)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -30,13 +33,14 @@ export default function SetPassword() {
     if (a.length < 8) return setError(t('auth.pwTooShort'))
     if (a !== b) return setError(t('auth.pwMismatch'))
     if (askTemp && !cur) return setError(t('logins.currentRequired'))
-    const current = tempPassword ? (remembered || cur) : null
+    const current = askTemp ? cur : tempPassword && !fromLink ? remembered : null
     if (current && current === a) return setError(t('logins.samePassword'))
     setBusy(true)
     // password_set tells the app this login has finished its invite; the database clears a temporary password itself.
     const { error: err } = await supabase.auth.updateUser({ password: a, ...(current ? { current_password: current } : {}), data: { password_set: true } })
     if (err) {
       setBusy(false)
+      if (isCurrentPasswordError(err) && !current) { setForceAsk(true); return setError(t('logins.currentRequired')) }
       return setError(isCurrentPasswordError(err) ? t('logins.tempWrong') : err.code === 'same_password' ? t('logins.samePassword') : errorText(err, t))
     }
     signInMemory.password = null
@@ -58,7 +62,7 @@ export default function SetPassword() {
       </p>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {error && <Notice kind="err">{error}</Notice>}
-        {askTemp && <Input type="password" label={t('logins.tempAgain')} value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" autoFocus />}
+        {askTemp && <Input type="password" label={tempPassword ? t('logins.tempAgain') : t('logins.currentPassword')} value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" autoFocus />}
         <Input type="password" label={t('auth.newPassword')} value={a} onChange={(e) => setA(e.target.value)} autoComplete="new-password" autoFocus={!askTemp} />
         <Input type="password" label={t('auth.confirmPassword')} value={b} onChange={(e) => setB(e.target.value)} autoComplete="new-password" />
         <Button type="submit" variant="primary" loading={busy}>{t('auth.savePassword')}</Button>

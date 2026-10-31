@@ -120,6 +120,8 @@ export function AuthProvider({ children }) {
       needsPasswordSetup: Boolean(session) && (recovery || mustSetPassword(session?.user) || (loaded.userId === userId && loaded.tempPassword)),
       // Signed in with a temporary password the Owner or Admin set (migration 134).
       tempPassword: loaded.userId === userId && loaded.tempPassword,
+      // Signed in from an invite or "Forgot password" email link (Supabase doesn't ask for the current password then).
+      fromLink: recovery,
       linkError,
       clearLinkError: () => setLinkError(null),
       completePasswordSetup: () => setRecovery(false),

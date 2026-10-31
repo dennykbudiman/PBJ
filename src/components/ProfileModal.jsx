@@ -26,7 +26,8 @@ export default function ProfileModal({ open, onClose }) {
   async function save() {
     setMsg(null)
     if (!form.name.trim()) return setMsg({ kind: 'err', text: t('profile.nameRequired') })
-    if (pw.a || pw.b || pw.cur) {
+    // Only a new password counts as a change: a browser may fill in the current-password field by itself.
+    if (pw.a || pw.b) {
       if (!pw.cur) return setMsg({ kind: 'err', text: t('logins.currentRequired') })
       if (pw.a.length < 8) return setMsg({ kind: 'err', text: t('auth.pwTooShort') })
       if (pw.a !== pw.b) return setMsg({ kind: 'err', text: t('auth.pwMismatch') })
