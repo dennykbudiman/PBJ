@@ -749,3 +749,6 @@ span.seg-btn { cursor: default; }
 /* Logins without email (migration 134): username + temporary password shown once to the Owner or Admin. */
 .field.grow { flex: 1; min-width: 0; }
 .credbox { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: var(--gray-bg); font-size: 14px; }
+
+/* A logo on the sign-in card sits on the white card itself: no coloured tile showing through transparent parts. */
+.authbrand .brand-mark.has-logo { background: transparent; border-radius: 0; }

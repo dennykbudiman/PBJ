@@ -20,7 +20,7 @@ export function AuthShell({ children }) {
         </div>
         <div className="authcard">
           <div className="authbrand">
-            {(logoUrl || name) && <span className="brand-mark">{logoUrl ? <img src={logoUrl} alt="" /> : initials(name)}</span>}
+            {(logoUrl || name) && <span className={`brand-mark${logoUrl ? ' has-logo' : ''}`}>{logoUrl ? <img src={logoUrl} alt="" /> : initials(name)}</span>}
             <span style={{ fontWeight: 800, fontSize: 17 }}>{name}</span>
           </div>
           {children}
