@@ -489,6 +489,7 @@ span.seg-btn { cursor: default; }
 .doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 26px; text-align: center; break-inside: avoid; }
 .sign-line { border-bottom: 1px solid #111; height: 48px; margin-bottom: 4px; }
 .doc-foot { margin-top: 16px; font-size: 9.5px; color: #666; text-align: center; }
+.doc-printedby { margin-top: 10px; font-size: 9px; color: #888; text-align: right; }
 @page { size: A4; margin: 0; }
 @media print {
   .no-print { display: none !important; }

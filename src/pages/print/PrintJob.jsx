@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { usePageTitle } from '../../lib/branding'
+import PrintedBy from '../../components/PrintedBy'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useShop } from '../../context/ShopContext'
 import { useT, translate } from '../../lib/i18n'
@@ -232,6 +233,7 @@ export default function PrintJob() {
           <div><div className="sign-line" />{t('pr.shopSign')}<div className="small muted">{advisor ? `${advisor} · ` : ''}{shop.shop_name || shop.legal_name}</div></div>
         </section>
         <footer className="doc-foot">{doc === 'estimate' ? t('pr.estimateFoot') : t('pr.invoiceFoot')}</footer>
+        <PrintedBy lang={lang} timezone={timezone} />
       </article>
     </div>
   )

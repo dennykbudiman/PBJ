@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { usePageTitle } from '../../lib/branding'
+import PrintedBy from '../../components/PrintedBy'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
@@ -113,6 +114,7 @@ export default function PrintHistory() {
         ))}
         {doc !== 'list' && !visits && <div className="doc-empty">{t('fh.noVisits')}</div>}
         {doc !== 'list' && <div className="doc-terms">{t(doc === 'history' ? 'fh.footVehicle' : 'fh.footCompany')}</div>}
+        <PrintedBy lang={lang} timezone={timezone} />
       </article>
     </div>
   )

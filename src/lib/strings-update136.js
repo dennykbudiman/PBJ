@@ -11,6 +11,7 @@ export const u136En = {
   'drv.saveOnVehicle': 'Also save as the driver of {plate}',
   'drv.replaceOnVehicle': 'Also make this the driver of {plate} (replaces the one on file)',
   'pr.driver': 'Driver',
+  'pr.printedBy': 'Printed by {name} · {when}',
   // new job search
   'nj.search': 'Search company, plate or driver…',
   'nj.vehicleHits': 'Matching vehicles',
@@ -41,6 +42,7 @@ export const u136Id = {
   'drv.saveOnVehicle': 'Simpan juga sebagai supir {plate}',
   'drv.replaceOnVehicle': 'Jadikan juga supir {plate} (mengganti yang tercatat)',
   'pr.driver': 'Supir',
+  'pr.printedBy': 'Dicetak oleh {name} · {when}',
   'nj.search': 'Cari perusahaan, plat nomor atau supir…',
   'nj.vehicleHits': 'Kendaraan yang cocok',
   'alt.numbers': 'Nomor part alternatif',

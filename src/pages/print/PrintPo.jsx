@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { usePageTitle } from '../../lib/branding'
+import PrintedBy from '../../components/PrintedBy'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
@@ -145,6 +146,7 @@ export default function PrintPo() {
           <div><div className="sign-line" />{t('pr.po.orderedBy')}<div className="small muted">{shop.shop_name || shop.legal_name}</div></div>
           <div><div className="sign-line" />{t('pr.po.acceptedBy')}<div className="small muted">{sup?.name}</div></div>
         </section>
+        <PrintedBy lang={lang} timezone={timezone} />
       </article>
     </div>
   )
