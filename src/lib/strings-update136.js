@@ -15,6 +15,7 @@ export const u136En = {
   // new job search
   'nj.search': 'Search company, plate or driver…',
   'nj.vehicleHits': 'Matching vehicles',
+  'appt.searchWho': 'Search company, plate or driver',
   // catalog
   'alt.numbers': 'Alternative part numbers',
   'alt.numbersHint': 'Other numbers for the same part (other brands, replaced numbers), separated by commas. e.g. Sakura C-1007, ME215002',
@@ -45,6 +46,7 @@ export const u136Id = {
   'pr.printedBy': 'Dicetak oleh {name} · {when}',
   'nj.search': 'Cari perusahaan, plat nomor atau supir…',
   'nj.vehicleHits': 'Kendaraan yang cocok',
+  'appt.searchWho': 'Cari perusahaan, plat nomor atau supir',
   'alt.numbers': 'Nomor part alternatif',
   'alt.numbersHint': 'Nomor lain untuk part yang sama (merek lain, nomor pengganti), dipisah koma. Mis. Sakura C-1007, ME215002',
   'alt.fits': 'Cocok untuk',

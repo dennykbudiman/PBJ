@@ -12,7 +12,7 @@ import { supabase, errorText } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { fmtDate, jobNo, km } from '../../lib/format'
-import { VEHICLE_STATUS_COLOR, vehicleName } from '../../lib/customers'
+import { VEHICLE_STATUS_COLOR, plateDriver, vehicleName } from '../../lib/customers'
 
 function Field({ label, children }) {
   return (
@@ -32,7 +32,7 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
   const toast = useToast()
   const { timezone } = useShop()
   const [tab, setTab] = useState('overview')
-  usePageTitle(vehicle ? [vehicle.plate, vehicleName(vehicle)].filter(Boolean).join(' · ') : null)
+  usePageTitle(vehicle ? [plateDriver(vehicle), vehicleName(vehicle)].filter(Boolean).join(' · ') : null)
   const [history, setHistory] = useState(null)
   const [transfer, setTransfer] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)

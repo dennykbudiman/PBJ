@@ -6,6 +6,12 @@ export const VEHICLE_STATUSES = ['active', 'in_shop', 'inactive', 'sold']
 export const FUEL_TYPES = ['petrol', 'diesel', 'electric', 'hybrid', 'other']
 export const VEHICLE_TYPES = ['car', 'pickup', 'van', 'truck', 'bus', 'motorcycle', 'other']
 
+// How the shop names a vehicle (Nov 4, Denny: drivers are known by name more than by plate): "DA 8476 CS · Jamani".
+// `driver` overrides the vehicle's own driver (e.g. who brought it in on a job).
+export function plateDriver(v, driver) {
+  return [v?.plate, driver ?? v?.driver_name].filter(Boolean).join(' · ')
+}
+
 export const TYPE_COLOR = { fleet_internal: 'blue', fleet_external: 'purple', regular: 'gray' }
 export const VEHICLE_STATUS_COLOR = { active: 'green', in_shop: 'purple', inactive: 'gray', sold: 'gray' }
 

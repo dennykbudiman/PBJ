@@ -6,8 +6,8 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { fmtDateTime, jobNo } from '../../lib/format'
-import { shopToday, vehicleName } from '../../lib/customers'
-import { WORKFLOW_COLOR } from '../../lib/jobs'
+import { plateDriver, shopToday, vehicleName } from '../../lib/customers'
+import { WORKFLOW_COLOR, splitConcerns } from '../../lib/jobs'
 import { APPT_COLOR, APPT_STATUSES, addDays, daysBetween, hhmmToMinutes, isActiveAppt, isDate, minutesToHhmm, shopParts, shopTimeToIso } from '../../lib/calendar'
 import { selectAll } from '../customers/useCustomerData'
 import { bookingProblem, dayHours, hhmm24, hoursText } from '../../lib/hours'
@@ -88,12 +88,18 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
   const vehicles = lists?.vehicles || []
   const customer = customers.find((c) => c.id === f?.customer_id)
   const custVehicles = vehicles.filter((v) => v.customer_id === f?.customer_id && (v.status !== 'sold' || v.id === f?.vehicle_id))
+  // Companies by name; vehicles by plate (spaces optional) or driver name, so one pick sets both company and vehicle
+  // (Nov 4, Denny). Vehicles only show once something is typed.
   const pickOptions = useMemo(() => {
-    const plates = {}
-    for (const v of vehicles) (plates[v.customer_id] ||= []).push(`${v.plate} ${(v.plate || '').replace(/\s/g, '')}`)
-    return customers.filter((c) => c.active !== false).map((c) => ({
-      key: c.id, c, search: [c.display_name, c.legal_name, ...(plates[c.id] || [])].filter(Boolean).join(' ').toLowerCase(),
+    const active = new Map(customers.filter((c) => c.active !== false).map((c) => [c.id, c]))
+    const companies = [...active.values()].map((c) => ({
+      key: c.id, c, search: [c.display_name, c.legal_name].filter(Boolean).join(' ').toLowerCase(),
     }))
+    const vehs = vehicles.filter((v) => active.has(v.customer_id) && v.status !== 'sold').map((v) => ({
+      key: `v:${v.id}`, v, c: active.get(v.customer_id), typed: true,
+      search: [v.plate, (v.plate || '').replace(/\s/g, ''), v.driver_name].filter(Boolean).join(' ').toLowerCase(),
+    }))
+    return [...companies, ...vehs]
   }, [customers, vehicles])
 
   // Booked from a job page, the calendar's appointments aren't at hand: look up this technician's bookings then.
@@ -118,6 +124,9 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
   const job = jobs.find((j) => j.id === f.ro)
   const jobLocked = Boolean(appointment?.ro_id && job && (job.order_status !== 'estimate' || job.closed_at))
 
+  function pickVehicle(v) {
+    setF((x) => ({ ...x, customer_id: v.customer_id, vehicle_id: v.id, ro: '' }))
+  }
   function pickCustomer(c) {
     const vs = vehicles.filter((v) => v.customer_id === c.id && v.status !== 'sold')
     setF((x) => ({ ...x, customer_id: c.id, vehicle_id: vs.length === 1 ? vs[0].id : '', ro: '' }))
@@ -190,7 +199,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
         roId = ro.id
         jobMade = ro
         setCreatedJob(ro)
-        const lines = f.concerns.split('\n').map((x) => x.trim()).filter(Boolean)
+        const lines = splitConcerns(f.concerns)
         if (lines.length) {
           const c = await supabase.from('ro_concerns').insert(lines.map((text, position) => ({ ro_id: ro.id, text, position })))
           if (c.error) toast(errorText(c.error, t), 'err')
@@ -294,8 +303,10 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
               {!readOnly && !jobLocked && <button type="button" className="linkbtn small" onClick={() => setF((x) => ({ ...x, customer_id: '', vehicle_id: '', ro: '' }))}>{t('appt.change')}</button>}
             </div>
           ) : readOnly ? <div className="muted">—</div> : (
-            <Picker options={pickOptions} onPick={(o) => pickCustomer(o.c)} placeholder={lists ? t('job.searchCompany') : t('common.loading')}
-              render={(o) => <span><b>{o.c.display_name}</b>{o.c.legal_name && <span className="muted small"> · {o.c.legal_name}</span>}</span>} />
+            <Picker options={pickOptions} onPick={(o) => (o.v ? pickVehicle(o.v) : pickCustomer(o.c))} placeholder={lists ? t('appt.searchWho') : t('common.loading')}
+              render={(o) => (o.v
+                ? <span><b>{plateDriver(o.v)}</b> <span className="muted small">· {vehicleName(o.v) || '—'} — {o.c.display_name}</span></span>
+                : <span><b>{o.c.display_name}</b>{o.c.legal_name && <span className="muted small"> · {o.c.legal_name}</span>}</span>)} />
           )}
           {errors.who ? <div className="error">{errors.who}</div> : !customer && <div className="hint">{t('appt.blockHint')}</div>}
         </div>
@@ -303,7 +314,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
           <>
             <Select label={t('job.vehicle')} value={f.vehicle_id} disabled={readOnly || jobLocked} error={errors.vehicle}
               onChange={(e) => setF((x) => ({ ...x, vehicle_id: e.target.value, ro: '' }))}
-              options={[{ value: '', label: custVehicles.length ? t('appt.noVehicle') : t('job.noVehicles') }, ...custVehicles.map((v) => ({ value: v.id, label: `${v.plate} · ${vehicleName(v) || '—'}` }))]} />
+              options={[{ value: '', label: custVehicles.length ? t('appt.noVehicle') : t('job.noVehicles') }, ...custVehicles.map((v) => ({ value: v.id, label: `${plateDriver(v)} · ${vehicleName(v) || '—'}` }))]} />
             <div className="field">
               <label htmlFor="ap-job">{t('appt.job')}</label>
               <select id="ap-job" className="select" value={f.ro} onChange={set('ro')} disabled={readOnly || jobLocked || !f.vehicle_id}>

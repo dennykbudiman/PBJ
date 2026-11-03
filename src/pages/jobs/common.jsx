@@ -120,7 +120,7 @@ export function Picker({ options, onPick, placeholder, render, disabled, autoFoc
   const ref = useRef(null)
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return options.slice(0, 8)
+    if (!needle) return options.filter((o) => !o.typed).slice(0, 8)
     return options.filter((o) => o.search.includes(needle)).slice(0, 8)
   }, [options, q])
   useEffect(() => {

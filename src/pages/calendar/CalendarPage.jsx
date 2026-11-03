@@ -7,7 +7,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { initials, jobNo } from '../../lib/format'
-import { shopToday, vehicleName } from '../../lib/customers'
+import { plateDriver, shopToday, vehicleName } from '../../lib/customers'
 import {
   addDays, addMonths, clock, dayLabel, daysBetween, isDate, layoutOverlaps, monthFirst, monthLabel,
   shopParts, shopTimeToIso, weekStart, weekdayNames,
@@ -17,7 +17,7 @@ import { useStaff } from '../jobs/useJobData'
 import AppointmentModal from './AppointmentModal'
 import { bookingProblem, dayHours, hoursRange, hoursText } from '../../lib/hours'
 
-const HOUR_PX = 52
+const HOUR_PX = 96 // Nov 4, Denny: roomier; scrolling down is fine
 const SLOT = 30 // minutes per clickable slot
 const MIN_EV = 30 // shortest drawn booking, in minutes, so short ones stay readable and never overlap
 const VIEWS = ['day', 'week', 'month']
@@ -76,7 +76,7 @@ export default function CalendarPage() {
   useEffect(() => {
     Promise.all([
       selectAll(() => supabase.from('customers').select('id, display_name').order('id')),
-      selectAll(() => supabase.from('vehicles').select('id, plate, make, model, year').order('id')),
+      selectAll(() => supabase.from('vehicles').select('id, plate, make, model, year, driver_name').order('id')),
     ]).then(([c, v]) => setNames({
       customer: Object.fromEntries((c.data || []).map((x) => [x.id, x])),
       vehicle: Object.fromEntries((v.data || []).map((x) => [x.id, x])),
@@ -92,7 +92,7 @@ export default function CalendarPage() {
       selectAll(() => supabase.from('appointments').select('*').eq('status', 'requested').gt('end_time', new Date().toISOString()).order('start_time').order('id')),
     ])
     const roIds = [...new Set([...(a.data || []), ...(r.data || [])].map((x) => x.ro_id).filter(Boolean))]
-    const j = roIds.length ? await supabase.from('repair_orders').select('id, job_number, workflow_status, order_status').in('id', roIds) : { data: [] }
+    const j = roIds.length ? await supabase.from('repair_orders').select('id, job_number, workflow_status, order_status, driver_name').in('id', roIds) : { data: [] }
     if (n !== loads.current) return
     setAppts(a.data || [])
     setRequests(r.data || [])
@@ -113,14 +113,17 @@ export default function CalendarPage() {
   const label = (a) => {
     const c = names?.customer[a.customer_id]
     const v = names?.vehicle[a.vehicle_id]
-    return { who: c?.display_name || a.title || '—', title: c ? a.title : null, plate: v?.plate, vehicle: v ? vehicleName(v) : '', job: a.ro_id ? jobs[a.ro_id] : null }
+    const job = a.ro_id ? jobs[a.ro_id] : null
+    // the driver: who brought it in on the linked job, else the vehicle's driver; on the first line with the plate
+    const driver = job?.driver_name || v?.driver_name || null
+    return { who: c?.display_name || a.title || '—', title: c ? a.title : null, plate: v?.plate, driver, head: v ? plateDriver(v, driver) : null, vehicle: v ? vehicleName(v) : '', job }
   }
   const shown = useMemo(() => (appts || []).filter((a) => {
     if (!showCancelled && a.status === 'cancelled') return false
     if (tech === 'none' ? a.technician_id : tech && a.technician_id !== tech) return false
     if (!needle) return true
     const l = label(a)
-    return [l.who, l.title, l.plate, l.plate?.replace(/\s/g, ''), l.vehicle, l.job && jobNo(l.job.job_number), a.notes].filter(Boolean).join(' ').toLowerCase().includes(needle)
+    return [l.who, l.title, l.plate, l.plate?.replace(/\s/g, ''), l.driver, l.vehicle, l.job && jobNo(l.job.job_number), a.notes].filter(Boolean).join(' ').toLowerCase().includes(needle)
   }), [appts, showCancelled, tech, needle, names, jobs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Rescheduling by drag: same length, new start (and, in the day view, maybe a new technician).
@@ -213,7 +216,7 @@ export default function CalendarPage() {
                     <button type="button" className="reqrow" onClick={() => setModal({ appointment: a })}>
                       <span className="muted small">{dayLabel(p.date, lang)} · {clock(p.minutes, lang)}</span>
                       <b>{l.who}</b>
-                      {l.plate && <span className="small">{l.plate} <span className="muted">{l.vehicle}</span></span>}
+                      {l.plate && <span className="small">{l.head} <span className="muted">{l.vehicle}</span></span>}
                     </button>
                   </li>
                 )
@@ -361,13 +364,13 @@ function TimeGrid({ columns, byTech, appts, label, staff, canEdit, today, allHou
                     }}
                     onDragEnd={() => { setDrag(null); setOver(null) }}
                     onClick={() => onOpen(ev.a)}
-                    title={`${spanText(ev.p, lang, t)} · ${l.who}${l.plate ? ` · ${l.plate} ${l.vehicle}` : ''} · ${t(`appt.st.${ev.a.status}`)}`}>
+                    title={`${spanText(ev.p, lang, t)} · ${l.head ? `${l.head} · ` : ''}${l.who}${l.vehicle ? ` · ${l.vehicle}` : ''} · ${t(`appt.st.${ev.a.status}`)}`}>
                     <span className="ev-time">{spanText(ev.p, lang, t)}{tech && !byTech && <span className="ev-tech">{initials(tech.name)}</span>}</span>
-                    {/* Plate and company on the first line, so even a short booking shows both; the model goes under them when there is room. */}
-                    <span className="ev-who">{l.plate ? `${l.plate} · ${l.who}` : l.who}</span>
-                    {height >= 64 && l.plate && l.vehicle && <span className="ev-sub ev-veh">{l.vehicle}</span>}
-                    {height >= 88 && l.job && <span className="ev-sub">#{jobNo(l.job.job_number)}</span>}
-                    {height >= 104 && l.title && <span className="ev-sub">{l.title}</span>}
+                    {/* Plate, driver and company on the first line, so even a short booking shows them; the model goes under them when there is room. */}
+                    <span className="ev-who">{l.head ? `${l.head} · ${l.who}` : l.who}</span>
+                    {height >= 72 && l.plate && l.vehicle && <span className="ev-sub ev-veh">{l.vehicle}</span>}
+                    {height >= 92 && l.job && <span className="ev-sub">#{jobNo(l.job.job_number)}</span>}
+                    {height >= 120 && l.title && <span className="ev-sub">{l.title}</span>}
                   </button>
                 )
               })}
@@ -414,8 +417,8 @@ function MonthView({ appts, label, date, first, staff, canEdit, today, hours, on
               return (
                 <button key={a.id} type="button" draggable={canEdit} className={`mev s-${a.status}`} onClick={() => onOpen(a)}
                   onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', a.id); setDrag({ a, day: d }) }} onDragEnd={() => { setDrag(null); setOver(null) }}
-                  title={`${l.plate ? `${l.plate} ${l.vehicle} · ` : ''}${l.who} · ${t(`appt.st.${a.status}`)}`}>
-                  <span className="mev-time">{p.first ? clock(p.start, lang) : '→'}</span> <span className="mev-who">{l.plate ? `${l.plate} · ${l.who}` : l.who}</span>
+                  title={`${l.head ? `${l.head} ${l.vehicle} · ` : ''}${l.who} · ${t(`appt.st.${a.status}`)}`}>
+                  <span className="mev-time">{p.first ? clock(p.start, lang) : '→'}</span> <span className="mev-who">{l.head ? `${l.head} · ${l.who}` : l.who}</span>
                   {tech && <span className="ev-tech">{initials(tech.name)}</span>}
                 </button>
               )

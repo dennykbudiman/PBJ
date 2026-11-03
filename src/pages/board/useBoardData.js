@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { selectAll } from '../customers/useCustomerData'
 import { isActiveAppt } from '../../lib/calendar'
 
-const JOB_COLS = 'id, job_number, invoice_number, customer_id, vehicle_id, order_status, workflow_status, priority, service_advisor_id, total, balance, payment_status, invoiced_at, due_date, created_at, updated_at, archived_at, closed_at'
+const JOB_COLS = 'id, job_number, invoice_number, customer_id, vehicle_id, driver_name, order_status, workflow_status, priority, service_advisor_id, total, balance, payment_status, invoiced_at, due_date, created_at, updated_at, archived_at, closed_at'
 
 // Runs an `.in()` query in chunks so long id lists never make an over-long URL.
 async function inChunks(ids, build) {
@@ -28,7 +28,7 @@ export function useBoardData() {
     const [jobs, customers, vehicles, contacts] = await Promise.all([
       selectAll(() => supabase.from('repair_orders').select(JOB_COLS).is('archived_at', null).is('closed_at', null).order('job_number', { ascending: false }).order('id')),
       selectAll(() => supabase.from('customers').select('id, display_name, phone').order('id')),
-      selectAll(() => supabase.from('vehicles').select('id, customer_id, plate, make, model, year').order('id')),
+      selectAll(() => supabase.from('vehicles').select('id, customer_id, plate, make, model, year, driver_name').order('id')),
       selectAll(() => supabase.from('customer_contacts').select('id, customer_id, name, phone, is_primary').order('is_primary', { ascending: false }).order('id')),
     ])
     const ids = (jobs.data || []).map((j) => j.id)

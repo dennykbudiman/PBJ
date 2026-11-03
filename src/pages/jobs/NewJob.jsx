@@ -8,8 +8,8 @@ import { useT } from '../../lib/i18n'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { selectAll } from '../customers/useCustomerData'
 import { jobNo, km } from '../../lib/format'
-import { vehicleName } from '../../lib/customers'
-import { PRIORITIES } from '../../lib/jobs'
+import { plateDriver, vehicleName } from '../../lib/customers'
+import { PRIORITIES, splitConcerns } from '../../lib/jobs'
 import { runsJobs, useStaff } from './useJobData'
 
 // New job: pick the company and vehicle, the odometer reading, who brought it in and what the driver reported.
@@ -117,8 +117,9 @@ export default function NewJob() {
       const d = await supabase.from('vehicles').update(driver).eq('id', f.vehicle_id)
       if (d.error) toast(errorText(d.error, t), 'err')
     }
-    if (f.concern.trim()) {
-      const c = await supabase.from('ro_concerns').insert({ ro_id: data.id, position: 0, text: f.concern.trim() })
+    const concerns = splitConcerns(f.concern) // one concern per line
+    if (concerns.length) {
+      const c = await supabase.from('ro_concerns').insert(concerns.map((text, position) => ({ ro_id: data.id, position, text })))
       if (c.error) toast(errorText(c.error, t), 'err')
     }
     toast(t('job.created', { no: jobNo(data.job_number) }))
@@ -147,7 +148,7 @@ export default function NewJob() {
                   <div className="vehhits" role="list" aria-label={t('nj.vehicleHits')}>
                     {vehHits.map((v) => (
                       <button key={v.id} type="button" role="listitem" className={`vehhit ${f.vehicle_id === v.id ? 'on' : ''}`} onClick={() => pickVehicle(v)}>
-                        <b>{v.plate}</b> · {vehicleName(v) || '—'} <span className="muted">— {nameOfCustomer(v.customer_id)}</span>
+                        <b>{plateDriver(v)}</b> · {vehicleName(v) || '—'} <span className="muted">— {nameOfCustomer(v.customer_id)}</span>
                         {v.driver_name && <span className="muted small"> · {t('drv.driver')}: {v.driver_name}</span>}
                       </button>
                     ))}
@@ -162,7 +163,7 @@ export default function NewJob() {
               <div className="span2">
                 <Select label={t('job.vehicle')} value={f.vehicle_id} onChange={set('vehicle_id')} error={errors.vehicle_id} disabled={!f.customer_id}
                   options={[{ value: '', label: f.customer_id ? (custVehicles.length ? t('job.pickVehicle') : t('job.noVehicles')) : t('job.pickCompanyFirst') },
-                    ...custVehicles.map((v) => ({ value: v.id, label: `${v.plate} · ${vehicleName(v) || '—'}` }))]} />
+                    ...custVehicles.map((v) => ({ value: v.id, label: `${plateDriver(v)} · ${vehicleName(v) || '—'}` }))]} />
                 {f.customer_id && custVehicles.length === 0 && (
                   <div className="hint"><Link to={`/customers/${f.customer_id}`}>{t('job.addVehicleFirst')}</Link></div>
                 )}

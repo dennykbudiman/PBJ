@@ -7,7 +7,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { initials, invoiceNo, jobNo, num, rp, sumOf } from '../../lib/format'
-import { shopToday, vehicleName } from '../../lib/customers'
+import { plateDriver, shopToday, vehicleName } from '../../lib/customers'
 import { PRIORITIES, PRIORITY_COLOR, WORKFLOW_COLOR, WORKFLOW_MANUAL } from '../../lib/jobs'
 import { APPT_COLOR, addDays, clock, dayLabel, daysBetween, shopParts } from '../../lib/calendar'
 import { MoreMenu } from '../jobs/common'
@@ -60,7 +60,7 @@ export default function BoardPage() {
       if (!needle) return true
       const c = data.customer[j.customer_id]
       const v = data.vehicle[j.vehicle_id]
-      const hay = [jobNo(j.job_number), j.invoice_number && invoiceNo(j.invoice_number), c?.display_name, v?.plate, v?.plate?.replace(/\s/g, ''), v && vehicleName(v), data.contact[j.customer_id]?.name]
+      const hay = [jobNo(j.job_number), j.invoice_number && invoiceNo(j.invoice_number), c?.display_name, v?.plate, v?.plate?.replace(/\s/g, ''), v && vehicleName(v), j.driver_name, v?.driver_name, data.contact[j.customer_id]?.name]
       return hay.filter(Boolean).join(' ').toLowerCase().includes(needle)
     })
   }, [data, moved, tech, advisor, priority, needle])
@@ -244,7 +244,7 @@ function JobCard({ job, data, staff, today, canEdit, draggable, dragging, onDrag
           {(job.priority === 'high' || job.priority === 'urgent') && <Badge color={PRIORITY_COLOR[job.priority]}>{t(`job.pri.${job.priority}`)}</Badge>}
         </div>
         <div className="bcard-company">{c?.display_name || '—'}</div>
-        <div className="bcard-vehicle"><Icon name="car" size={13} /><b>{v?.plate || '—'}</b>{v && vehicleName(v) && <span>{vehicleName(v)}</span>}</div>
+        <div className="bcard-vehicle"><Icon name="car" size={13} /><b>{(v && plateDriver(v, job.driver_name || v.driver_name)) || '—'}</b>{v && vehicleName(v) && <span>{vehicleName(v)}</span>}</div>
         {phone && <div className="muted small"><Icon name="phone" size={11} /> {phone}{contact?.name ? ` · ${contact.name}` : ''}</div>}
       </button>
       <div className="bcard-people">

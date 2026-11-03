@@ -11,8 +11,8 @@ import { supabase, errorText } from '../../lib/supabase'
 import { invoiceNo, jobNo, km, num, rp } from '../../lib/format'
 import { usePageTitle } from '../../lib/branding'
 import { DriverText } from '../../components/DriverText'
-import { vehicleName } from '../../lib/customers'
-import { PRIORITY_COLOR, WORKFLOW_COLOR } from '../../lib/jobs'
+import { plateDriver, vehicleName } from '../../lib/customers'
+import { PRIORITY_COLOR, WORKFLOW_COLOR, splitConcerns } from '../../lib/jobs'
 import { useCatalogData } from '../catalog/useCatalogData'
 import { useJobData, useStaff } from './useJobData'
 import { BlurInput, MoreMenu, useRun } from './common'
@@ -60,7 +60,7 @@ export default function JobPage({ id }) {
   const toast = useToast()
 
   // Tab title: "DA 8130 BN · #100001" (Nov 3, Denny: tell many open job tabs apart).
-  usePageTitle(job ? [job.vehicle?.plate, `#${jobNo(job.ro.job_number)}`].filter(Boolean).join(' · ') : null)
+  usePageTitle(job ? [plateDriver(job.vehicle, job.ro.driver_name || job.vehicle?.driver_name), `#${jobNo(job.ro.job_number)}`].filter(Boolean).join(' · ') : null)
   if (missing) return <Page><Card><Empty icon="info" title={t('job.notFound')} action={<Link className="btn" to="/customers/repair-orders">{t('job.backToList')}</Link>} /></Card></Page>
   if (!job || !cat) return <Page><div className="muted">{error ? errorText(error, t) : t('common.loading')}</div></Page>
 
@@ -264,10 +264,12 @@ function ConcernsTab({ job, editable, run, busy }) {
   const { t } = useT()
   const [text, setText] = useState('')
   const concerns = job.concerns
-  const add = async () => {
-    if (!text.trim()) return
+  // Several lines (pasted from a message or a list) become one concern each.
+  const add = async (value = text) => {
+    const lines = splitConcerns(value)
+    if (!lines.length) return
     const pos = concerns.reduce((m, c) => Math.max(m, c.position), -1) + 1
-    if (await run(() => supabase.from('ro_concerns').insert({ ro_id: job.ro.id, text: text.trim(), position: pos }))) setText('')
+    if (await run(() => supabase.from('ro_concerns').insert(lines.map((x, i) => ({ ro_id: job.ro.id, text: x, position: pos + i }))))) setText('')
   }
   const swap = (i, d) => {
     const a = concerns[i]; const b = concerns[i + d]
@@ -303,8 +305,15 @@ function ConcernsTab({ job, editable, run, busy }) {
       {editable && (
         <div className="row" style={{ gap: 8, marginTop: 10 }}>
           <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder={t('job.concernExample')} aria-label={t('job.addConcern')}
-            onKeyDown={(e) => e.key === 'Enter' && add()} />
-          <Button onClick={add} loading={busy}>{t('job.add')}</Button>
+            onKeyDown={(e) => e.key === 'Enter' && add()}
+            onPaste={(e) => {
+              // a one-line box would run pasted lines together: add them as separate concerns instead
+              const pasted = e.clipboardData?.getData('text') || ''
+              if (!/[\r\n]/.test(pasted.trim())) return
+              e.preventDefault()
+              add(text.trim() ? `${text}\n${pasted}` : pasted)
+            }} />
+          <Button onClick={() => add()} loading={busy}>{t('job.add')}</Button>
         </div>
       )}
     </section>

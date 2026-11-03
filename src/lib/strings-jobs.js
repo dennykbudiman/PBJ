@@ -7,7 +7,7 @@ export const jobsEn = {
   'job.alreadyOpen': 'This vehicle already has an open job:', 'job.odometerIn': 'Odometer in', 'job.odometerOut': 'Odometer out',
   'job.lastKnown': 'Last known: {km}', 'job.lowerThanLast': 'Lower than the last known reading ({km}). Check the number.',
   'job.priority': 'Priority', 'job.advisor': 'Service advisor', 'job.concern': 'Customer concern',
-  'job.concernExample': 'e.g. Brakes squeal when stopping', 'job.concernHint': 'What the driver or fleet manager reported. More can be added later.',
+  'job.concernExample': 'e.g. Brakes squeal when stopping', 'job.concernHint': 'What the driver or fleet manager reported, one per line. More can be added later.',
   'job.create': 'Create job', 'job.created': 'Job #{no} created', 'job.noCustomers': 'No companies yet', 'job.noCustomersText': 'Add a company and its vehicles first.',
   'job.pri.low': 'Low', 'job.pri.medium': 'Medium', 'job.pri.high': 'High', 'job.pri.urgent': 'Urgent',
 
@@ -184,7 +184,7 @@ export const jobsId = {
   'job.alreadyOpen': 'Kendaraan ini sudah punya pekerjaan terbuka:', 'job.odometerIn': 'Odometer masuk', 'job.odometerOut': 'Odometer keluar',
   'job.lastKnown': 'Terakhir: {km}', 'job.lowerThanLast': 'Lebih rendah dari angka terakhir ({km}). Periksa angkanya.',
   'job.priority': 'Prioritas', 'job.advisor': 'Service advisor', 'job.concern': 'Keluhan pelanggan',
-  'job.concernExample': 'mis. Rem berdecit saat berhenti', 'job.concernHint': 'Yang dilaporkan sopir atau fleet manager. Bisa ditambah nanti.',
+  'job.concernExample': 'mis. Rem berdecit saat berhenti', 'job.concernHint': 'Yang dilaporkan sopir atau fleet manager, satu per baris. Bisa ditambah nanti.',
   'job.create': 'Buat pekerjaan', 'job.created': 'Pekerjaan #{no} dibuat', 'job.noCustomers': 'Belum ada perusahaan', 'job.noCustomersText': 'Tambahkan perusahaan dan kendaraannya terlebih dahulu.',
   'job.pri.low': 'Rendah', 'job.pri.medium': 'Sedang', 'job.pri.high': 'Tinggi', 'job.pri.urgent': 'Mendesak',
 

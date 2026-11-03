@@ -1,6 +1,14 @@
 // Shared job (repair order) constants and small helpers.
 import { zonedMidnightUtc } from './customers'
 
+// Concerns typed or pasted as several lines become one concern per line (Nov 4, Denny): list markers ("-", "•", "1.",
+// "2)") at the start of a line are dropped, empty lines skipped.
+export function splitConcerns(text) {
+  return String(text || '').split(/\r?\n|\r/)
+    .map((x) => x.replace(/^\s*(?:[-•*·]+|\d{1,2}[.)])\s*/, '').trim())
+    .filter(Boolean)
+}
+
 export const WORKFLOW = ['estimate', 'scheduled', 'arrived', 'in_progress', 'waiting_parts', 'completed', 'invoiced', 'paid']
 // Statuses staff pick by hand; Invoiced and Paid are set by invoicing and payments.
 export const WORKFLOW_MANUAL = ['estimate', 'scheduled', 'arrived', 'in_progress', 'waiting_parts', 'completed']
