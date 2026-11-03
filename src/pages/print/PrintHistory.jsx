@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { usePageTitle } from '../../lib/branding'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
@@ -40,6 +41,7 @@ export default function PrintHistory() {
     return () => { live = false }
   }, [vehicleId, companyId, doc])
 
+  usePageTitle(data ? [tUi(`fh.title.${doc}`), vehicleId ? data.vehicles[0]?.v?.plate : data.customer?.display_name].filter(Boolean).join(' · ') : null, { alone: true })
   if (!vehicleId && !companyId) return <div className="print-msg">{tUi('fh.nothing')}</div>
   if (error) return <div className="print-msg">{errorText(error, tUi)}</div>
   if (!data || !settings) return <div className="print-msg">{tUi('common.loading')}</div>
@@ -50,7 +52,7 @@ export default function PrintHistory() {
   const title = t(`fh.title.${doc}`)
   const who = data.customer?.display_name || data.customer?.legal_name || '—'
   const today = shopToday(timezone)
-  const fileBase = vehicleId ? `axle-history-${(data.vehicles[0].v.plate || '').replace(/\s+/g, '')}` : `axle-${doc === 'list' ? 'vehicles' : 'fleet-history'}-${(data.customer?.display_name || 'company').replace(/[^A-Za-z0-9]+/g, '-')}`
+  const fileBase = vehicleId ? `service-history-${(data.vehicles[0].v.plate || '').replace(/\s+/g, '')}` : `${doc === 'list' ? 'vehicles' : 'fleet-history'}-${(data.customer?.display_name || 'company').replace(/[^A-Za-z0-9]+/g, '-')}`
   function csv() {
     const { head, rows } = historyCsv(data, doc, t, lang, prices, timezone)
     downloadCsv(`${fileBase}-${today}.csv`, head, rows)

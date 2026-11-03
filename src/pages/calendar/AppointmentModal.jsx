@@ -65,7 +65,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
     if (!open) return
     Promise.all([
       selectAll(() => supabase.from('customers').select('id, display_name, legal_name, active').order('display_name').order('id')),
-      selectAll(() => supabase.from('vehicles').select('id, customer_id, plate, make, model, year, status').order('plate').order('id')),
+      selectAll(() => supabase.from('vehicles').select('id, customer_id, plate, make, model, year, status, driver_name, driver_phone').order('plate').order('id')),
     ]).then(([c, v]) => {
       setLists({ customers: c.data || [], vehicles: v.data || [] })
       if (c.error || v.error) setMsg(errorText(c.error || v.error, t))
@@ -181,7 +181,11 @@ export default function AppointmentModal({ open, onClose, appointment, defaults,
       if (createdJob && createdJob.vehicle_id === f.vehicle_id) roId = createdJob.id
       else {
         const advisor = roleName !== 'Technician' && staff.some((s) => s.id === profile?.id) ? profile.id : null
-        const { data: ro, error } = await writeRow('repair_orders', { customer_id: f.customer_id, vehicle_id: f.vehicle_id, priority: 'medium', service_advisor_id: advisor })
+        const veh = lists?.vehicles?.find((v) => v.id === f.vehicle_id)
+        const { data: ro, error } = await writeRow('repair_orders', {
+          customer_id: f.customer_id, vehicle_id: f.vehicle_id, priority: 'medium', service_advisor_id: advisor,
+          driver_name: veh?.driver_name || null, driver_phone: veh?.driver_phone || null, // who usually brings it (136)
+        })
         if (error) { setBusy(false); return setMsg(errorText(error, t)) }
         roId = ro.id
         jobMade = ro

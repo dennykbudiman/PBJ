@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { usePageTitle } from '../../lib/branding'
 import { Badge, Button, Empty, Notice, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import ContactForm from './ContactForm'
@@ -42,6 +43,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
   const toast = useToast()
   const { settings } = useShop()
   const [tab, setTab] = useState('contact')
+  usePageTitle(customer?.display_name)
   const [contact, setContact] = useState(undefined) // undefined = closed, null = new
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)

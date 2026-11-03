@@ -43,7 +43,7 @@ export default function FleetReport() {
   function csv() {
     const head = [t('rep.col.company'), t('rep.col.plate'), t('rep.g.vehicle'), t('rep.col.invoice'), t('rep.col.date'), t('rep.col.job'), t('rep.col.km'),
       ...MONEY.map((m) => t(`rep.m.${m}`))]
-    downloadCsv(`axle-fleet-${period.from}-${period.to}.csv`, head, list.map((r) => [r.company, r.plate, vehicleName(r), invoiceNo(r.invoice_number), r.invoiced_on,
+    downloadCsv(`fleet-${period.from}-${period.to}.csv`, head, list.map((r) => [r.company, r.plate, vehicleName(r), invoiceNo(r.invoice_number), r.invoiced_on,
       jobNo(r.job_number), r.km, ...MONEY.map((m) => Number(r[m]))]))  // discounts as a positive amount, as in the Sales CSV
   }
 

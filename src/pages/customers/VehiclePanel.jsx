@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { usePageTitle } from '../../lib/branding'
+import { DriverText } from '../../components/DriverText'
 import { Badge, Button, Empty, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import TransferForm from './TransferForm'
@@ -30,6 +32,7 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
   const toast = useToast()
   const { timezone } = useShop()
   const [tab, setTab] = useState('overview')
+  usePageTitle(vehicle ? [vehicle.plate, vehicleName(vehicle)].filter(Boolean).join(' · ') : null)
   const [history, setHistory] = useState(null)
   const [transfer, setTransfer] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -102,6 +105,7 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
               <Field label={t('veh.type')}>{vehicle.type ? t(`veh.vtype.${vehicle.type}`) : null}</Field>
               <Field label={t('veh.fuel')}>{vehicle.fuel_type ? t(`veh.fuel.${vehicle.fuel_type}`) : null}</Field>
               <Field label={t('veh.added')}>{fmtDate(vehicle.created_at, lang, timezone)}</Field>
+              <Field label={t('drv.driver')}>{vehicle.driver_name || vehicle.driver_phone ? <DriverText name={vehicle.driver_name} phone={vehicle.driver_phone} /> : null}</Field>
             </div>
             {vehicle.notes && <div className="hint" style={{ whiteSpace: 'pre-line', marginTop: 10 }}><b>{t('veh.notes')}:</b> {vehicle.notes}</div>}
 

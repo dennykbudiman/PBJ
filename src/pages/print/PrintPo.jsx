@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { usePageTitle } from '../../lib/branding'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
@@ -39,6 +40,7 @@ export default function PrintPo() {
     return () => { live = false }
   }, [id])
 
+  usePageTitle(d ? ['PO ' + d.po.po_number, d.sup?.name].filter(Boolean).join(' · ') : null, { alone: true })
   if (error === 'missing') return <div className="print-msg">{tUi('inv.po.notFound')} · <Link to="/inventory/purchase-orders">{tUi('inv.po.back')}</Link></div>
   if (!d || !settings) return <div className="print-msg">{error ? errorText(error, tUi) : tUi('common.loading')}</div>
 

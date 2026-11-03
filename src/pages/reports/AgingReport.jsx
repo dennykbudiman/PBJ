@@ -46,7 +46,7 @@ export default function AgingReport() {
 
   function csv() {
     const head = [t('rep.col.company'), t('rep.col.invoice'), t('rep.col.date'), t('rep.col.due'), t('rep.col.daysOverdue'), t('rep.col.bucket'), t('rep.m.total'), t('rep.col.paid'), t('rep.col.balance')]
-    downloadCsv(`axle-aging-${shopToday(timezone)}.csv`, head,
+    downloadCsv(`aging-${shopToday(timezone)}.csv`, head,
       list.map((r) => [r.company, invoiceNo(r.invoice_number), r.invoiced_on, r.due_date, r.days_overdue, t(`rep.b.${agingBucket(r.days_overdue)}`), Number(r.total), Number(r.paid), Number(r.balance)]))
   }
 

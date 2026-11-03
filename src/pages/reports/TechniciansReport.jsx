@@ -38,7 +38,7 @@ export default function TechniciansReport() {
   function csv() {
     const head = [t('rep.col.invoice'), t('rep.col.date'), t('rep.col.job'), t('rep.col.company'), t('rep.col.plate'), t('rep.tech.service'), t('rep.tech.col'),
       t('rep.tech.hoursSold'), t('rep.tech.hoursWorked'), t('rep.tech.labor')]
-    downloadCsv(`axle-technicians-${period.from}-${period.to}.csv`, head, list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate,
+    downloadCsv(`technicians-${period.from}-${period.to}.csv`, head, list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate,
       r.service_name, r.technician || t('rep.tech.unassigned'), n(r.hours_sold), r.hours_worked == null ? null : n(r.hours_worked), n(r.labor)]))
   }
 

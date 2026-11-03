@@ -13,6 +13,7 @@ import { LINE_COLOR, lineState } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, discountText, parseDiscount } from './common'
 import { worksOnJobs } from './useJobData'
 import { useAuth } from '../../context/AuthContext'
+import { alternativesIndex, fitsVehicle, numberTokens } from '../../lib/alternatives'
 
 const nextPos = (rows) => rows.reduce((m, r) => Math.max(m, Number(r.position) || 0), -1) + 1
 
@@ -70,6 +71,8 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
   const ro = job.ro
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
+  // Parts sharing a part number (migration 136), shown on each part line as alternatives.
+  const alts = useMemo(() => alternativesIndex(cat.items), [cat.items])
 
   const templateOptions = useMemo(() => cat.templates.filter((x) => x.active).map((x) => ({
     key: x.id, tp: x, search: [x.name, ...(x.tags || [])].join(' ').toLowerCase(),
@@ -116,13 +119,13 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
         <div className="card"><Empty icon="wrench" title={t('job.noServices')}>{editable ? t('job.noServicesText') : null}</Empty></div>
       ) : job.services.map((s, i) => (
         <ServiceCard key={s.id} s={s} index={i} job={job} cat={cat} staff={staff} editable={editable} workEditable={workEditable}
-          showCost={showCost} run={run} busy={busy} openApproval={openApproval} />
+          showCost={showCost} run={run} busy={busy} openApproval={openApproval} alts={alts} />
       ))}
     </div>
   )
 }
 
-function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCost, run, busy, openApproval }) {
+function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCost, run, busy, openApproval, alts }) {
   const { t } = useT()
   const toast = useToast()
   const ro = job.ro
@@ -138,12 +141,42 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   const upd = (patch, okText) => run(() => supabase.from('ro_services').update(patch).eq('id', s.id), okText)
   const updLine = (id, patch) => run(() => supabase.from('ro_service_items').update(patch).eq('id', id))
 
+  // Search covers part numbers with or without dashes, alternative numbers and fitment; parts that fit this job's
+  // vehicle come first (migration 136).
   const itemOptions = useMemo(() => cat.items.filter((x) => x.active).map((x) => ({
-    key: x.id, item: x, search: [x.name, x.code, x.brand, x.tire_size].filter(Boolean).join(' ').toLowerCase(),
-  })), [cat.items])
+    key: x.id, item: x, fits: x.item_type === 'part' && fitsVehicle(x, job.vehicle),
+    search: [x.name, x.code, x.brand, x.tire_size, x.alt_numbers, x.fits, ...numberTokens(x.code), ...numberTokens(x.alt_numbers)].filter(Boolean).join(' ').toLowerCase(),
+  })).sort((a, b) => Number(b.fits) - Number(a.fits)), [cat.items, job.vehicle])
+  const [altFor, setAltFor] = useState(null) // the job line whose alternatives are shown
 
   function addItem(item) {
     run(() => insertLines(s.id, ro.id, nextPos(lines), buildFor(item, cat), job.fees))
+  }
+  // Swap a part line for an alternative: the new part goes in at the same place with the same quantity and discount,
+  // then the old line is removed (only while the part isn't taken from stock or ordered on a PO). If the old line can't
+  // be removed, the new one is taken out again, so the job never ends up with both. A fixed discount larger than the
+  // new line is capped at the new line's amount. Fee lines that come with the new part are added unless the service
+  // already has a line of that name.
+  function swapLine(line, item) {
+    return run(async () => {
+      const built = buildFor(item, cat, { qty: line.qty })
+      const [main, ...extra] = built.lines
+      const gross = Number(lineAmount(main))
+      const fixed = Number(line.discount_amount) || 0
+      const ins = await supabase.from('ro_service_items').insert({
+        ...main, service_id: s.id, position: line.position, discount_pct: line.discount_pct,
+        discount_amount: fixed > gross ? gross : line.discount_amount,
+      }).select('id').single()
+      if (ins.error) return ins
+      const del = await supabase.from('ro_service_items').delete().eq('id', line.id)
+      if (del.error) {
+        await supabase.from('ro_service_items').delete().eq('id', ins.data.id)
+        return del
+      }
+      const have = new Set(lines.map((l) => String(l.name || '').toLowerCase()))
+      const fees = extra.filter((l) => !have.has(String(l.name || '').toLowerCase()))
+      return insertLines(s.id, ro.id, nextPos(lines), { lines: fees, jobFees: built.jobFees }, job.fees)
+    }, t('alt.swapped', { name: item.name }))
   }
   function addCustom(type) {
     run(() => supabase.from('ro_service_items').insert({
@@ -290,7 +323,12 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
                       </>
                     ) : <><b>{l.name}</b>{l.description && <div className="muted small">{l.description}</div>}</>}
                     <div className="muted small cellpad">
-                      {[item?.code, rate ? t('job.rateHint', { name: rate.name, amount: rp(rate.rate_per_hour) }) : null, Number(l.core_charge) > 0 ? t('job.coreHint', { amount: rp(l.core_charge) }) : null].filter(Boolean).join(' · ')}
+                      {[item?.code, item?.brand, rate ? t('job.rateHint', { name: rate.name, amount: rp(rate.rate_per_hour) }) : null, Number(l.core_charge) > 0 ? t('job.coreHint', { amount: rp(l.core_charge) }) : null].filter(Boolean).join(' · ')}
+                      {item && (alts.get(item.id) || []).length > 0 && (
+                        <> · <button type="button" className="linkbtn small" onClick={() => setAltFor(l)}>
+                          {(alts.get(item.id) || []).length === 1 ? t('alt.one') : t('alt.count', { n: (alts.get(item.id) || []).length })}
+                        </button></>
+                      )}
                     </div>
                   </td>
                   {showCost && (
@@ -321,7 +359,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
         <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
           <div style={{ flex: '1 1 260px' }}>
             <Picker options={itemOptions} onPick={(o) => addItem(o.item)} placeholder={t('job.searchItems')} disabled={busy}
-              render={(o) => <ItemOption item={o.item} cat={cat} />} />
+              render={(o) => <ItemOption item={o.item} cat={cat} fits={o.fits} />} />
           </div>
           <select className="select" style={{ width: 'auto' }} value="" aria-label={t('job.customLine')} onChange={(e) => e.target.value && addCustom(e.target.value)}>
             <option value="">{t('job.customLine')}</option>
@@ -354,6 +392,11 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
           <Button variant="danger" className="solid" loading={busy} onClick={() => run(() => supabase.from('ro_services').delete().eq('id', s.id)).then(() => setConfirmDelete(false))}>{t('job.deleteServiceYes')}</Button></>}>
         {t('job.deleteServiceText', { name: s.name, n: lines.length })}
       </Modal>
+      <AltModal line={altFor} alts={altFor ? alts.get(altFor.catalog_item_id) || [] : []} cat={cat} vehicle={job.vehicle} busy={busy}
+        canAdd={editable} canSwap={editable && altFor && !altFor.stock_deducted && !altFor.po_item_id}
+        onClose={() => setAltFor(null)}
+        onAdd={(item) => run(() => insertLines(s.id, ro.id, nextPos(lines), buildFor(item, cat), job.fees)).then((ok) => ok && setAltFor(null))}
+        onSwap={(item) => swapLine(altFor, item).then(() => setAltFor(null))} />
     </section>
   )
 }
@@ -387,7 +430,7 @@ function LineStatus({ l, item, cat, job, workEditable, commitHours }) {
   return <Badge color="red">{t('job.stock.out')}</Badge>
 }
 
-function ItemOption({ item, cat }) {
+function ItemOption({ item, cat, fits }) {
   const { t } = useT()
   const stock = item.track_inventory ? Number(cat.stockById[item.id]?.qty_on_hand ?? item.qty_on_hand ?? 0) : null
   return (
@@ -395,7 +438,8 @@ function ItemOption({ item, cat }) {
       <span className={`typedot t-${item.item_type}`} title={t(`job.type.${item.item_type}`)} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <b>{item.name}</b>
-        <span className="muted small">{item.code ? ` · ${item.code}` : ''} · {t(`job.type.${item.item_type}`)}</span>
+        <span className="muted small">{item.code ? ` · ${item.code}` : ''}{item.brand ? ` · ${item.brand}` : ''} · {t(`job.type.${item.item_type}`)}</span>
+        {fits && <span className="small" style={{ color: 'var(--green)' }}> · {t('alt.fitsVehicle')}</span>}
       </span>
       {stock != null && <span className="small" style={{ color: stock > 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>{t('job.stockN', { n: num(stock, 2) })}</span>}
       <span className="small" style={{ fontWeight: 700 }}>{item.item_type === 'fee' && item.fee_kind === 'percent' ? `${num(item.fee_value, 2)}%` : rp(item.item_type === 'fee' ? item.fee_value ?? item.price : item.price)}</span>
@@ -437,6 +481,35 @@ function ServiceDiscountModal({ open, onClose, s, cat, onSave, busy }) {
           ))}
         </div>
       )}
+    </Modal>
+  )
+}
+
+// The alternatives of one part line: other parts sharing its part number, with brand, price and stock on hand.
+function AltModal({ line, alts, cat, vehicle, busy, canAdd, canSwap, onClose, onAdd, onSwap }) {
+  const { t } = useT()
+  if (!line) return null
+  return (
+    <Modal open title={t('alt.showFor', { name: line.name })} onClose={onClose} footer={<Button onClick={onClose}>{t('common.close')}</Button>}>
+      <div className="altbox">
+        {alts.map((a) => {
+          const stock = a.track_inventory ? Number(cat.stockById[a.id]?.qty_on_hand ?? a.qty_on_hand ?? 0) : null
+          return (
+            <div key={a.id} className="altrow">
+              <span style={{ minWidth: 0 }}>
+                <b>{a.name}</b>
+                <div className="muted small">{[a.code, a.brand, a.fits].filter(Boolean).join(' · ')}{fitsVehicle(a, vehicle) && <span style={{ color: 'var(--green)' }}> · {t('alt.fitsVehicle')}</span>}</div>
+              </span>
+              <span className="row" style={{ gap: 8, flexShrink: 0 }}>
+                {stock != null && <span className="small" style={{ color: stock > 0 ? 'var(--green)' : 'var(--red)', fontWeight: 700 }}>{t('alt.inStock', { n: num(stock, 2) })}</span>}
+                {a.price != null && <span className="small" style={{ fontWeight: 700 }}>{rp(a.price)}</span>}
+                {canSwap && <Button size="sm" variant="primary" disabled={busy} onClick={() => onSwap(a)}>{t('alt.swap')}</Button>}
+                {canAdd && <Button size="sm" disabled={busy} onClick={() => onAdd(a)}>{t('alt.add')}</Button>}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </Modal>
   )
 }

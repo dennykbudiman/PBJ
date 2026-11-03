@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { alternativesIndex, numberTokens, partNumbers } from '../../lib/alternatives'
 import { Badge, Button, Input, Select, Textarea, Toggle, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, RowLink, deleteErrorText } from './common'
@@ -32,7 +33,8 @@ export default function ItemsTab({ tab, data, id, canEdit, showCost, canAdjust, 
       if (status === 'inactive' && x.active) return false
       if (cat !== 'all' && x.category_id !== cat) return false
       if (!needle) return true
-      return [x.name, x.code, x.brand, x.description].filter(Boolean).join(' ').toLowerCase().includes(needle)
+      return [x.name, x.code, x.brand, x.description, x.alt_numbers, x.fits].filter(Boolean).join(' ').toLowerCase().includes(needle)
+        || (numberTokens(q).length > 0 && numberTokens(q).some((tk) => partNumbers(x).has(tk)))
     })
   }, [data, type, q, cat, status, id])
 
@@ -91,7 +93,7 @@ export default function ItemsTab({ tab, data, id, canEdit, showCost, canAdjust, 
               const usedBy = type === 'fee' ? data.itemFees.filter((f) => f.fee_item_id === x.id).length : 0
               return (
                 <tr key={x.id} className={`click ${x.id === id ? 'selected' : ''}`} onClick={() => go(`${base}/${x.id}`)}>
-                  <td><RowLink to={`${base}/${x.id}`} go={go}>{x.name}</RowLink>{!x.active && <> <Badge color="gray">{t('cat.inactive')}</Badge></>}{x.brand && type === 'part' && <div className="muted small">{x.brand}</div>}</td>
+                  <td><RowLink to={`${base}/${x.id}`} go={go}>{x.name}</RowLink>{!x.active && <> <Badge color="gray">{t('cat.inactive')}</Badge></>}{type === 'part' && (x.brand || x.fits) && <div className="muted small">{[x.brand, x.fits].filter(Boolean).join(' · ')}</div>}</td>
                   {type === 'part' && <>
                     <td className="muted code">{x.code || '—'}</td>
                     <td className="xwide-only">{data.supplierById[x.supplier_id]?.name || <span className="muted">—</span>}</td>
@@ -134,7 +136,7 @@ function emptyItem(type, settings, rates) {
     cost: 0, price: 0, markup_pct: null, default_qty: 1, labor_hours: null, labor_rate_id: type === 'labor' ? defRate?.id || '' : '',
     fee_kind: type === 'fee' ? 'fixed' : null, fee_value: null, taxable: Boolean(settings?.new_items_taxable),
     show_on_invoice: true, show_qty_price: true, track_inventory: type === 'part', qty_on_hand: 0, reorder_point: null,
-    has_core: false, core_cost: 0, tire_size: '', notes: '', active: true,
+    has_core: false, core_cost: 0, tire_size: '', notes: '', active: true, alt_numbers: '', fits: '',
   }
 }
 
@@ -152,6 +154,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
     taxable: src.taxable, show_on_invoice: src.show_on_invoice, show_qty_price: src.show_qty_price,
     track_inventory: src.track_inventory, reorder_point: dec(src.reorder_point), opening: '',
     has_core: src.has_core, core_cost: amt(src.core_cost), tire_size: src.tire_size || '', notes: src.notes || '', active: src.active,
+    alt_numbers: src.alt_numbers || '', fits: src.fits || '',
   }))
   const initialFees = useMemo(() => data.itemFees.filter((x) => x.item_id === item?.id).map((x) => x.fee_item_id), [data.itemFees, item?.id])
   const [fees, setFees] = useState(initialFees)
@@ -254,6 +257,8 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
       reorder_point: type === 'part' && f.track_inventory && f.reorder_point.trim() ? reorder : null,
       has_core: type === 'part' ? f.has_core : false, core_cost: type === 'part' && f.has_core ? core ?? 0 : 0,
       tire_size: type === 'part' ? f.tire_size.trim() || null : null,
+      alt_numbers: type === 'part' ? f.alt_numbers.trim() || null : null,
+      fits: type === 'part' ? f.fits.trim() || null : null,
     }
     setBusy(true)
     setMsg(null)
@@ -310,6 +315,9 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
           <Input label={t('cat.brand')} value={f.brand} onChange={set('brand')} disabled={dis} />
           <Select label={t('cat.supplier')} value={f.supplier_id} onChange={set('supplier_id')} disabled={dis}
             options={[{ value: '', label: '—' }, ...data.suppliers.filter((s) => s.active || s.id === f.supplier_id).map((s) => ({ value: s.id, label: s.name }))]} />
+          <Input fieldClass="span2" label={t('alt.numbers')} value={f.alt_numbers} onChange={set('alt_numbers')} disabled={dis} maxLength={500} hint={t('alt.numbersHint')} />
+          <Input fieldClass="span2" label={t('alt.fits')} value={f.fits} onChange={set('fits')} disabled={dis} maxLength={500} hint={t('alt.fitsHint')} />
+          {!isNew && <AltList item={{ ...item, code: f.code, alt_numbers: f.alt_numbers }} items={data.items} stockById={data.stockById} />}
         </>}
         <Textarea fieldClass="span2" label={t('cat.description')} value={f.description} onChange={set('description')} disabled={dis} rows={2} hint={t('cat.descriptionHint')} />
       </div>
@@ -458,6 +466,23 @@ function StockAdjust({ item, onHand, dirty, onDone }) {
         <Button size="sm" onClick={() => setOpen(false)} disabled={busy}>{t('common.cancel')}</Button>
         <Button size="sm" variant="primary" onClick={confirm} loading={busy}>{t('cat.adjust.confirm')}</Button>
       </div>
+    </div>
+  )
+}
+
+// Other parts sharing one of this part's numbers (code or alternative numbers), with brand, price and stock.
+function AltList({ item, items, stockById }) {
+  const { t } = useT()
+  const alts = useMemo(() => alternativesIndex([...items.filter((x) => x.id !== item.id), item]).get(item.id) || [], [items, item])
+  return (
+    <div className="span2 altbox">
+      <div className="fieldlabel">{t('alt.title')}</div>
+      {alts.length === 0 ? <div className="muted small">{t('alt.none')}</div> : alts.map((a) => (
+        <div key={a.id} className="altrow">
+          <span><b>{a.code || '—'}</b> · {a.name}{a.brand && <span className="muted"> · {a.brand}</span>}</span>
+          <span className="small">{a.price != null && rp(a.price)}{a.track_inventory && <span className="muted"> · {t('alt.inStock', { n: num(stockById[a.id]?.qty_on_hand ?? a.qty_on_hand, 2) })}</span>}</span>
+        </div>
+      ))}
     </div>
   )
 }

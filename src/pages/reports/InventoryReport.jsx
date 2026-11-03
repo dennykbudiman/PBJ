@@ -52,7 +52,7 @@ export default function InventoryReport() {
   function csv() {
     const head = [t('rep.col.item'), t('rep.col.code'), t('rep.col.brand'), t('rep.inv.category'), t('rep.col.supplier'), t('rep.col.onHand'), t('rep.col.reorderAt'), t('rep.col.unitCost'), t('rep.col.value'),
       t('rep.col.usedQty'), t('rep.col.usedValue'), t('rep.col.received'), t('rep.col.lastUsed')]
-    downloadCsv(`axle-inventory-${view}-${today}.csv`, head, list.map((r) => [r.name, r.code, r.brand, r.category, r.supplier, n(r.qty_on_hand), r.reorder_point == null ? null : n(r.reorder_point),
+    downloadCsv(`inventory-${view}-${today}.csv`, head, list.map((r) => [r.name, r.code, r.brand, r.category, r.supplier, n(r.qty_on_hand), r.reorder_point == null ? null : n(r.reorder_point),
       n(r.cost), n(r.value), n(r.used_qty), n(r.used_value), n(r.received_qty), r.last_used]))
   }
 

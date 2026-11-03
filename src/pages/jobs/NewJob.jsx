@@ -12,7 +12,8 @@ import { vehicleName } from '../../lib/customers'
 import { PRIORITIES } from '../../lib/jobs'
 import { runsJobs, useStaff } from './useJobData'
 
-// New job: pick the company and vehicle, the odometer reading and what the driver reported.
+// New job: pick the company and vehicle, the odometer reading, who brought it in and what the driver reported.
+// Typing a plate (or a driver's name) lists the matching vehicles: one click picks the vehicle and its company (Nov 3).
 export default function NewJob() {
   const { t } = useT()
   const toast = useToast()
@@ -25,7 +26,7 @@ export default function NewJob() {
   const [vehicles, setVehicles] = useState([])
   const [openJobs, setOpenJobs] = useState([])
   const [q, setQ] = useState('')
-  const [f, setF] = useState({ customer_id: params.get('customer') || '', vehicle_id: params.get('vehicle') || '', odometer: '', concern: '', priority: 'medium', advisor: '' })
+  const [f, setF] = useState({ customer_id: params.get('customer') || '', vehicle_id: params.get('vehicle') || '', odometer: '', concern: '', priority: 'medium', advisor: '', driver_name: '', driver_phone: '', save_driver: false })
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -35,7 +36,7 @@ export default function NewJob() {
   useEffect(() => {
     Promise.all([
       selectAll(() => supabase.from('customers').select('id, display_name, legal_name, active').order('display_name').order('id')),
-      selectAll(() => supabase.from('vehicles').select('id, customer_id, plate, make, model, year, status, mileage_km').order('plate').order('id')),
+      selectAll(() => supabase.from('vehicles').select('id, customer_id, plate, make, model, year, status, mileage_km, driver_name, driver_phone').order('plate').order('id')),
     ]).then(([c, v]) => {
       setCustomers(c.data || [])
       setVehicles(v.data || [])
@@ -58,6 +59,12 @@ export default function NewJob() {
     if (f.customer_id && !custVehicles.some((v) => v.id === f.vehicle_id)) setF((x) => ({ ...x, vehicle_id: custVehicles.length === 1 ? custVehicles[0].id : '' }))
   }, [f.customer_id, vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Who brought it in: the vehicle's driver, editable. A driver typed for a vehicle without one is saved on the vehicle too.
+  useEffect(() => {
+    const v = vehicles.find((x) => x.id === f.vehicle_id)
+    setF((x) => ({ ...x, driver_name: v?.driver_name || '', driver_phone: v?.driver_phone || '', save_driver: Boolean(v) && !v.driver_name && !v.driver_phone }))
+  }, [f.vehicle_id, vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     setOpenJobs([])
     if (!f.vehicle_id) return
@@ -72,6 +79,19 @@ export default function NewJob() {
     const plateHits = new Set(vehicles.filter((v) => (v.plate || '').toLowerCase().replace(/\s/g, '').includes(needle.replace(/\s/g, ''))).map((v) => v.customer_id))
     return list.filter((c) => c.id === f.customer_id || [c.display_name, c.legal_name].filter(Boolean).join(' ').toLowerCase().includes(needle) || plateHits.has(c.id))
   }, [customers, vehicles, q, f.customer_id])
+
+  // Vehicles whose plate (spaces ignored) or driver matches what was typed.
+  const vehHits = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    const flat = needle.replace(/\s/g, '')
+    if (flat.length < 2) return []
+    const active = new Set((customers || []).filter((c) => c.active !== false).map((c) => c.id))
+    return vehicles.filter((v) => v.status !== 'sold' && active.has(v.customer_id)
+      && ((v.plate || '').toLowerCase().replace(/\s/g, '').includes(flat) || (needle.length >= 3 && (v.driver_name || '').toLowerCase().includes(needle))))
+      .slice(0, 8)
+  }, [customers, vehicles, q])
+  const nameOfCustomer = (id) => (customers || []).find((c) => c.id === id)?.display_name || ''
+  const pickVehicle = (v) => { setF((x) => ({ ...x, customer_id: v.customer_id, vehicle_id: v.id })); setErrors({}) }
 
   if (!can('edit_jobs')) {
     return <Page><Card><Empty icon="lock" title={t('err.permission')} /></Card></Page>
@@ -88,10 +108,15 @@ export default function NewJob() {
     setBusy(true)
     setMsg(null)
     if (!(await confirmKm({ value: odo, vehicleId: f.vehicle_id, confirm, t, fmt: km, jobNo }))) { setBusy(false); return }
+    const driver = { driver_name: f.driver_name.trim() || null, driver_phone: f.driver_phone.trim() || null }
     const { data, error } = await writeRow('repair_orders', {
-      customer_id: f.customer_id, vehicle_id: f.vehicle_id, odometer_in: odo, priority: f.priority, service_advisor_id: f.advisor || null,
+      customer_id: f.customer_id, vehicle_id: f.vehicle_id, odometer_in: odo, priority: f.priority, service_advisor_id: f.advisor || null, ...driver,
     })
     if (error) { setBusy(false); return setMsg(errorText(error, t)) }
+    if (f.save_driver && (driver.driver_name || driver.driver_phone)) {
+      const d = await supabase.from('vehicles').update(driver).eq('id', f.vehicle_id)
+      if (d.error) toast(errorText(d.error, t), 'err')
+    }
     if (f.concern.trim()) {
       const c = await supabase.from('ro_concerns').insert({ ro_id: data.id, position: 0, text: f.concern.trim() })
       if (c.error) toast(errorText(c.error, t), 'err')
@@ -117,7 +142,17 @@ export default function NewJob() {
             <div className="grid2">
               <div className="field span2">
                 <label htmlFor="nj-search">{t('job.company')}</label>
-                <input id="nj-search" className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('job.searchCompany')} autoFocus={!f.customer_id} />
+                <input id="nj-search" className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('nj.search')} autoFocus={!f.customer_id} />
+                {vehHits.length > 0 && (
+                  <div className="vehhits" role="list" aria-label={t('nj.vehicleHits')}>
+                    {vehHits.map((v) => (
+                      <button key={v.id} type="button" role="listitem" className={`vehhit ${f.vehicle_id === v.id ? 'on' : ''}`} onClick={() => pickVehicle(v)}>
+                        <b>{v.plate}</b> · {vehicleName(v) || '—'} <span className="muted">— {nameOfCustomer(v.customer_id)}</span>
+                        {v.driver_name && <span className="muted small"> · {t('drv.driver')}: {v.driver_name}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <select className={`select ${errors.customer_id ? 'invalid' : ''}`} size={Math.min(6, Math.max(3, shown.length))} value={f.customer_id}
                   onChange={set('customer_id')} aria-label={t('job.company')} style={{ marginTop: 6, height: 'auto' }}>
                   {shown.map((c) => <option key={c.id} value={c.id}>{c.display_name}</option>)}
@@ -137,6 +172,14 @@ export default function NewJob() {
                   {t('job.alreadyOpen')}{' '}
                   {openJobs.map((j, i) => <React.Fragment key={j.id}>{i > 0 && ', '}<Link to={`/jobs/${j.id}`}>#{jobNo(j.job_number)}</Link></React.Fragment>)}
                 </Notice>
+              )}
+              <Input label={t('drv.broughtBy')} value={f.driver_name} onChange={set('driver_name')} maxLength={120} disabled={!f.vehicle_id} />
+              <Input label={t('drv.phone')} value={f.driver_phone} onChange={set('driver_phone')} maxLength={40} inputMode="tel" disabled={!f.vehicle_id} />
+              {vehicle && (f.driver_name.trim() || f.driver_phone.trim()) && (f.driver_name.trim() !== (vehicle.driver_name || '') || f.driver_phone.trim() !== (vehicle.driver_phone || '')) && (
+                <label className="inlinecheck span2">
+                  <input type="checkbox" checked={f.save_driver} onChange={(e) => setF((x) => ({ ...x, save_driver: e.target.checked }))} />
+                  <span>{vehicle.driver_name || vehicle.driver_phone ? t('drv.replaceOnVehicle', { plate: vehicle.plate }) : t('drv.saveOnVehicle', { plate: vehicle.plate })}</span>
+                </label>
               )}
               <Input label={t('job.odometerIn')} value={f.odometer} onChange={set('odometer')} inputMode="numeric" suffix="km" error={errors.odometer}
                 hint={vehicle?.mileage_km != null ? (lowKm ? t('job.lowerThanLast', { km: km(vehicle.mileage_km) }) : t('job.lastKnown', { km: km(vehicle.mileage_km) })) : null} />

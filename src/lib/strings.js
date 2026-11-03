@@ -10,6 +10,7 @@ import { goliveEn, goliveId } from './strings-golive.js'
 import { historyEn, historyId } from './strings-history.js'
 import { fleetEn, fleetId } from './strings-fleet.js'
 import { loginsEn, loginsId } from './strings-logins.js'
+import { u136En, u136Id } from './strings-update136.js'
 
 const base = {
   en: {
@@ -265,6 +266,6 @@ const base = {
 }
 
 export const dict = {
-  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn, ...historyEn, ...fleetEn, ...loginsEn },
-  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId, ...historyId, ...fleetId, ...loginsId },
+  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn, ...historyEn, ...fleetEn, ...loginsEn, ...u136En },
+  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId, ...historyId, ...fleetId, ...loginsId, ...u136Id },
 }

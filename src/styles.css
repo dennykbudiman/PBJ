@@ -752,3 +752,15 @@ span.seg-btn { cursor: default; }
 
 /* A logo on the sign-in card sits on the white card itself: no coloured tile showing through transparent parts. */
 .authbrand .brand-mark.has-logo { background: transparent; border-radius: 0; }
+
+/* Update 136: vehicles matching a typed plate or driver on a new job; small inline checkboxes. */
+.vehhits { display: flex; flex-direction: column; margin-top: 6px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.vehhit { text-align: left; padding: 8px 11px; background: var(--card); border: none; border-bottom: 1px solid var(--line-soft); cursor: pointer; font: inherit; color: inherit; }
+.vehhit:last-child { border-bottom: none; }
+.vehhit:hover, .vehhit:focus-visible { background: var(--head-bg); }
+.vehhit.on { background: var(--accent-soft, var(--head-bg)); box-shadow: inset 3px 0 0 var(--accent); }
+.inlinecheck { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.inlinecheck input { accent-color: var(--accent); width: 16px; height: 16px; }
+.altbox { display: flex; flex-direction: column; gap: 0; }
+.altrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.altrow:last-child { border-bottom: none; }

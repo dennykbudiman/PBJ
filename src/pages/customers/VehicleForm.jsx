@@ -6,7 +6,7 @@ import { useT } from '../../lib/i18n'
 import { jobNo, km as kmText, num, readAmount } from '../../lib/format'
 import { FUEL_TYPES, VEHICLE_TYPES, formatPlate, normalizePlate, normalizeVin } from '../../lib/customers'
 
-const EMPTY = { customer_id: '', plate: '', year: '', make: '', model: '', vin: '', type: '', fuel_type: '', mileage_km: '', status: 'active', notes: '' }
+const EMPTY = { customer_id: '', plate: '', year: '', make: '', model: '', vin: '', type: '', fuel_type: '', mileage_km: '', status: 'active', notes: '', driver_name: '', driver_phone: '' }
 
 // Add or edit a vehicle. The owning company is chosen when adding; after that it
 // only changes through "Transfer to another PT", which keeps the ownership history.
@@ -27,6 +27,7 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
       customer_id: vehicle.customer_id, plate: vehicle.plate || '', year: vehicle.year ? String(vehicle.year) : '', make: vehicle.make || '',
       model: vehicle.model || '', vin: vehicle.vin || '', type: vehicle.type || '', fuel_type: vehicle.fuel_type || '',
       mileage_km: vehicle.mileage_km == null ? '' : num(vehicle.mileage_km), status: vehicle.status, notes: vehicle.notes || '',
+      driver_name: vehicle.driver_name || '', driver_phone: vehicle.driver_phone || '',
     } : { ...EMPTY, customer_id: defaultCustomerId || '' })
   }, [open, vehicle, defaultCustomerId])
 
@@ -58,6 +59,7 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
     const row = {
       plate, year, make: f.make.trim() || null, model: f.model.trim() || null, vin: vin || null,
       type: f.type || null, fuel_type: f.fuel_type || null, mileage_km: km, status: f.status, notes: f.notes.trim() || null,
+      driver_name: f.driver_name.trim() || null, driver_phone: f.driver_phone.trim() || null,
     }
     // Lowering the odometer (below what's on file or on an earlier job) is checked first.
     if (busy) return
@@ -116,6 +118,9 @@ export default function VehicleForm({ open, vehicle, customers, vehicles, defaul
               { value: 'sold', label: t('veh.st.sold') },
             ]} />
         )}
+        {/* The current driver (migration 136): copied onto each new job as "brought in by"; fleet managers see it too. */}
+        <Input label={t('drv.name')} value={f.driver_name} onChange={set('driver_name')} maxLength={120} />
+        <Input label={t('drv.phone')} value={f.driver_phone} onChange={set('driver_phone')} maxLength={40} inputMode="tel" placeholder="0812-…" />
         <Textarea fieldClass={editing ? '' : 'span2'} label={t('veh.notes')} value={f.notes} onChange={set('notes')} rows={2} />
       </div>
     </Modal>

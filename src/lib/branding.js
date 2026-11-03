@@ -2,7 +2,7 @@
 // browser tab title and the tab icon (Settings → Shop profile). Signed-in pages get them from the shop settings
 // (ShopContext); before signing in they come from shop_branding() (migration 135), which returns only the name, the
 // logo and the colour theme. The last values are kept in this browser so the next visit shows them at once.
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { supabase, publicFileUrl, LOGO_BUCKET } from './supabase'
 import { applyTheme, rememberTheme } from './theme'
 
@@ -20,8 +20,18 @@ export function brandName(lang) {
   return brand.name || (lang === 'id' ? 'aplikasi' : 'the app')
 }
 
+// The browser tab title (Nov 3, Denny: many open tabs must be told apart): the page's own title, then the shop name,
+// e.g. "DA 8130 BN · #100001 — PBG Service Shop". The layout sets a title for each list page from the address
+// (setRouteTitle); a page showing one record sets a more specific one while it is open (usePageTitle), which wins.
+// Print pages use their title alone, because the browser suggests it as the PDF file name.
+let routeTitle = ''
+let pageTitle = null // { text, alone }
+
 function applyToDocument() {
-  if (brand.name) document.title = brand.name
+  const own = pageTitle?.text || routeTitle
+  const title = own ? (pageTitle?.alone || !brand.name ? own : `${own} — ${brand.name}`) : brand.name
+  const shown = title || 'Bengkel' // nothing known yet: the neutral name from index.html, not the previous page's title
+  if (document.title !== shown) document.title = shown
   let link = document.querySelector('link[rel~="icon"]')
   if (!link) {
     link = document.createElement('link')
@@ -51,6 +61,22 @@ export async function loadBranding() {
   if (error || !data) return // older database or offline: keep the last known name and logo
   setBranding({ name: data.name, logoPath: data.logo_path })
   if (data.theme) { applyTheme(data.theme); rememberTheme(data.theme) }
+}
+
+export function setRouteTitle(text) {
+  routeTitle = text || ''
+  applyToDocument()
+}
+
+// `alone`: without the shop name (print pages).
+export function usePageTitle(text, { alone = false } = {}) {
+  useEffect(() => {
+    if (!text) return undefined
+    const mine = { text, alone }
+    pageTitle = mine
+    applyToDocument()
+    return () => { if (pageTitle === mine) { pageTitle = null; applyToDocument() } }
+  }, [text, alone])
 }
 
 export function useBranding() {

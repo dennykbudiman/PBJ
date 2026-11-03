@@ -39,7 +39,7 @@ export default function ProfitReport() {
     const head = [t('rep.col.invoice'), t('rep.col.date'), t('rep.col.job'), t('rep.col.company'), t('rep.col.plate'),
       t('rep.col.parts'), t('rep.col.partsCost'), t('rep.col.sublet'), t('rep.col.subletCost'), t('rep.m.labor'), t('rep.m.fees'), t('rep.m.discounts'),
       t('rep.m.sales'), t('rep.col.cost'), t('rep.m.gross'), `${t('rep.m.margin')} %`, t('rep.col.noCost')]
-    downloadCsv(`axle-profit-${period.from}-${period.to}.csv`, head, list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate,
+    downloadCsv(`profit-${period.from}-${period.to}.csv`, head, list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate,
       r.parts, r.parts_cost, r.sublet, r.sublet_cost, r.labor, r.fees, -r.discounts, r.subtotal, r.cost, r.gross,
       r.subtotal ? Math.round((r.gross / r.subtotal) * 1000) / 10 : null, r.no_cost_lines]))
   }

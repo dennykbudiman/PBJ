@@ -29,7 +29,7 @@ export default function ImportData({ id }) {
     const blob = new Blob([templateCsv(type, help(type))], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `axle-${type}.csv`
+    a.download = `import-${type}.csv`
     document.body.appendChild(a)
     a.click()
     a.remove()

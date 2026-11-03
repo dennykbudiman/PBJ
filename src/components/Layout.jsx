@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Icon from './Icon'
 import NotificationBell from './NotificationBell'
 import ProfileModal from './ProfileModal'
@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { useShop } from '../context/ShopContext'
 import { useT } from '../lib/i18n'
 import { initials } from '../lib/format'
+import { setRouteTitle } from '../lib/branding'
 
 export const NAV = [
   { to: '/', key: 'nav.dashboard', icon: 'layout-dashboard', end: true },
@@ -131,9 +132,34 @@ const FLEET_NAV = [
   { to: '/customers', key: 'nav.myFleet', icon: 'users' },
 ]
 
+// The tab title for list pages, from the address: "Inventaris – Pesanan pembelian". Pages showing one record (a job,
+// vehicle, company, purchase order) set their own, more specific title (usePageTitle).
+const AREA_TABS = { customers: 'cust.area', catalog: 'cat.tab', inventory: 'inv.tab', reports: 'rep.tab' }
+const AREA_NAV = { customers: 'nav.customers', catalog: 'nav.catalog', inventory: 'nav.inventory', reports: 'nav.reports' }
+const AREA_FIRST = { customers: 'customers', catalog: 'parts', inventory: 'stock', reports: 'sales' }
+export function routeTitleFor(pathname, t, isFleet) {
+  const [area, sub] = pathname.split('/').filter(Boolean)
+  if (!area) return t('nav.dashboard')
+  if (area === 'board') return t('nav.board')
+  if (area === 'calendar') return t('nav.calendar')
+  if (area === 'search') return t('title.search')
+  if (area === 'settings') return t('nav.settings')
+  if (area === 'jobs') return sub === 'new' ? t('title.newJob') : t('nav.jobs')
+  if (AREA_TABS[area]) {
+    const main = t(area === 'customers' && isFleet ? 'nav.myFleet' : AREA_NAV[area])
+    const tab = sub || AREA_FIRST[area]
+    const label = t(`${AREA_TABS[area]}.${tab}`)
+    return tab === AREA_FIRST[area] || label === `${AREA_TABS[area]}.${tab}` ? main : `${main} – ${label}`
+  }
+  return ''
+}
+
 export default function Layout() {
   const { t } = useT()
   const { can, isFleet } = useAuth()
+  const { pathname } = useLocation()
+  useEffect(() => { setRouteTitle(routeTitleFor(pathname, t, isFleet)) }, [pathname, t, isFleet])
+  useEffect(() => () => setRouteTitle(''), []) // signed out: the sign-in page shows just the shop name
   const nav = isFleet ? FLEET_NAV : NAV.filter((n) => !n.perm || can(n.perm))
   return (
     <div className="app">

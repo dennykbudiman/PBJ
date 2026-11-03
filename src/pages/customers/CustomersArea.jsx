@@ -235,7 +235,9 @@ function VehiclesTab({ data, id, canEdit, reload, go, onNew, onEdit }) {
       if (status !== 'current' && status !== 'all' && v.status !== status) return false
       if (!needle) return true
       if (plateNeedle && normalizePlate(v.plate).includes(plateNeedle)) return true
-      return [v.vin, v.make, v.model, vehicleName(v)].filter(Boolean).join(' ').toLowerCase().includes(needle)
+      const digits = needle.replace(/\D/g, '')
+      if (digits.length >= 4 && String(v.driver_phone || '').replace(/\D/g, '').includes(digits)) return true
+      return [v.vin, v.make, v.model, vehicleName(v), v.driver_name, v.driver_phone].filter(Boolean).join(' ').toLowerCase().includes(needle)
     })
   }, [data, q, company, status, id])
 
@@ -281,7 +283,7 @@ function VehiclesTab({ data, id, canEdit, reload, go, onNew, onEdit }) {
             <div className="table">
               <table>
                 <thead>
-                  <tr><th>{t('veh.plate')}</th><th>{t('veh.vehicle')}</th><th>{t('veh.company')}</th><th className="num wide-only">{t('veh.odometer')}</th><th>{t('veh.status')}</th></tr>
+                  <tr><th>{t('veh.plate')}</th><th>{t('veh.vehicle')}</th><th>{t('veh.company')}</th><th className="wide-only">{t('drv.driver')}</th><th className="num wide-only">{t('veh.odometer')}</th><th>{t('veh.status')}</th></tr>
                 </thead>
                 <tbody>
                   {rows.slice(0, limit).map((v) => {
@@ -291,6 +293,7 @@ function VehiclesTab({ data, id, canEdit, reload, go, onNew, onEdit }) {
                         <td><b style={{ whiteSpace: 'nowrap' }}>{v.plate}</b></td>
                         <td>{vehicleName(v) || <span className="muted">—</span>}</td>
                         <td>{companyName(v.customer_id)}</td>
+                        <td className="wide-only">{v.driver_name || <span className="muted">—</span>}</td>
                         <td className="num wide-only">{km(v.mileage_km)}</td>
                         <td>
                           <div className="row wrap" style={{ gap: 4 }}>

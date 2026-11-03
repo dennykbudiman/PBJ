@@ -39,7 +39,7 @@ export default function PaymentsReport() {
 
   function csv() {
     const head = [t('rep.col.date'), t('rep.col.kind'), t('rep.col.company'), t('rep.col.invoice'), t('rep.col.job'), t('rep.col.method'), t('rep.col.reference'), t('rep.col.amount')]
-    downloadCsv(`axle-payments-${period.from}-${period.to}.csv`, head,
+    downloadCsv(`payments-${period.from}-${period.to}.csv`, head,
       list.map((r) => [r.paid_on, t(`rep.kind.${r.kind}`), r.company, r.invoice_number ? invoiceNo(r.invoice_number) : '', r.job_number ? jobNo(r.job_number) : '', t(`job.pay.${r.method}`), r.reference || '', signed(r)]))
   }
 

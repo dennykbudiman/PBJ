@@ -43,7 +43,7 @@ export default function SalesReport() {
 
   function csv() {
     const head = [t('rep.col.invoice'), t('rep.col.date'), t('rep.col.job'), t('rep.col.company'), t('rep.col.plate'), ...MONEY.map((m) => t(`rep.m.${m}`)), t('rep.col.paid'), t('rep.col.balance')]
-    downloadCsv(`axle-sales-${period.from}-${period.to}.csv`, head,
+    downloadCsv(`sales-${period.from}-${period.to}.csv`, head,
       list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate, ...MONEY.map((m) => Number(r[m])), Number(r.paid), Number(r.balance)]))
   }
 

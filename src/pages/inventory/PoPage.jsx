@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { usePageTitle } from '../../lib/branding'
 import { Link, useNavigate } from 'react-router-dom'
 import { Badge, Button, Card, Empty, Notice, useConfirm, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
@@ -25,6 +26,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const [sel, setSel] = useState(() => new Set())
   const [modal, setModal] = useState(null) // { kind: 'line' | 'receive' | 'pay' | 'return', ... }
   const po = data.poById[id]
+  usePageTitle(po ? [po.po_number, data.supplierById[po.supplier_id]?.name].filter(Boolean).join(' · ') : null)
   const lines = useMemo(() => data.linesByPo[id] || [], [data, id])
 
   if (!po) {

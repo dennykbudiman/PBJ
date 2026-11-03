@@ -123,10 +123,10 @@ export function AddToJobModal({ open, service, onClose, onDone }) {
     let ro = jobs.find((j) => j.id === target)
     if (target === 'new') {
       // The vehicle may have moved to another company since that visit: the new estimate goes to its current owner.
-      const veh = await supabase.from('vehicles').select('customer_id').eq('id', vehicleId).maybeSingle()
+      const veh = await supabase.from('vehicles').select('customer_id, driver_name, driver_phone').eq('id', vehicleId).maybeSingle()
       if (veh.error || !veh.data) { setBusy(false); return setMsg(errorText(veh.error || { message: 'not found' }, t)) }
       const { data, error } = await writeRow('repair_orders', {
-        customer_id: veh.data.customer_id, vehicle_id: vehicleId, priority: 'medium', service_advisor_id: roleName !== 'Technician' ? profile?.id || null : null,
+        customer_id: veh.data.customer_id, vehicle_id: vehicleId, priority: 'medium', driver_name: veh.data.driver_name || null, driver_phone: veh.data.driver_phone || null, service_advisor_id: roleName !== 'Technician' ? profile?.id || null : null,
       })
       if (error) { setBusy(false); return setMsg(errorText(error, t)) }
       ro = data

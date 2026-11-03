@@ -16,9 +16,9 @@ export const COLUMNS = {
   suppliers: ['name*', 'type', 'payment_terms_days', 'account_number', 'contact_name', 'phone', 'email', 'address', 'notes'],
   companies: ['name*', 'legal_name', 'npwp', 'type', 'billing_address', 'phone', 'email', 'payment_terms_days', 'credit_limit',
     'charge_account', 'tax_exempt', 'contact_name', 'contact_phone', 'contact_email'],
-  vehicles: ['company*', 'plate*', 'make', 'model', 'year', 'vin', 'type', 'fuel_type', 'mileage_km', 'notes'],
+  vehicles: ['company*', 'plate*', 'make', 'model', 'year', 'vin', 'type', 'fuel_type', 'mileage_km', 'notes', 'driver_name', 'driver_phone'],
   catalog: ['type*', 'name*', 'code', 'category', 'supplier', 'brand', 'cost', 'price', 'taxable', 'track_inventory',
-    'reorder_point', 'labor_hours', 'fee_kind', 'fee_value', 'notes'],
+    'reorder_point', 'labor_hours', 'fee_kind', 'fee_value', 'notes', 'alt_numbers', 'fits'],
   schedules: ['plate*', 'service*', 'interval_km', 'interval_months', 'last_done_km', 'last_done_date', 'template'],
   stock: ['part*', 'qty*', 'note'],
 }
@@ -264,7 +264,8 @@ export function checkRows(type, records, ctx) {
       if (sameplate) { skipped++; continue }
       if (vin && ctx.vehicles.some((x) => x.vin && normalizeVin(x.vin) === vin)) { err(r, 'vinTaken'); continue }
       ready.push({ customer_id: cust.id, plate, make: r.make || null, model: r.model || null, year: yr, vin, type: vt || null, fuel_type: fuel || null,
-        mileage_km: km, notes: r.notes || null, status: 'active' })
+        mileage_km: km, notes: r.notes || null, status: 'active',
+        driver_name: r.driver_name ? r.driver_name.trim().slice(0, 120) : null, driver_phone: r.driver_phone ? r.driver_phone.trim().slice(0, 40) : null })
     } else if (type === 'catalog') {
       const typ = key(r.type)
       if (!['part', 'labor', 'fee'].includes(typ)) err(r, 'oneOf', { col: 'type', list: 'part, labor, fee' })
@@ -303,7 +304,8 @@ export function checkRows(type, records, ctx) {
         category: r.category ? r.category.trim() : null,
         row: { item_type: typ, name: r.name.trim(), code: r.code || null, supplier_id: sup?.id || null, brand: r.brand || null, cost: cost ?? 0, price: price ?? 0,
           taxable, track_inventory: !!track, reorder_point: track ? reorder : null, labor_hours: typ === 'labor' ? hours : null,
-          fee_kind: typ === 'fee' ? feeKind : 'fixed', fee_value: typ === 'fee' ? feeValue ?? 0 : null, notes: r.notes || null },
+          fee_kind: typ === 'fee' ? feeKind : 'fixed', fee_value: typ === 'fee' ? feeValue ?? 0 : null, notes: r.notes || null,
+          alt_numbers: r.alt_numbers ? r.alt_numbers.trim().slice(0, 500) : null, fits: r.fits ? r.fits.trim().slice(0, 500) : null },
       })
     } else if (type === 'schedules') {
       if (!r.plate) err(r, 'required', { col: 'plate' })

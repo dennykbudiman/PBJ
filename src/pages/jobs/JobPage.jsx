@@ -9,6 +9,8 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { invoiceNo, jobNo, km, num, rp } from '../../lib/format'
+import { usePageTitle } from '../../lib/branding'
+import { DriverText } from '../../components/DriverText'
 import { vehicleName } from '../../lib/customers'
 import { PRIORITY_COLOR, WORKFLOW_COLOR } from '../../lib/jobs'
 import { useCatalogData } from '../catalog/useCatalogData'
@@ -57,6 +59,8 @@ export default function JobPage({ id }) {
   const [confirm, confirmEl] = useConfirm()
   const toast = useToast()
 
+  // Tab title: "DA 8130 BN · #100001" (Nov 3, Denny: tell many open job tabs apart).
+  usePageTitle(job ? [job.vehicle?.plate, `#${jobNo(job.ro.job_number)}`].filter(Boolean).join(' · ') : null)
   if (missing) return <Page><Card><Empty icon="info" title={t('job.notFound')} action={<Link className="btn" to="/customers/repair-orders">{t('job.backToList')}</Link>} /></Card></Page>
   if (!job || !cat) return <Page><div className="muted">{error ? errorText(error, t) : t('common.loading')}</div></Page>
 
@@ -147,6 +151,21 @@ export default function JobPage({ id }) {
                       onCommit={(val, reset) => saveOdo('odometer_out', val, reset)} />
                   </label>
                 </div>
+                {/* Who brought it in (migration 136): printed on the estimate and invoice; locked once invoiced. */}
+                {editable ? (
+                  <div className="row wrap" style={{ gap: 8, marginTop: 8 }}>
+                    <label className="mini">{t('drv.broughtBy')}
+                      <BlurInput className="input cell" style={{ width: 170 }} value={ro.driver_name || ''} maxLength={120} placeholder={t('drv.name')} aria-label={t('drv.broughtBy')}
+                        onCommit={(val) => run(() => supabase.from('repair_orders').update({ driver_name: val.trim() || null }).eq('id', ro.id))} />
+                    </label>
+                    <label className="mini">{t('drv.phone')}
+                      <BlurInput className="input cell" style={{ width: 140 }} value={ro.driver_phone || ''} maxLength={40} inputMode="tel" placeholder="0812-…" aria-label={t('drv.phone')}
+                        onCommit={(val) => run(() => supabase.from('repair_orders').update({ driver_phone: val.trim() || null }).eq('id', ro.id))} />
+                    </label>
+                  </div>
+                ) : (ro.driver_name || ro.driver_phone) ? (
+                  <div style={{ marginTop: 8 }}><span className="muted small">{t('drv.broughtBy')}:</span> <DriverText name={ro.driver_name} phone={ro.driver_phone} /></div>
+                ) : null}
               </div>
               <div className="notebox">
                 <div className="sectionlabel" style={{ marginTop: 0 }}>{t('job.customerConcern')}</div>

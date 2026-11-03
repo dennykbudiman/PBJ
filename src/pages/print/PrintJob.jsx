@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { usePageTitle } from '../../lib/branding'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useShop } from '../../context/ShopContext'
 import { useT, translate } from '../../lib/i18n'
@@ -21,6 +22,9 @@ export default function PrintJob() {
   const { job, error, missing } = useJobData(id)
   const staff = useStaff()
 
+  // Tab title, also the suggested PDF file name: "Invoice 000006 · B 9240 CCI".
+  const docEarly = params.get('doc') === 'invoice' && job?.ro?.order_status === 'invoice' ? 'invoice' : 'estimate'
+  usePageTitle(job ? [docEarly === 'invoice' ? `${tUi('pr.invoiceUi')} ${invoiceNo(job.ro.invoice_number)}` : `${tUi('pr.estimateUi')} ${jobNo(job.ro.job_number)}`, (docEarly === 'invoice' && job.ro.bill_to_snapshot?.vehicle?.plate) || job.vehicle?.plate].filter(Boolean).join(' · ') : null, { alone: true })
   if (missing) return <div className="print-msg">{tUi('job.notFound')} · <Link to="/customers/repair-orders">{tUi('job.backToList')}</Link></div>
   if (!job || !settings) return <div className="print-msg">{error ? errorText(error, tUi) : tUi('common.loading')}</div>
 
@@ -117,6 +121,7 @@ export default function PrintJob() {
             <b>{veh.plate}</b> · {vehicleName(veh) || '—'}
             {veh.vin && <div>VIN {veh.vin}</div>}
             <div>{t('pr.odometer')}: {ro.odometer_in != null ? km(ro.odometer_in) : '—'}{ro.odometer_out != null ? ` → ${km(ro.odometer_out)}` : ''}</div>
+            {(ro.driver_name || ro.driver_phone) && <div>{t('pr.driver')}: {[ro.driver_name, ro.driver_phone].filter(Boolean).join(' · ')}</div>}
           </div>
         </section>
 

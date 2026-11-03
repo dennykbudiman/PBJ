@@ -33,7 +33,7 @@ export default function SearchPage() {
       // Every row, past the server's 1,000-row page (a big fleet has more vehicles than that).
       selectAll(() => supabase.from('customers').select('id, display_name, legal_name, npwp, phone, email, type, active').order('display_name').order('id')),
       selectAll(() => supabase.from('customer_contacts').select('id, customer_id, name, phone, email').order('id')),
-      selectAll(() => supabase.from('vehicles').select('id, plate, year, make, model, vin, customer_id, mileage_km, status').order('plate').order('id')),
+      selectAll(() => supabase.from('vehicles').select('id, plate, year, make, model, vin, customer_id, mileage_km, status, driver_name, driver_phone').order('plate').order('id')),
     ]).then(([c, ct, v]) => {
       if (cancelled) return
       setError(c.error || ct.error || v.error || null)
@@ -61,7 +61,8 @@ export default function SearchPage() {
     const vehicles = data.vehicles.filter((v) =>
       (plate.length >= 2 && normalizePlate(v.plate).includes(plate))
       || (plate.length >= 4 && normalizeVin(v.vin).includes(plate))
-      || [v.make, v.model, vehicleName(v)].filter(Boolean).join(' ').toLowerCase().includes(needle))
+      || [v.make, v.model, vehicleName(v), v.driver_name].filter(Boolean).join(' ').toLowerCase().includes(needle)
+      || phoneHit(v.driver_phone))
     return { customers, vehicles, byId, viaContact }
   }, [data, q])
 
@@ -131,7 +132,7 @@ export default function SearchPage() {
             {results.vehicles.slice(0, MAX).map((v) => (
               <Link key={v.id} className="resultrow" to={`/customers/vehicles/${v.id}`}>
                 <div><b>{v.plate}</b> <span className="muted">· {vehicleName(v)}</span></div>
-                <div className="muted small">{results.byId[v.customer_id]?.display_name} · {km(v.mileage_km)}</div>
+                <div className="muted small">{[results.byId[v.customer_id]?.display_name, km(v.mileage_km), v.driver_name ? `${t('drv.driver')}: ${v.driver_name}` : null].filter(Boolean).join(' · ')}</div>
               </Link>
             ))}
           </div>

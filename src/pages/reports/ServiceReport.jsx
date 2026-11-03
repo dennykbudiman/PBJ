@@ -58,13 +58,13 @@ export default function ServiceReport() {
 
   function csv() {
     if (view === 'done') {
-      downloadCsv(`axle-service-done-${period.from}-${period.to}.csv`,
+      downloadCsv(`service-done-${period.from}-${period.to}.csv`,
         [t('rep.col.date'), t('rep.col.company'), t('rep.col.plate'), t('rep.svc.schedule'), t('rep.col.job'), `${t('rep.svc.dueAt')} km`, t('rep.svc.dueAt'), `${t('rep.svc.doneAt')} km`, t('rep.svc.result'), t('rep.svc.kmLateCol'), t('rep.svc.daysLateCol')],
         doneList.map((r) => [r.done_date, r.company, r.plate, r.name, jobNo(r.job_number), r.due_km, r.due_date, r.done_km,
           r.on_time === true ? t('rep.svc.onTime') : r.on_time === false ? t('rep.svc.late') : r.due_km == null && r.due_date == null ? t('rep.svc.first') : t('rep.svc.unknown'), r.km_late, r.days_late]))
       return
     }
-    downloadCsv(`axle-service-status-${today}.csv`,
+    downloadCsv(`service-status-${today}.csv`,
       [t('rep.col.company'), t('rep.col.plate'), t('rep.g.vehicle'), t('rep.svc.schedule'), t('rep.svc.status'), `${t('rep.svc.dueAt')} km`, t('rep.svc.dueAt'), t('rep.col.km'), `${t('rep.svc.over')} km`, `${t('rep.svc.over')} (${t('common.days')})`],
       all.map((r) => [r.company, r.plate, vehicleName(r), r.name || t('rep.svc.noSchedule'), r.schedule_id ? t({ ok: 'rep.svc.ok', due_soon: 'rep.svc.dueSoon', overdue: 'rep.svc.overdue' }[r.status]) : '—',
         r.next_due_km, r.next_due_date, r.mileage_km, r.km_over, r.days_over]))
