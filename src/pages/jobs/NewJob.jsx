@@ -59,10 +59,11 @@ export default function NewJob() {
     if (f.customer_id && !custVehicles.some((v) => v.id === f.vehicle_id)) setF((x) => ({ ...x, vehicle_id: custVehicles.length === 1 ? custVehicles[0].id : '' }))
   }, [f.customer_id, vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Who brought it in: the vehicle's driver, editable. A driver typed for a vehicle without one is saved on the vehicle too.
+  // Who brought it in: the vehicle's driver, editable. A different driver typed here is saved on the vehicle too, unless
+  // the tick is cleared for a one-off substitute (Nov 4, Denny: drivers typed on jobs should update the vehicle).
   useEffect(() => {
     const v = vehicles.find((x) => x.id === f.vehicle_id)
-    setF((x) => ({ ...x, driver_name: v?.driver_name || '', driver_phone: v?.driver_phone || '', save_driver: Boolean(v) && !v.driver_name && !v.driver_phone }))
+    setF((x) => ({ ...x, driver_name: v?.driver_name || '', driver_phone: v?.driver_phone || '', save_driver: Boolean(v) }))
   }, [f.vehicle_id, vehicles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -113,8 +114,11 @@ export default function NewJob() {
       customer_id: f.customer_id, vehicle_id: f.vehicle_id, odometer_in: odo, priority: f.priority, service_advisor_id: f.advisor || null, ...driver,
     })
     if (error) { setBusy(false); return setMsg(errorText(error, t)) }
-    if (f.save_driver && (driver.driver_name || driver.driver_phone)) {
-      const d = await supabase.from('vehicles').update(driver).eq('id', f.vehicle_id)
+    const v = vehicles.find((x) => x.id === f.vehicle_id)
+    const changed = v && ((driver.driver_name || '') !== (v.driver_name || '') || (driver.driver_phone || '') !== (v.driver_phone || ''))
+    if (f.save_driver && changed && (driver.driver_name || driver.driver_phone)) {
+      // empty fields don't clear the vehicle's
+      const d = await supabase.from('vehicles').update(Object.fromEntries(Object.entries(driver).filter(([, x]) => x))).eq('id', f.vehicle_id)
       if (d.error) toast(errorText(d.error, t), 'err')
     }
     const concerns = splitConcerns(f.concern) // one concern per line
@@ -179,7 +183,7 @@ export default function NewJob() {
               {vehicle && (f.driver_name.trim() || f.driver_phone.trim()) && (f.driver_name.trim() !== (vehicle.driver_name || '') || f.driver_phone.trim() !== (vehicle.driver_phone || '')) && (
                 <label className="inlinecheck span2">
                   <input type="checkbox" checked={f.save_driver} onChange={(e) => setF((x) => ({ ...x, save_driver: e.target.checked }))} />
-                  <span>{vehicle.driver_name || vehicle.driver_phone ? t('drv.replaceOnVehicle', { plate: vehicle.plate }) : t('drv.saveOnVehicle', { plate: vehicle.plate })}</span>
+                  <span>{vehicle.driver_name || vehicle.driver_phone ? t('drv138.keepOnVehicle', { plate: vehicle.plate }) : t('drv.saveOnVehicle', { plate: vehicle.plate })}</span>
                 </label>
               )}
               <Input label={t('job.odometerIn')} value={f.odometer} onChange={set('odometer')} inputMode="numeric" suffix="km" error={errors.odometer}

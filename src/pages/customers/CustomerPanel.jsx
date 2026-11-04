@@ -36,7 +36,7 @@ const TABS = ['contact', 'vehicles', 'jobs', 'deferred', 'finances']
 
 export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEdit, onReload, onClose, onAddVehicle, onOpenVehicle, onDeleted }) {
   const navigate = useNavigate()
-  const { can, isFleet } = useAuth()
+  const { can, isFleet, isOwner } = useAuth()
   const [creditOpen, setCreditOpen] = useState(false)
   const [payBackOpen, setPayBackOpen] = useState(false)
   const { t, lang } = useT()
@@ -200,7 +200,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
           </>
         )}
 
-        {canEdit && tab === 'contact' && (
+        {canEdit && isOwner && tab === 'contact' && (
           <div style={{ marginTop: 22, paddingTop: 12, borderTop: '1px solid var(--line-soft)' }}>
             {confirmDelete ? (
               <div className="row wrap">

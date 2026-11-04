@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
 import { num } from '../../lib/format'
-import { openQty, stockState } from '../../lib/inventory'
+import { openQty, sparePoParts, stockState } from '../../lib/inventory'
 import { PoBadge } from '../inventory/bits'
 
 // Part lines on this job that could still be ordered: on pending or approved work and not already on a PO.
@@ -39,9 +39,12 @@ export function PartsOrdersCard({ job, cat, canOrder, candidates, onOrder }) {
           {job.pos.map((po) => {
             const lines = job.poLines.filter((l) => l.po_id === po.id)
             const waiting = lines.reduce((a, l) => a + openQty(l), 0)
+            // Delivered parts this job doesn't use stay in stock (Nov 4).
+            const spareQty = [...sparePoParts(lines, job.items, job.services, (l) => Number(l.qty_returned || 0), job.poLineLinks || {}).values()].reduce((a, n) => a + n, 0)
             return (
               <Link key={po.id} to={`/inventory/purchase-orders/${po.id}`} className="porow">
-                <span style={{ flex: 1, minWidth: 0 }}><b>{po.po_number}</b><span className="muted small"> · {cat.supplierById[po.supplier_id]?.name || '—'} · {t(lines.length === 1 ? 'job.po.nPart' : 'job.po.nParts', { n: lines.length })}{waiting > 0 && po.status !== 'draft' ? ` · ${t('job.po.waiting', { n: num(waiting, 2) })}` : ''}</span></span>
+                <span style={{ flex: 1, minWidth: 0 }}><b>{po.po_number}</b><span className="muted small"> · {cat.supplierById[po.supplier_id]?.name || '—'} · {t(lines.length === 1 ? 'job.po.nPart' : 'job.po.nParts', { n: lines.length })}{waiting > 0 && po.status !== 'draft' ? ` · ${t('job.po.waiting', { n: num(waiting, 2) })}` : ''}</span>
+                  {spareQty > 0 && <span className="small" style={{ display: 'block', color: 'var(--amber-ink, #9A5B10)' }}>{t('po138.spareOnJob', { n: num(spareQty, 2) })}</span>}</span>
                 <PoBadge status={po.status} />
               </Link>
             )

@@ -50,7 +50,7 @@ export function AuthProvider({ children }) {
       setLoaded({ userId: null, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [], tempPassword: false })
       return
     }
-    const [{ data: p, error }, { data: staff }, { data: fleet }, { data: temp }] = await Promise.all([
+    const [{ data: p, error }, { data: staff }, { data: fleet }, { data: temp }, { data: hours }] = await Promise.all([
       supabase.from('profiles').select('id, name, username, phone, status, language, role_id, roles(name)').eq('id', userId).maybeSingle(),
       // The database's own answer to "may this person use the app?" (active and not a Fleet manager).
       supabase.rpc('is_staff'),
@@ -58,6 +58,8 @@ export function AuthProvider({ children }) {
       supabase.rpc('is_fleet'),
       // Signed in with a temporary password the Owner or Admin set (migration 134): choose your own first.
       supabase.rpc('my_temp_password'),
+      // Staff app hours (migration 138): outside them the app shows when it opens again; the use is recorded.
+      supabase.rpc('staff_hours_check'),
     ])
     if (error) console.error('profile load failed', error)
     if (refresh && (error || !p || typeof staff !== 'boolean')) return // a failed background refresh keeps what we had
@@ -77,7 +79,9 @@ export function AuthProvider({ children }) {
     if (temp !== true) signInMemory.password = null
     // Nothing changed: keep the same objects, so open forms (e.g. the profile dialog) aren't reset by a background check.
     setLoaded((old) => {
-      const next = { userId, profile: p ?? null, permissions, staff: staff === true, fleet: fleet === true && staff !== true, fleetCompanies, tempPassword: temp === true }
+      const offHours = hours && hours.limited && hours.ok === false ? { nextOpen: hours.next_open || null, timezone: hours.timezone || 'Asia/Makassar' } : null
+      const next = { userId, profile: p ?? null, permissions, staff: staff === true, fleet: fleet === true && staff !== true, fleetCompanies, tempPassword: temp === true,
+        offHours, overtimeUntil: hours?.overtime_until || null, closesAt: hours?.closes_at || null }
       return JSON.stringify(old) === JSON.stringify(next) ? old : next
     })
   }, [userId])
@@ -86,6 +90,17 @@ export function AuthProvider({ children }) {
     if (session === undefined) return
     loadProfile()
   }, [session === undefined, loadProfile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Staff app hours (migration 138): when the hours (or overtime) end, check at once, so the app switches to the
+  // closed page instead of quietly showing nothing.
+  const closesAt = loaded.userId === userId ? loaded.closesAt : null
+  useEffect(() => {
+    if (!closesAt) return
+    const ms = new Date(closesAt).getTime() - Date.now() + 5000
+    if (ms > 2147483000) return
+    const timer = setTimeout(() => loadProfile(true), Math.max(ms, 1000))
+    return () => clearTimeout(timer)
+  }, [closesAt, loadProfile])
 
   // A role or permission change (or a person being disabled) reaches open tabs when the window is used again, at most
   // once a minute, and every 5 minutes while the tab is shown (a counter PC that stays in front all day).
@@ -109,11 +124,16 @@ export function AuthProvider({ children }) {
       user: session?.user ?? null,
       profile,
       roleName: profile?.roles?.name ?? null,
+      // Only the Owner deletes vehicles, companies and contacts (migration 137); the database enforces it too.
+      isOwner: isStaff && profile?.roles?.name === 'Owner',
       permissions,
       isStaff,
       // Fleet manager: read-only view of the linked companies, plus approving waiting work (fleet_decide).
       isFleet,
       fleetCompanies: isFleet ? loaded.fleetCompanies : [],
+      // Outside the staff app hours (migration 138): { nextOpen } — the app shows a closed page instead.
+      offHours: loaded.userId === userId ? loaded.offHours || null : null,
+      overtimeUntil: loaded.userId === userId ? loaded.overtimeUntil || null : null,
       can: (key) => isStaff && permissions.includes(key),
       // Still loading until the profile we hold belongs to the person signed in.
       loading: session === undefined || (Boolean(session) && loaded.userId !== userId),

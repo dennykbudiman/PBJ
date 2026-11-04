@@ -27,7 +27,7 @@ const TABS = ['overview', 'jobs', 'inspections']
 
 export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onEdit, onClose, onChanged, onOpenCustomer, onDeleted }) {
   const navigate = useNavigate()
-  const { can } = useAuth()
+  const { can, isOwner } = useAuth()
   const { t, lang } = useT()
   const toast = useToast()
   const { timezone } = useShop()
@@ -135,7 +135,7 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
               </div>
             )}
 
-            {canEdit && (
+            {canEdit && isOwner && (
               <div style={{ marginTop: 22, paddingTop: 12, borderTop: '1px solid var(--line-soft)' }}>
                 {confirmDelete ? (
                   <div className="row wrap">

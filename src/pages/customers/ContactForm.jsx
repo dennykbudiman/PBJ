@@ -3,12 +3,14 @@ import { Button, Input, Modal, Notice, Select, Toggle } from '../../components/u
 import { supabase, errorText } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { CONTACT_ROLES } from '../../lib/customers'
+import { useAuth } from '../../context/AuthContext'
 
 const EMPTY = { name: '', role: 'fleet_manager', phone: '', email: '', is_primary: false, can_approve: false }
 
 // A person at a company: fleet manager (the future approver), billing contact, or other.
 export default function ContactForm({ open, customerId, contact, others, onClose, onSaved }) {
   const { t } = useT()
+  const { isOwner } = useAuth()
   const [f, setF] = useState(EMPTY)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -62,7 +64,7 @@ export default function ContactForm({ open, customerId, contact, others, onClose
   return (
     <Modal open={open} onClose={onClose} title={contact ? t('cust.editContact') : t('cust.addContact')}
       footer={<>
-        {contact && (confirmDelete
+        {contact && isOwner && (confirmDelete
           ? <Button variant="danger" className="solid" onClick={remove} loading={busy} style={{ marginRight: 'auto' }}>{t('cust.confirmDeleteContact')}</Button>
           : <Button variant="ghost" className="danger" onClick={() => setConfirmDelete(true)} style={{ marginRight: 'auto' }}>{t('common.delete')}</Button>)}
         <Button onClick={onClose}>{t('common.cancel')}</Button>

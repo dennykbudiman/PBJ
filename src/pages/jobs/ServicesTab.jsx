@@ -136,7 +136,8 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   const inspection = job.inspections.find((x) => x.service_id === s.id)
   const template = s.template_id ? cat.templates.find((x) => x.id === s.template_id) : null
   const schedule = s.service_schedule_id ? (job.schedules || []).find((x) => x.id === s.service_schedule_id) : null
-  const { isFleet } = useAuth()
+  const { isFleet, can } = useAuth()
+  const { settings } = useShop()
   const tech = staff.find((p) => p.id === s.technician_id)
   const upd = (patch, okText) => run(() => supabase.from('ro_services').update(patch).eq('id', s.id), okText)
   const updLine = (id, patch) => run(() => supabase.from('ro_service_items').update(patch).eq('id', id))
@@ -195,6 +196,15 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   const commitMoney = (id, field) => (v, reset) => {
     const n = readAmount(v)
     if (n === null || Number.isNaN(n)) { toast(t('settings.badAmount'), 'err'); reset(); return }
+    // A typed-in part (not from the catalog): its price follows the cost at the shop's default markup (Nov 4), unless
+    // someone already typed a different price.
+    const line = lines.find((x) => x.id === id)
+    if (field === 'cost' && line && line.item_type === 'part' && !line.catalog_item_id) {
+      const m = Number(settings?.default_markup_pct ?? 0)
+      const suggest = (c) => Math.round(Number(c || 0) * (1 + m / 100))
+      const price = Number(line.price || 0)
+      if (price === 0 || price === suggest(line.cost)) return updLine(id, { cost: n, price: suggest(n) })
+    }
     return updLine(id, { [field]: n })
   }
   const commitQty = (id) => (v, reset) => {
@@ -328,6 +338,10 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
                         <> · <button type="button" className="linkbtn small" onClick={() => setAltFor(l)}>
                           {(alts.get(item.id) || []).length === 1 ? t('alt.one') : t('alt.count', { n: (alts.get(item.id) || []).length })}
                         </button></>
+                      )}
+                      {/* A part typed by hand: add it to the catalog (item 9, Nov 4). */}
+                      {!item && l.item_type === 'part' && can('edit_catalog') && !isFleet && (
+                        <> <Link className="small" to={`/catalog/parts?typed=${encodeURIComponent(l.name)}`}>{t('tp.addLink')}</Link></>
                       )}
                     </div>
                   </td>

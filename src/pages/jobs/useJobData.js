@@ -43,8 +43,11 @@ export function useJobData(id) {
       inspIds.length ? supabase.from('ro_inspection_results').select('*').in('inspection_id', inspIds).order('id') : { data: [] },
       poIds.length ? supabase.from('purchase_order_items').select('*').in('po_id', poIds).order('created_at').order('id') : { data: [] },
     ])
+    // typed-in PO lines that were added to the catalog afterwards (migration 138)
+    const lineIds = (poLines.data || []).filter((l) => !l.catalog_item_id).map((l) => l.id)
+    const links = lineIds.length ? await supabase.from('typed_part_links').select('line_id, catalog_item_id').in('line_id', lineIds) : { data: [] }
     if (n !== loads.current) return
-    const all = [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, pos, files, items, results, poLines]
+    const all = [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, pos, files, items, results, poLines, links]
     const firstError = all.find((x) => x.error)?.error
     setError(firstError || null)
     setMissing(false)
@@ -71,6 +74,7 @@ export function useJobData(id) {
       // Purchase orders raised for this job, and their lines (job part lines point at them through po_item_id).
       pos: pos.data || [],
       poLines: poLines.data || [],
+      poLineLinks: Object.fromEntries((links.data || []).map((x) => [x.line_id, x.catalog_item_id])),
       attachments: files.data || [],
       version: n,
     })

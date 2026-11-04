@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { usePageTitle } from '../../lib/branding'
 import { Link, useNavigate } from 'react-router-dom'
 import { Badge, Button, Card, Empty, Notice, useConfirm, useToast } from '../../components/ui'
@@ -6,13 +6,14 @@ import Icon from '../../components/Icon'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
-import { fmtDate, fmtDateTime, num, rp } from '../../lib/format'
+import { fmtDate, fmtDateTime, jobNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
-import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poTotals, stockState } from '../../lib/inventory'
+import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poTotals, sparePoParts, stockState } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, TotalRow, useRun } from '../jobs/common'
 import { JobRef, PayBadge, PoBadge, Tick } from './bits'
 import { CorrectReceivedModal, LineModal, PayModal, PoReturnModal, ReceiveModal } from './PoModals'
 import { returnValue } from './ReturnsTab'
+import { useAuth } from '../../context/AuthContext'
 
 // One purchase order: its parts, deliveries, supplier invoice, payments and returns.
 export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost }) {
@@ -22,12 +23,37 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const { timezone } = useShop()
   const today = shopToday(timezone)
   const { run, busy } = useRun(reload)
+  const { can } = useAuth()
   const [confirm, confirmEl] = useConfirm()
   const [sel, setSel] = useState(() => new Set())
   const [modal, setModal] = useState(null) // { kind: 'line' | 'receive' | 'pay' | 'return', ... }
   const po = data.poById[id]
   usePageTitle(po ? [po.po_number, data.supplierById[po.supplier_id]?.name].filter(Boolean).join(' · ') : null)
   const lines = useMemo(() => data.linesByPo[id] || [], [data, id])
+  // A job's PO: what the job itself uses, to show delivered parts it doesn't need (they stay in stock; Nov 4).
+  const [jobUse, setJobUse] = useState(null)
+  const [linkOf, setLinkOf] = useState({}) // typed-in lines added to the catalog afterwards
+  const roId = po?.ro_id
+  useEffect(() => {
+    let live = true
+    const typed = lines.filter((l) => !l.catalog_item_id).map((l) => l.id)
+    if (typed.length) supabase.from('typed_part_links').select('line_id, catalog_item_id').in('line_id', typed)
+      .then(({ data: d }) => { if (live) setLinkOf(Object.fromEntries((d || []).map((x) => [x.line_id, x.catalog_item_id]))) })
+    else setLinkOf({})
+    return () => { live = false }
+  }, [lines])
+  useEffect(() => {
+    let live = true
+    setJobUse(null)
+    if (!roId) return
+    ;(async () => {
+      const svcs = await supabase.from('ro_services').select('id, approval_status').eq('ro_id', roId)
+      const ids = (svcs.data || []).map((s) => s.id)
+      const items = ids.length ? await supabase.from('ro_service_items').select('id, service_id, item_type, catalog_item_id, name, qty').in('service_id', ids) : { data: [] }
+      if (live && !svcs.error && !items.error) setJobUse({ services: svcs.data || [], items: items.data || [] })
+    })()
+    return () => { live = false }
+  }, [roId, data])
 
   if (!po) {
     return <Card><Empty icon="packages" title={t('inv.po.notFound')} action={<Link className="btn" to="/inventory/purchase-orders">{t('inv.po.back')}</Link>} /></Card>
@@ -42,6 +68,8 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const returnedOf = (l) => data.returns.filter((r) => r.po_item_id === l.id).reduce((a, r) => a + Number(r.qty), 0)
   // Received parts that can still go back to the supplier (returns are made for the whole PO at once).
   const returnable = lines.filter((l) => Number(l.qty_delivered) - returnedOf(l) > 0)
+  const spare = jobUse ? sparePoParts(lines, jobUse.items, jobUse.services, returnedOf, linkOf) : new Map()
+  const jobNoOf = po.ro_id ? data.jobById[po.ro_id]?.job_number : null
   const lineIds = new Set(lines.map((l) => l.id))
   const returns = data.returns.filter((r) => lineIds.has(r.po_item_id))
   const payments = data.payments.filter((p) => (p.po_item_ids || []).some((x) => lineIds.has(x)))
@@ -160,6 +188,13 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                           </div>
                           {Number(l.qty_cancelled) > 0 && <div className="small muted">{t('inv.line.nCancelled', { n: num(l.qty_cancelled, 2) })}</div>}
                           {ret > 0 && <div className="small" style={{ color: 'var(--amber-ink, #9A5B10)' }}>{t('inv.line.nReturned', { n: num(ret, 2) })}</div>}
+                          {spare.has(l.id) && (
+                            <div className="small" style={{ color: 'var(--amber-ink, #9A5B10)' }}>
+                              {t(item || linkOf[l.id] ? 'po138.spare' : 'po138.spareTyped', { n: num(spare.get(l.id), 2), job: jobNoOf != null ? `#${jobNo(jobNoOf)}` : '' })}
+                            </div>
+                          )}
+                          {/* A part typed by hand: add it to the catalog (item 9, Nov 4). */}
+                          {!item && !linkOf[l.id] && can('edit_catalog') && <Link className="small" to={`/catalog/parts?typed=${encodeURIComponent(l.name)}`}>{t('tp.addLink')}</Link>}
                         </td>
                         <td className="num">{num(q, 2)}</td>
                         <td className="num">{num(l.qty_delivered, 2)}</td>

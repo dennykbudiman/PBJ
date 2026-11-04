@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Page } from '../../components/Layout'
-import { Button, Card, Input, Notice, PageHead, Select, Textarea, Toggle, useToast } from '../../components/ui'
+import { Button, Card, Input, Modal, Notice, PageHead, Select, Textarea, Toggle, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import LaborRates from './LaborRates'
 import Users from './Users'
+import StaffHours from './StaffHours'
 import ImportData from './ImportData'
 import Appearance, { themeError } from './Appearance'
 import OpeningHours, { hoursError } from './OpeningHours'
@@ -21,8 +22,8 @@ const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'f
 // shop_settings columns edited on this page, with how each is read from the form.
 const TEXT = ['shop_name', 'legal_name', 'npwp', 'address', 'phone', 'email', 'bank_details', 'terms_id', 'terms_en', 'tax_name']
 const CHOICE = ['pkp_status', 'timezone', 'default_app_language', 'default_print_language', 'shop_supplies_type', 'shop_supplies_base']
-const FLAG = ['shop_supplies_enabled', 'shop_supplies_taxable', 'new_items_taxable']
-const DECIMAL = ['tax_rate']
+const FLAG = ['shop_supplies_enabled', 'shop_supplies_taxable', 'new_items_taxable', 'auto_approve']
+const DECIMAL = ['tax_rate', 'default_markup_pct']
 const MONEY = ['shop_supplies_min', 'shop_supplies_max']
 const INT = ['default_payment_terms_days', 'due_soon_days', 'due_soon_km']
 
@@ -54,8 +55,9 @@ function fromForm(f, s, t) {
   if (!f.shop_name.trim()) errors.shop_name = t('settings.required')
   if (!f.tax_name.trim()) errors.tax_name = t('settings.required')
   for (const k of CHOICE) if (f[k] !== (s[k] ?? '')) patch[k] = f[k]
-  for (const k of FLAG) if (f[k] !== !!s[k]) patch[k] = f[k]
+  for (const k of FLAG) if (s[k] !== undefined && f[k] !== !!s[k]) patch[k] = f[k]
   for (const k of DECIMAL) {
+    if (s[k] === undefined) continue // column not there yet (migration 138 not run)
     const v = parseDecimal(f[k])
     if (v === null || v < 0) errors[k] = t('settings.badNumber')
     else if (Number(s[k]) !== v) patch[k] = v
@@ -73,6 +75,8 @@ function fromForm(f, s, t) {
   const ss = f.shop_supplies_type === 'fixed' ? readAmount(f.shop_supplies_rate) : parseDecimal(f.shop_supplies_rate)
   if (ss === null || Number.isNaN(ss) || ss < 0) errors.shop_supplies_rate = t('settings.badNumber')
   else if (Number(s.shop_supplies_rate) !== ss) patch.shop_supplies_rate = ss
+  const mk = parseDecimal(f.default_markup_pct)
+  if (mk !== null && mk > 1000) errors.default_markup_pct = t('set138.markupRule')
   const rate = parseDecimal(f.tax_rate)
   if (rate !== null && rate > 100) errors.tax_rate = t('settings.max100')
   if (f.shop_supplies_type === 'percent' && ss !== null && ss > 100) errors.shop_supplies_rate = t('settings.max100')
@@ -163,7 +167,7 @@ function LogoPicker({ disabled }) {
 export default function Settings() {
   const { t } = useT()
   const toast = useToast()
-  const { can } = useAuth()
+  const { can, isOwner } = useAuth()
   const { settings, setSettings } = useShop()
   const seq = useSequences()
   const editable = can('edit_settings')
@@ -323,6 +327,15 @@ export default function Settings() {
               <Input label={t('settings.dueSoonKm')} value={form.due_soon_km} onChange={set('due_soon_km')} disabled={dis} inputMode="numeric" suffix="km" error={errors.due_soon_km} />
             </div>
             <div className="hint">{t('settings.defaultsHint')}</div>
+            {/* Nov 4, Denny: work approved automatically for now; parts priced from cost with a default markup. */}
+            <div className="sectionlabel">{t('set138.workParts')}</div>
+            <Toggle checked={form.auto_approve} onChange={set('auto_approve')} disabled={dis} label={t('set138.autoApprove')} />
+            <div className="hint">{t(form.auto_approve ? 'set138.autoApproveOn' : 'set138.autoApproveOff')}</div>
+            <div className="grid3" style={{ marginTop: 12 }}>
+              <Input label={t('set138.markup')} value={form.default_markup_pct} onChange={set('default_markup_pct')} disabled={dis} inputMode="decimal" suffix="%" error={errors.default_markup_pct} />
+            </div>
+            <div className="hint">{t('set138.markupHint')}</div>
+            {isOwner && <ApplyMarkup markup={Number(settings.default_markup_pct ?? 0)} dirty={String(form.default_markup_pct) !== String(Number(settings.default_markup_pct ?? 0)).replace('.', ',')} />}
           </Card>
 
           <Card title={t('settings.nav.fees')} id="set-fees">
@@ -368,6 +381,7 @@ export default function Settings() {
 
           <LaborRates id="set-labor" />
           {manageUsers && <Users id="set-users" />}
+          {manageUsers && <StaffHours id="set-staffhours" />}
           {editable && <ImportData id="set-import" />}
 
           {editable && dirty && (
@@ -394,4 +408,51 @@ function exampleFee(f) {
   if (mn !== null && !Number.isNaN(mn) && fee < mn) fee = mn
   if (mx !== null && !Number.isNaN(mx) && fee > mx) fee = mx
   return fee
+}
+
+// Owner only (Nov 4): reprice every active catalog part with a cost to cost × (1 + the saved default markup), after a
+// preview of what changes. Lines already on jobs keep their prices.
+function ApplyMarkup({ markup, dirty }) {
+  const { t } = useT()
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [parts, setParts] = useState(null)
+  const [busy, setBusy] = useState(false)
+  async function preview() {
+    setOpen(true)
+    setParts(null)
+    const { data, error } = await supabase.from('catalog_items_read').select('id, name, code, cost, price, markup_pct').eq('item_type', 'part').eq('active', true).order('name')
+    if (error) { toast(errorText(error, t), 'err'); setOpen(false); return }
+    setParts((data || []).filter((x) => Number(x.cost) > 0).map((x) => ({ ...x, next: Math.round(Number(x.cost) * (1 + markup / 100)) })).filter((x) => Number(x.price) !== x.next || Number(x.markup_pct) !== markup))
+  }
+  async function apply() {
+    setBusy(true)
+    const { data, error } = await supabase.rpc('apply_parts_markup', { p_markup: markup })
+    setBusy(false)
+    if (error) return toast(errorText(error, t), 'err')
+    toast(t('set138.applied', { n: data ?? 0 }))
+    setOpen(false)
+  }
+  return (
+    <>
+      <div style={{ marginTop: 8 }}>
+        <Button size="sm" onClick={preview} disabled={dirty} title={dirty ? t('set138.saveFirst') : undefined}>{t('set138.applyAll', { pct: num(markup, 2) })}</Button>
+        {dirty && <span className="muted small" style={{ marginLeft: 8 }}>{t('set138.saveFirst')}</span>}
+      </div>
+      <Modal open={open} onClose={() => setOpen(false)} title={t('set138.applyTitle', { pct: num(markup, 2) })}
+        footer={<><Button onClick={() => setOpen(false)}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} disabled={!parts || parts.length === 0} onClick={apply}>{t('set138.applyYes', { n: parts?.length ?? 0 })}</Button></>}>
+        {!parts ? <div className="muted">{t('common.loading')}</div> : parts.length === 0 ? <div className="muted">{t('set138.nothingToChange')}</div> : (
+          <>
+            <div className="hint" style={{ marginTop: 0 }}>{t('set138.applyHint')}</div>
+            <div className="table" style={{ maxHeight: 360, overflow: 'auto' }}>
+              <table>
+                <thead><tr><th>{t('cat.name')}</th><th className="num">{t('cat.cost')}</th><th className="num">{t('set138.priceNow')}</th><th className="num">{t('set138.priceNew')}</th></tr></thead>
+                <tbody>{parts.map((x) => <tr key={x.id}><td>{x.name}<div className="muted small">{x.code}</div></td><td className="num">{rp(x.cost)}</td><td className="num">{rp(x.price)}</td><td className="num"><b>{rp(x.next)}</b></td></tr>)}</tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Modal>
+    </>
+  )
 }

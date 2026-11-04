@@ -1,6 +1,9 @@
 // Update 136 (Nov 3, 2026): tab titles, drivers, plate search on a new job, alternative part numbers and fitment
 // (English / Bahasa Indonesia).
 export const u136En = {
+  // signature boxes on invoices and POs (Nov 4)
+  'pr.sign.advisor': 'Service advisor', 'pr.sign.mechanic': 'Mechanic', 'pr.sign.driver': 'Driver', 'pr.sign.boss': 'Management',
+  'pr.sign.pickup': 'Parts picked up by', 'pr.sign.supplier': 'Supplier',
   'title.search': 'Search',
   'title.newJob': 'New job',
   // drivers
@@ -34,6 +37,8 @@ export const u136En = {
 }
 
 export const u136Id = {
+  'pr.sign.advisor': 'Service advisor', 'pr.sign.mechanic': 'Mekanik', 'pr.sign.driver': 'Supir', 'pr.sign.boss': 'Pimpinan',
+  'pr.sign.pickup': 'Pengambil part', 'pr.sign.supplier': 'Supplier',
   'title.search': 'Cari',
   'title.newJob': 'Pekerjaan baru',
   'drv.driver': 'Supir',
@@ -61,4 +66,6 @@ export const u136Id = {
   'alt.fitsVehicle': 'cocok untuk kendaraan ini',
   'alt.count': '{n} alternatif',
   'alt.one': '1 alternatif',
+  // 137: only the Owner deletes vehicles, companies and contacts (Nov 4)
+  'db:Only the Owner can delete vehicles, companies and contacts.': 'Hanya Owner yang bisa menghapus kendaraan, perusahaan, dan kontak.',
 }

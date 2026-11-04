@@ -5,6 +5,7 @@ import { FullPageSpinner } from './components/ui'
 import { useAuth } from './context/AuthContext'
 import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
+import OffHours from './pages/OffHours'
 import AccountPending from './pages/AccountPending'
 import { NotFound } from './pages/ComingSoon'
 import Dashboard from './pages/Dashboard'
@@ -29,11 +30,12 @@ function VehiclesRedirect() {
 }
 
 export default function App() {
-  const { session, loading, needsPasswordSetup, isStaff, isFleet } = useAuth()
+  const { session, loading, needsPasswordSetup, isStaff, isFleet, offHours } = useAuth()
 
   if (loading) return <FullPageSpinner />
   if (!session) return <Login />
   if (needsPasswordSetup) return <SetPassword />
+  if (offHours) return <OffHours />
   if (isFleet) return <FleetRoutes />
   if (!isStaff) return <AccountPending />
 

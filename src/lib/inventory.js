@@ -79,3 +79,31 @@ export function stockState(item, lvl) {
 export const STOCK_COLOR = { out: 'red', low: 'amber', ok: 'green' }
 
 export const poNumber = (po) => po?.po_number || '—'
+
+// Parts delivered on a job's PO that the job doesn't use (Nov 4, Denny): the part line was removed, declined or
+// deferred, or never added. A catalog part stays on the shelf (it goes onto the shelf when it arrives and only comes off
+// when a job using it is invoiced); a typed-in part isn't counted in stock until it is added to the catalog.
+// Matching is by catalog part, else by name; quantities are shared out in PO order. Returns Map(poLineId → spare qty).
+// linkOf: PO line id → catalog part, for typed-in PO lines added to the catalog afterwards (migration 138).
+export function sparePoParts(poLines, jobItems, services, returnedOf = () => 0, linkOf = {}) {
+  const live = new Set((services || []).filter((s) => s.approval_status === 'approved' || s.approval_status === 'pending').map((s) => s.id))
+  const key = (x) => {
+    const c = x.catalog_item_id || linkOf[x.id]
+    return c ? `c:${c}` : `n:${String(x.name || '').trim().toLowerCase()}`
+  }
+  const need = new Map()
+  for (const i of jobItems || []) {
+    if (i.item_type !== 'part' || !live.has(i.service_id)) continue
+    need.set(key(i), (need.get(key(i)) || 0) + Number(i.qty || 0))
+  }
+  const out = new Map()
+  for (const l of poLines || []) {
+    const got = Number(l.qty_delivered || 0) - Number(returnedOf(l) || 0)
+    if (got <= 0) continue
+    const n = need.get(key(l)) || 0
+    const take = Math.min(n, got)
+    need.set(key(l), n - take)
+    if (got - take > 0) out.set(l.id, Math.round((got - take) * 100) / 100)
+  }
+  return out
+}

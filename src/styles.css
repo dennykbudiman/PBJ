@@ -463,6 +463,7 @@ span.seg-btn { cursor: default; }
 .doc-meta th { text-align: left; font-weight: 600; color: #555; padding: 1px 10px 1px 0; }
 .doc-meta td { text-align: right; padding: 1px 0; }
 .doc-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+.doc-parties.three { grid-template-columns: 1fr 1fr 1fr; }
 .doc-parties > div { border: 1px solid #ccc; border-radius: 6px; padding: 8px 10px; }
 .doc-label { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #555; margin-bottom: 3px; }
 .doc-block { margin: 10px 0; }
@@ -488,6 +489,8 @@ span.seg-btn { cursor: default; }
 .doc-terms { margin-top: 14px; font-size: 10px; color: #444; border-top: 1px solid #ddd; padding-top: 8px; }
 .doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 26px; text-align: center; break-inside: avoid; }
 .sign-line { border-bottom: 1px solid #111; height: 48px; margin-bottom: 4px; }
+.doc-sign.four { grid-template-columns: repeat(4, 1fr); gap: 22px; }
+.doc-sign .sign-name { min-height: 1.3em; }
 .doc-foot { margin-top: 16px; font-size: 9.5px; color: #666; text-align: center; }
 .doc-printedby { margin-top: 10px; font-size: 9px; color: #888; text-align: right; }
 @page { size: A4; margin: 0; }

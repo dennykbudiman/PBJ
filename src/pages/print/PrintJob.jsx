@@ -54,6 +54,8 @@ export default function PrintJob() {
   const notIncluded = job.services.filter((s) => s.approval_status === 'declined' || s.approval_status === 'deferred')
   const terms = lang === 'en' ? shop.terms_en : shop.terms_id
   const advisor = staff.find((p) => p.id === ro.service_advisor_id)?.name
+  // Everyone who worked on the billed services, in order.
+  const mechanics = [...new Set(billed.map((s) => s.technician_id).filter(Boolean))].map((id) => staff.find((p) => p.id === id)?.name).filter(Boolean).join(', ')
   const title = doc === 'invoice' ? t('pr.invoice') : t('pr.estimate')
 
   return (
@@ -228,10 +230,19 @@ export default function PrintJob() {
 
         {terms && <section className="doc-terms pre">{terms}</section>}
 
-        <section className="doc-sign">
-          <div><div className="sign-line" />{doc === 'invoice' ? t('pr.receivedBy') : t('pr.approvedBy')}<div className="small muted">{bill.display_name || bill.legal_name}</div></div>
-          <div><div className="sign-line" />{t('pr.shopSign')}<div className="small muted">{advisor ? `${advisor} · ` : ''}{shop.shop_name || shop.legal_name}</div></div>
-        </section>
+        {doc === 'invoice' ? (
+          // Invoice (Nov 4, Denny): service advisor, mechanic, driver and management sign; names printed where known.
+          <section className="doc-sign four">
+            {[['pr.sign.advisor', advisor], ['pr.sign.mechanic', mechanics], ['pr.sign.driver', ro.driver_name || veh.driver_name || job.vehicle?.driver_name], ['pr.sign.boss', '']].map(([k, name]) => (
+              <div key={k}><div className="sign-line" />{t(k)}<div className="small muted sign-name">{name || ''}</div></div>
+            ))}
+          </section>
+        ) : (
+          <section className="doc-sign">
+            <div><div className="sign-line" />{t('pr.approvedBy')}<div className="small muted">{bill.display_name || bill.legal_name}</div></div>
+            <div><div className="sign-line" />{t('pr.shopSign')}<div className="small muted">{advisor ? `${advisor} · ` : ''}{shop.shop_name || shop.legal_name}</div></div>
+          </section>
+        )}
         <footer className="doc-foot">{doc === 'estimate' ? t('pr.estimateFoot') : t('pr.invoiceFoot')}</footer>
         <PrintedBy lang={lang} timezone={timezone} />
       </article>

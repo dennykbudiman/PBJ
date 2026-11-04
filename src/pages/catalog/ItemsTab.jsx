@@ -6,6 +6,8 @@ import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, RowLink, deleteE
 import { categoryPath } from './useCatalogData'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
 import History from './History'
+import TypedParts from './TypedParts'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { num, parseDecimal, readAmount, rp } from '../../lib/format'
@@ -23,6 +25,13 @@ export default function ItemsTab({ tab, data, id, canEdit, showCost, canAdjust, 
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('all')
   const [status, setStatus] = useState('active')
+  // Parts typed by hand on jobs and POs, to add to the catalog (item 9). A job or PO line links here with ?typed=<name>.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const typedFocus = type === 'part' ? new URLSearchParams(location.search).get('typed') : null
+  const [typedOpen, setTypedOpen] = useState(Boolean(typedFocus))
+  const toast = useToast()
+  const closeTyped = () => { setTypedOpen(false); if (typedFocus) navigate(location.pathname, { replace: true }) }
 
   const cats = data.categories.filter((c) => c.applies_to === type || c.applies_to === 'any')
   const rows = useMemo(() => {
@@ -69,6 +78,11 @@ export default function ItemsTab({ tab, data, id, canEdit, showCost, canAdjust, 
         <option value="inactive">{t('cat.statusInactive')}</option>
         <option value="all">{t('cat.statusAll')}</option>
       </select>
+      {type === 'part' && canEdit && <Button size="sm" icon="plus" onClick={() => setTypedOpen(true)}>{t('tp.button')}</Button>}
+      {type === 'part' && canEdit && (typedOpen || typedFocus) && (
+        <TypedParts open={typedOpen} focus={typedFocus} data={data} onClose={closeTyped}
+          onDone={async (msg) => { toast(msg); await reload() }} />
+      )}
     </>
   )
 
@@ -133,7 +147,8 @@ function emptyItem(type, settings, rates) {
   const defRate = rates.find((r) => r.is_default && r.active) || rates.find((r) => r.active)
   return {
     item_type: type, name: '', code: '', description: '', category_id: '', supplier_id: '', brand: '',
-    cost: 0, price: 0, markup_pct: null, default_qty: 1, labor_hours: null, labor_rate_id: type === 'labor' ? defRate?.id || '' : '',
+    // New parts start at the shop's default markup (Settings; Nov 4), so the price follows the cost.
+    cost: 0, price: 0, markup_pct: type === 'part' ? Number(settings?.default_markup_pct ?? 0) : null, default_qty: 1, labor_hours: null, labor_rate_id: type === 'labor' ? defRate?.id || '' : '',
     fee_kind: type === 'fee' ? 'fixed' : null, fee_value: null, taxable: Boolean(settings?.new_items_taxable),
     show_on_invoice: true, show_qty_price: true, track_inventory: type === 'part', qty_on_hand: 0, reorder_point: null,
     has_core: false, core_cost: 0, tire_size: '', notes: '', active: true, alt_numbers: '', fits: '',

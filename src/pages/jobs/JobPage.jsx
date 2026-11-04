@@ -39,6 +39,21 @@ export default function JobPage({ id }) {
   const { data: cat, reload: reloadCat } = useCatalogData()
   const staff = useStaff()
   const { run, busy } = useRun(reload)
+  // A driver typed here is also saved as the vehicle's driver (Nov 4, Denny), unless the tick is cleared for a one-off
+  // substitute. Clearing the job's driver never clears the vehicle's.
+  const [keepDriver, setKeepDriver] = useState(true)
+  const saveDriver = (field, val) => run(async () => {
+    const patch = { [field]: val.trim() || null }
+    const r = await supabase.from('repair_orders').update(patch).eq('id', job.ro.id).select('driver_name, driver_phone').single()
+    const v = job.vehicle
+    if (r.error || !keepDriver || !can('edit_customers') || !v) return r
+    // what the job has now; empty fields don't clear the vehicle's
+    const next = {}
+    if (r.data?.driver_name && r.data.driver_name !== v.driver_name) next.driver_name = r.data.driver_name
+    if (r.data?.driver_phone && r.data.driver_phone !== v.driver_phone) next.driver_phone = r.data.driver_phone
+    if (!Object.keys(next).length) return r
+    return supabase.from('vehicles').update(next).eq('id', v.id)
+  })
   // Invoicing and voiding move stock, so the catalog (stock badges) is reloaded after those.
   const runStock = async (fn, okText) => { const ok = await run(fn, okText); reloadCat(); return ok }
   const [tab, setTab] = useState('services')
@@ -156,12 +171,18 @@ export default function JobPage({ id }) {
                   <div className="row wrap" style={{ gap: 8, marginTop: 8 }}>
                     <label className="mini">{t('drv.broughtBy')}
                       <BlurInput className="input cell" style={{ width: 170 }} value={ro.driver_name || ''} maxLength={120} placeholder={t('drv.name')} aria-label={t('drv.broughtBy')}
-                        onCommit={(val) => run(() => supabase.from('repair_orders').update({ driver_name: val.trim() || null }).eq('id', ro.id))} />
+                        onCommit={(val) => saveDriver('driver_name', val)} />
                     </label>
                     <label className="mini">{t('drv.phone')}
                       <BlurInput className="input cell" style={{ width: 140 }} value={ro.driver_phone || ''} maxLength={40} inputMode="tel" placeholder="0812-…" aria-label={t('drv.phone')}
-                        onCommit={(val) => run(() => supabase.from('repair_orders').update({ driver_phone: val.trim() || null }).eq('id', ro.id))} />
+                        onCommit={(val) => saveDriver('driver_phone', val)} />
                     </label>
+                    {can('edit_customers') && job.vehicle && (
+                      <label className="inlinecheck small" style={{ alignSelf: 'flex-end' }}>
+                        <input type="checkbox" checked={keepDriver} onChange={(e) => setKeepDriver(e.target.checked)} />
+                        <span>{t('drv138.keepOnVehicle', { plate: job.vehicle.plate })}</span>
+                      </label>
+                    )}
                   </div>
                 ) : (ro.driver_name || ro.driver_phone) ? (
                   <div style={{ marginTop: 8 }}><span className="muted small">{t('drv.broughtBy')}:</span> <DriverText name={ro.driver_name} phone={ro.driver_phone} /></div>
