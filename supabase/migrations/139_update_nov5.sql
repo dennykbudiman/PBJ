@@ -319,12 +319,16 @@ create trigger ro_services_0_link_schedule_upd before update of template_id on p
 
 -- 5. Km out no longer needed to invoice (Denny, Nov 5) -----------------------------------------------------------------
 do $$
-declare src text; changed text;
+declare src text; changed text; nl text;
 begin
   src := pg_get_functiondef('public.convert_to_invoice(uuid)'::regprocedure);
+  -- a function first run from the SQL Editor on Windows is stored with Windows line endings
+  nl := case when position(E'\r\n' in src) > 0 then E'\r\n' else E'\n' end;
   changed := replace(src,
-    E'  -- Denny, Oct 7: an invoice needs the km out and a technician on every approved service\n  if ro.odometer_out is null then raise exception ''Enter the km out before invoicing''; end if;\n  if ro.odometer_in is not null and ro.odometer_out < ro.odometer_in then raise exception ''The km out can''''t be lower than the km in''; end if;\n',
-    E'  -- Denny, Oct 7: an invoice needs a technician on every approved service (km out no longer needed: Nov 5)\n');
+    '  -- Denny, Oct 7: an invoice needs the km out and a technician on every approved service' || nl
+    || '  if ro.odometer_out is null then raise exception ''Enter the km out before invoicing''; end if;' || nl
+    || '  if ro.odometer_in is not null and ro.odometer_out < ro.odometer_in then raise exception ''The km out can''''t be lower than the km in''; end if;' || nl,
+    '  -- Denny, Oct 7: an invoice needs a technician on every approved service (km out no longer needed: Nov 5)' || nl);
   if changed = src then
     if position('Enter the km out before invoicing' in src) > 0 then raise exception 'convert_to_invoice: km out check not found as expected'; end if;
   else
