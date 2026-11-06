@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Icon from './Icon'
+import TanyaClaude from './TanyaClaude'
 import NotificationBell from './NotificationBell'
 import ProfileModal from './ProfileModal'
 import { usePopover } from './ui'
@@ -181,6 +182,7 @@ export default function Layout() {
             <Icon name="search" size={20} color="#fff" />
           </NavLink>
           <CreateMenu />
+          <TanyaClaude />
           {!isFleet && (
             <NavLink to="/settings" className="iconbtn" aria-label={t('nav.settings')} title={t('nav.settings')}>
               <Icon name="gear" size={20} color="#fff" />

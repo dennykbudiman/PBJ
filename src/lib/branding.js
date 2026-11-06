@@ -26,12 +26,14 @@ export function brandName(lang) {
 // Print pages use their title alone, because the browser suggests it as the PDF file name.
 let routeTitle = ''
 let pageTitle = null // { text, alone }
+const titleListeners = new Set() // Tanya Claude's "open now" line
 
 function applyToDocument() {
   const own = pageTitle?.text || routeTitle
   const title = own ? (pageTitle?.alone || !brand.name ? own : `${own} — ${brand.name}`) : brand.name
   const shown = title || 'Bengkel' // nothing known yet: the neutral name from index.html, not the previous page's title
   if (document.title !== shown) document.title = shown
+  titleListeners.forEach((fn) => fn())
   let link = document.querySelector('link[rel~="icon"]')
   if (!link) {
     link = document.createElement('link')
@@ -81,4 +83,12 @@ export function usePageTitle(text, { alone = false } = {}) {
 
 export function useBranding() {
   return useSyncExternalStore((fn) => { listeners.add(fn); return () => listeners.delete(fn) }, getBranding)
+}
+
+// The current page's own title without the shop name (e.g. "DA 8123 TAQ · #100005"), for Tanya Claude.
+export function currentPageTitle() {
+  return pageTitle?.text || routeTitle || ''
+}
+export function usePageTitleText() {
+  return useSyncExternalStore((fn) => { titleListeners.add(fn); return () => titleListeners.delete(fn) }, currentPageTitle)
 }

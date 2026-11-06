@@ -49,6 +49,10 @@ const PATHS = {
   undo: <><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></>,
   wallet: <><path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a1 1 0 0 1-1-1V7z" /><path d="M4 7l11-3v3" /><circle cx="16" cy="13.5" r="1.2" /></>,
   receipt: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></>,
+  // speech bubble with a question mark (Tanya Claude)
+  ask: <><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7" /><path d="M12 16.6v.01" /></>,
+  thumbUp: <><path d="M7 11v9H4v-9z" /><path d="M7 11l4-7a2 2 0 0 1 2.5 2.3L13 10h5.5a2 2 0 0 1 2 2.4l-1.4 6A2 2 0 0 1 17.2 20H7" /></>,
+  thumbDown: <><path d="M7 13V4H4v9z" /><path d="M7 13l4 7a2 2 0 0 0 2.5-2.3L13 14h5.5a2 2 0 0 0 2-2.4l-1.4-6A2 2 0 0 0 17.2 4H7" /></>,
 }
 
 export default function Icon({ name, size = 16, color = 'currentColor', stroke = 2, style }) {

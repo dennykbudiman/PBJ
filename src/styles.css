@@ -794,3 +794,66 @@ tr.totalrow td { border-top: 2px solid var(--line); }
 .bcard-wait .waitchip { font-size: 10.5px; }
 @media (max-width: 1500px) { .boardlist .hrs { display: none; } .boardlist .waitcell { min-width: 160px; } }
 @media (max-width: 700px) { .sc-wide { display: none; } }
+
+/* Tanya Claude (migration 140): the top-bar icon and the side panel */
+.tc-icon.on { background: rgba(255,255,255,.22); }
+.tc-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 100vw; background: #fff; border-left: 1px solid var(--line);
+  box-shadow: -8px 0 28px rgba(20,24,28,.14); z-index: 70; display: flex; flex-direction: column; font-size: 13px; color: var(--ink); }
+.tc-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line-soft); }
+.tc-title { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px; }
+.tc-spark { width: 26px; height: 26px; border-radius: 8px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px; }
+.tc-ro { margin-top: 4px; font-size: 11.5px; color: var(--muted); }
+.tc-ctx { margin-top: 8px; display: inline-flex; background: var(--head-bg); border: 1px solid var(--line-soft); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-textbtn { background: none; border: none; color: var(--link); font-weight: 700; font-size: 12px; cursor: pointer; padding: 4px 6px; }
+.tc-textbtn:disabled { opacity: .5; cursor: default; }
+.iconbtn-plain { background: none; border: none; cursor: pointer; padding: 4px; color: var(--muted); border-radius: 6px; display: flex; }
+.iconbtn-plain:hover { background: var(--bg); color: var(--ink); }
+.tc-body { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; background: var(--head-bg); }
+.tc-pair { display: flex; flex-direction: column; gap: 4px; }
+.tc-me { align-self: flex-end; max-width: 82%; background: var(--accent); color: #fff; padding: 8px 12px; border-radius: 14px 14px 4px 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tc-who { font-size: 10.5px; color: var(--faint); margin-top: 4px; }
+.tc-careful { color: var(--link); font-weight: 700; }
+.tc-ai { align-self: flex-start; max-width: 94%; background: #fff; border: 1px solid var(--line); padding: 10px 12px; border-radius: 14px 14px 14px 4px; line-height: 1.5; overflow-wrap: anywhere; }
+.tc-ai p { margin: 0 0 6px; } .tc-ai p:last-child { margin-bottom: 0; }
+.tc-ai ol, .tc-ai ul { margin: 4px 0 6px; padding-left: 20px; } .tc-ai li { margin: 2px 0; }
+.tc-wait { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.tc-err { border-color: #f1c4c0; background: #fdf3f2; color: var(--red); }
+.tc-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tc-link { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 11.5px; font-weight: 700; color: var(--link); background: #fff; text-decoration: none; }
+.tc-link:hover { border-color: var(--accent); }
+.tc-src { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--line-soft); font-size: 11px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.tc-rate { background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 4px; cursor: pointer; color: var(--faint); display: flex; }
+.tc-rate:hover { background: var(--bg); }
+.tc-rate.on { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
+.tc-more { align-self: flex-start; background: none; border: none; padding: 2px 0; color: var(--link); font-weight: 700; font-size: 12px; cursor: pointer; }
+.tc-more:disabled { opacity: .5; cursor: default; }
+.tc-sughead { font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 4px; }
+.tc-sug { display: flex; flex-direction: column; gap: 6px; }
+.tc-sug button { text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 10px; font-weight: 600; font-size: 13px; cursor: pointer; color: var(--ink); }
+.tc-sug button:hover { border-color: var(--accent); }
+.tc-foot { border-top: 1px solid var(--line-soft); padding: 10px 16px 12px; background: #fff; }
+.tc-input { border: 1px solid var(--line); border-radius: 12px; padding: 6px 6px 6px 12px; display: flex; gap: 8px; align-items: flex-end; }
+.tc-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.tc-input textarea { flex: 1; border: none; outline: none; resize: none; font: inherit; font-size: 13px; padding: 4px 0; min-height: 36px; max-height: 120px; background: transparent; color: var(--ink); }
+.tc-log { margin-top: 6px; font-size: 11px; color: var(--faint); }
+@media (max-width: 700px) { .tc-drawer { width: 100vw; border-left: none; } }
+@media print { .tc-drawer, .tc-icon { display: none !important; } }
+
+/* Settings → Tanya Claude */
+.tcs-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 4px 0 16px; }
+.tcs-stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+.tcs-stat .k { font-size: 11px; font-weight: 800; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; }
+.tcs-stat .v { font-size: 22px; font-weight: 800; margin-top: 2px; }
+.tcs-stat .s { font-size: 11.5px; color: var(--muted); }
+.tcs-stat.warn { border-left: 3px solid var(--amber); }
+.tcs-log td.q { max-width: 360px; }
+.tcs-log tr.clickable { cursor: pointer; }
+.tcs-log tr.clickable:hover td { background: var(--head-bg); }
+.tcs-detail { background: var(--head-bg); border: 1px solid var(--line-soft); border-radius: 10px; padding: 10px 12px; margin: 4px 0; font-size: 12.5px; }
+.tcs-detail .tc-ai { max-width: 100%; }
+.tcs-cmp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.tcs-cmp .tc-ai { max-width: 100%; font-size: 12.5px; }
+.tcs-cmp h4 { margin: 0 0 6px; font-size: 12px; }
+@media (max-width: 900px) { .tcs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tcs-cmp { grid-template-columns: 1fr; } }
+.tcs-form { display: flex; flex-direction: column; gap: 14px; }
+.tcs-log tr.clickable:focus-visible td { background: var(--accent-soft); outline: none; }

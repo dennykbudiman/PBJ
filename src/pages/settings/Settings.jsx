@@ -6,6 +6,7 @@ import LaborRates from './LaborRates'
 import Users from './Users'
 import StaffHours from './StaffHours'
 import ImportData from './ImportData'
+import TanyaSettings from './TanyaSettings'
 import Appearance, { themeError } from './Appearance'
 import OpeningHours, { hoursError } from './OpeningHours'
 import { normHours } from '../../lib/hours'
@@ -17,7 +18,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { initials, invoiceNo, jobNo, stockPoNo, readAmount, parseDecimal, rp, num } from '../../lib/format'
 
-const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'fees', 'labor', 'users', 'import']
+const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'fees', 'labor', 'users', 'import', 'tanya']
 
 // shop_settings columns edited on this page, with how each is read from the form.
 const TEXT = ['shop_name', 'legal_name', 'npwp', 'address', 'phone', 'email', 'bank_details', 'terms_id', 'terms_en', 'tax_name']
@@ -178,7 +179,7 @@ export default function Settings() {
   // Import data is for Owner and Admin (they also hold the permissions each kind of row needs).
   // Users & access: Owner and Admin only (manage_users; Oct 31, Denny).
   const manageUsers = can('manage_users')
-  const SECTIONS = ALL_SECTIONS.filter((x) => (editable || (x !== 'appearance' && x !== 'import')) && (manageUsers || x !== 'users'))
+  const SECTIONS = ALL_SECTIONS.filter((x) => (editable || (x !== 'appearance' && x !== 'import' && x !== 'tanya')) && (manageUsers || x !== 'users'))
   const [active, go] = useScrollSpy(SECTIONS, { prefix: 'set-' })
   const navRef = useRef(null)
 
@@ -391,6 +392,7 @@ export default function Settings() {
           {manageUsers && <Users id="set-users" />}
           {manageUsers && <StaffHours id="set-staffhours" />}
           {editable && <ImportData id="set-import" />}
+          {editable && <TanyaSettings id="set-tanya" />}
 
           {editable && dirty && (
             <div className="savebar">
