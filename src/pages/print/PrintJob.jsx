@@ -123,7 +123,7 @@ export default function PrintJob() {
             <div className="doc-label">{t('pr.vehicle')}</div>
             <b>{veh.plate}</b> · {vehicleName(veh) || '—'}
             {veh.vin && <div>VIN {veh.vin}</div>}
-            <div>{t('pr.odometer')}: {ro.odometer_in != null ? km(ro.odometer_in) : '—'}{ro.odometer_out != null ? ` → ${km(ro.odometer_out)}` : ''}</div>
+            <div>{t('pr.odometer')}: {(ro.odometer_in ?? ro.odometer_out) != null ? km(ro.odometer_in ?? ro.odometer_out) : '—'}</div>
             {(ro.driver_name || ro.driver_phone) && <div>{t('pr.driver')}: {[ro.driver_name, ro.driver_phone].filter(Boolean).join(' · ')}</div>}
           </div>
         </section>
@@ -220,7 +220,8 @@ export default function PrintJob() {
               {job.fees.filter((f) => Number(f.amount) > 0).map((f) => <tr key={f.id}><th>{f.is_shop_supplies ? t('pr.shopSupplies') : f.name}</th><td>{rp(f.amount)}</td></tr>)}
               {job.discounts.filter((d) => Number(d.amount) > 0).map((d) => <tr key={d.id}><th>{d.name}</th><td>-{rp(d.amount)}</td></tr>)}
               <tr className="rule"><th>{t('pr.subtotal')}</th><td>{rp(ro.subtotal)}</td></tr>
-              <tr><th>{taxRate > 0 ? t('pr.tax', { tax: taxName, rate: num(taxRate, 2), base: rp(ro.taxable_base) }) : taxName}</th><td>{rp(ro.tax_total)}</td></tr>
+              {/* No PPN charged: the line is left out (Denny, Nov 5). */}
+              {Number(ro.tax_total) !== 0 && <tr><th>{taxRate > 0 ? t('pr.tax', { tax: taxName, rate: num(taxRate, 2), base: rp(ro.taxable_base) }) : taxName}</th><td>{rp(ro.tax_total)}</td></tr>}
               <tr className="grand"><th>{t('pr.total')}</th><td>{rp(ro.total)}</td></tr>
               {Number(ro.paid_total) > 0 && <tr><th>{doc === 'invoice' ? t('pr.paid') : t('pr.deposit')}</th><td>-{rp(ro.paid_total)}</td></tr>}
               {doc === 'invoice' && <tr className="grand"><th>{t('pr.balance')}</th><td>{rp(ro.balance)}</td></tr>}

@@ -17,6 +17,7 @@ import CatalogArea from './pages/catalog/CatalogArea'
 import JobsArea from './pages/jobs/JobsArea'
 import PrintJob from './pages/print/PrintJob'
 import BoardPage from './pages/board/BoardPage'
+import TodayPage from './pages/TodayPage'
 import CalendarPage from './pages/calendar/CalendarPage'
 import InventoryArea from './pages/inventory/InventoryArea'
 import PrintPo from './pages/print/PrintPo'
@@ -46,6 +47,7 @@ export default function App() {
       <Route path="print/*" element={<PrintJob />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
+        <Route path="today" element={<TodayPage />} />
         <Route path="board" element={<BoardPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="customers/*" element={<CustomersArea />} />

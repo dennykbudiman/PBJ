@@ -30,7 +30,9 @@ export default function Dashboard() {
   }, [])
 
   const inShop = d?.in_shop || {}
-  const shopCount = ['scheduled', 'arrived', 'in_progress', 'waiting_parts', 'completed'].reduce((a, k) => a + (Number(inShop[k]) || 0), 0)
+  // Trucks actually here: booked ones (Dijadwalkan) aren't counted, finished ones waiting for an invoice are (Nov 5).
+  const HERE = ['arrived', 'in_progress', 'waiting_parts', 'completed']
+  const shopCount = HERE.reduce((a, k) => a + (Number(inShop[k]) || 0), 0)
   const m = d?.money
   const change = m && Number(m.invoiced_prev) > 0 ? Math.round(((Number(m.invoiced_mtd) - Number(m.invoiced_prev)) / Number(m.invoiced_prev)) * 100) : null
 
@@ -40,12 +42,16 @@ export default function Dashboard() {
       {error && <Notice kind="err" style={{ marginBottom: 12 }}>{errorText(error, t)}</Notice>}
       {!d ? !error && <div className="muted">{t('common.loading')}</div> : (
         <>
-          <h2 className="dash-h">{t('dash.today')}</h2>
+          <div className="row" style={{ alignItems: 'baseline' }}>
+            <h2 className="dash-h">{t('dash.today')}</h2>
+            <div className="spacer" />
+            <Link className="small" to="/today">{t('day.more')} →</Link>
+          </div>
           <div className="dashgrid">
             <Tile to="/calendar?v=day" icon="calendar" label={t('dash.bookings')} value={num(d.bookings_today)}
               note={Number(d.requests) ? t('dash.requests', { n: d.requests }) : t('dash.noRequests')} warn={Number(d.requests) > 0} />
             <Tile to="/board" icon="layout-kanban" label={t('dash.inShop')} value={num(shopCount)}
-              note={['arrived', 'in_progress', 'waiting_parts'].filter((k) => Number(inShop[k])).map((k) => `${t(`job.wf.${k}`)} ${inShop[k]}`).join(' · ') || t('dash.nothingInShop')} />
+              note={HERE.filter((k) => Number(inShop[k])).map((k) => `${t(`job.wf.${k}`)} ${inShop[k]}`).join(' · ') || t('dash.nothingInShop')} />
             <Tile to="/board" icon="packages" label={t('dash.waitingParts')} value={num(d.waiting_parts)} note={t('dash.waitingPartsNote')} warn={Number(d.waiting_parts) > 0} />
             <Tile to="/board" icon="check" label={t('dash.readyInv')} value={num(inShop.completed || 0)} note={t('dash.readyNote')} />
           </div>

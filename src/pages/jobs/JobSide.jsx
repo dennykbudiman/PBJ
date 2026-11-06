@@ -53,8 +53,17 @@ export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable,
   const upd = (patch) => run(() => supabase.from('repair_orders').update(patch).eq('id', ro.id))
   const terms = job.customer?.payment_terms_days ?? settings?.default_payment_terms_days
   const state = jobState(ro, shopToday(timezone))
+  // Moving to Done finishes the approved work too when the status moves by itself (migration 139): ask first.
+  const [confirm, confirmEl] = useConfirm()
+  async function setWorkflow(w) {
+    const open = job.services.some((s) => s.approval_status === 'approved' && s.work_status !== 'completed')
+    if (w === 'completed' && settings?.auto_workflow && open
+      && !(await confirm({ title: t('job.wf.completed'), text: t('u139.toDone'), yes: t('u139.toDoneYes') }))) return
+    upd({ workflow_status: w })
+  }
   return (
     <section className="card side-card">
+      {confirmEl}
       <div className="sectionlabel" style={{ marginTop: 0 }}>{t('job.orderStatus')}</div>
       <div className="seg" aria-label={t('job.orderStatus')}>
         <span className={`seg-btn ${!invoiced ? 'on' : ''}`}>{t('job.estimate')}</span>
@@ -87,7 +96,7 @@ export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable,
           ) : canEdit && <Button size="sm" icon="car" onClick={() => upd({ archived_at: new Date().toISOString() })}>{t('job.markPickedUp')}</Button>}
         </div>
       ) : (
-        <Select value={ro.workflow_status} disabled={!editable} onChange={(e) => upd({ workflow_status: e.target.value })} aria-label={t('job.workflow')}
+        <Select value={ro.workflow_status} disabled={!editable} onChange={(e) => setWorkflow(e.target.value)} aria-label={t('job.workflow')}
           options={WORKFLOW_MANUAL.map((w) => ({ value: w, label: t(`job.wf.${w}`) }))} />
       )}
 
@@ -176,7 +185,8 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
       )}
       <div className="trule" />
       <TotalRow label={t('job.subtotal')} value={ro.subtotal} strong />
-      <TotalRow label={job.customer?.tax_exempt ? t('job.taxExempt', { tax: settingsForTax?.tax_name || 'PPN' }) : t('job.taxLine', { tax: settingsForTax?.tax_name || 'PPN', rate: num(taxRate, 2), base: rp(ro.taxable_base) })} value={ro.tax_total} />
+      {/* No PPN on this job: the line is left out (Denny, Nov 5). */}
+      {Number(ro.tax_total) !== 0 && <TotalRow label={job.customer?.tax_exempt ? t('job.taxExempt', { tax: settingsForTax?.tax_name || 'PPN' }) : t('job.taxLine', { tax: settingsForTax?.tax_name || 'PPN', rate: num(taxRate, 2), base: rp(ro.taxable_base) })} value={ro.tax_total} />}
       <div className="trule" />
       <TotalRow label={t('job.total')} value={ro.total} strong />
       <TotalRow label={t('job.paidToDate')} value={ro.paid_total} muted />

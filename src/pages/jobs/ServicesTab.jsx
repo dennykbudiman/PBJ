@@ -54,6 +54,10 @@ export async function addBundleService({ job, cat, tp, name, scheduleId }) {
   })
   if (error) return { error }
   if (!tp) return { data: svc }
+  return insertLines(svc.id, ro.id, 0, bundleLines(cat, tp), job.fees)
+}
+
+function bundleLines(cat, tp) {
   const built = { lines: [], jobFees: [] }
   for (const ti of cat.templateItems.filter((x) => x.template_id === tp.id)) {
     const item = cat.itemById[ti.catalog_item_id]
@@ -63,7 +67,15 @@ export async function addBundleService({ job, cat, tp, name, scheduleId }) {
     built.lines.push(...r.lines)
     built.jobFees.push(...r.jobFees)
   }
-  return insertLines(svc.id, ro.id, 0, built, job.fees)
+  return built
+}
+
+// An empty service (e.g. one made from a complaint, migration 139) filled with a package's lines; it keeps its name.
+export async function fillFromBundle({ job, cat, tp, svc }) {
+  const { error } = await supabase.from('ro_services')
+    .update({ template_id: tp.id, checklist_id: tp.checklist_id || null, flat_price: tp.flat_price ?? null }).eq('id', svc.id)
+  if (error) return { error }
+  return insertLines(svc.id, job.ro.id, 0, bundleLines(cat, tp), job.fees)
 }
 
 export default function ServicesTab({ job, cat, staff, editable, workEditable, showCost, run, busy, openApproval }) {
@@ -80,6 +92,17 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
 
   async function addTemplate(tp) {
     await run(() => addBundleService({ job, cat, tp }), t('job.serviceAdded', { name: tp.name }))
+  }
+
+  // One mechanic on every service of the job (Denny, Nov 5). Finished work that already has a mechanic keeps theirs.
+  const { isFleet } = useAuth()
+  async function setTechAll(id) {
+    if (!id) return
+    const ids = job.services.filter((s) => ['approved', 'pending'].includes(s.approval_status) && s.technician_id !== id
+      && !(s.work_status === 'completed' && s.technician_id)).map((s) => s.id)
+    const name = staff.find((p) => p.id === id)?.name || ''
+    if (!ids.length) return
+    await run(() => supabase.from('ro_services').update({ technician_id: id }).in('id', ids), t('u139.techAllDone', { name, n: ids.length }))
   }
 
   async function addBlank() {
@@ -103,6 +126,15 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
                 </>
               )} />
           </div>
+          {!isFleet && editable && job.services.length > 1 && (
+            <label className="row techall" style={{ gap: 6 }}>
+              <span className="muted small">{t('u139.techAll')}</span>
+              <select className="select" value="" disabled={busy} aria-label={t('u139.techAll')} onChange={(e) => setTechAll(e.target.value)}>
+                <option value="" disabled>{t('u139.techAllPick')}</option>
+                {staff.filter(worksOnJobs).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
           {!adding ? (
             <Button icon="plus" onClick={() => setAdding(true)}>{t('job.addService')}</Button>
           ) : (
@@ -119,13 +151,13 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
         <div className="card"><Empty icon="wrench" title={t('job.noServices')}>{editable ? t('job.noServicesText') : null}</Empty></div>
       ) : job.services.map((s, i) => (
         <ServiceCard key={s.id} s={s} index={i} job={job} cat={cat} staff={staff} editable={editable} workEditable={workEditable}
-          showCost={showCost} run={run} busy={busy} openApproval={openApproval} alts={alts} />
+          showCost={showCost} run={run} busy={busy} openApproval={openApproval} alts={alts} templateOptions={templateOptions} />
       ))}
     </div>
   )
 }
 
-function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCost, run, busy, openApproval, alts }) {
+function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCost, run, busy, openApproval, alts, templateOptions }) {
   const { t } = useT()
   const toast = useToast()
   const ro = job.ro
@@ -310,7 +342,16 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
           </thead>
           <tbody>
             {lines.length === 0 && (
-              <tr><td colSpan={showCost ? 11 : 10} className="muted" style={{ textAlign: 'center', padding: 14 }}>{t('job.noLines')}</td></tr>
+              <tr><td colSpan={showCost ? 11 : 10} className="muted" style={{ textAlign: 'center', padding: 14 }}>
+                {t('job.noLines')}
+                {editable && templateOptions?.length > 0 && (
+                  <div style={{ maxWidth: 360, margin: '8px auto 0', textAlign: 'left' }}>
+                    <Picker options={templateOptions} placeholder={t('u139.fillFrom')} disabled={busy}
+                      onPick={(o) => run(() => fillFromBundle({ job, cat, tp: o.tp, svc: s }), t('u139.filled', { name: o.tp.name }))}
+                      render={(o) => <span style={{ flex: 1 }}><b>{o.tp.name}</b></span>} />
+                  </div>
+                )}
+              </td></tr>
             )}
             {lines.map((l) => {
               const item = l.catalog_item_id ? cat.itemById[l.catalog_item_id] : null

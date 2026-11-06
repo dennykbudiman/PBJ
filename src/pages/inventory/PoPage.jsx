@@ -302,7 +302,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
             <div className="sectionlabel" style={{ marginTop: 0 }}>{t('inv.po.totals')}</div>
             <TotalRow label={t('inv.po.partsTotal')} value={tot.parts} />
             {tot.core > 0 && <TotalRow label={t('inv.po.coreTotal')} value={tot.core} />}
-            <TotalRow label={t('inv.po.taxTotal', { rate: num(po.tax_rate, 2) })} value={tot.tax} />
+            {Number(tot.tax) !== 0 && <TotalRow label={t('inv.po.taxTotal', { rate: num(po.tax_rate, 2) })} value={tot.tax} />}
             <TotalRow label={t('inv.po.total')} value={tot.total} strong />
             {anyDelivered && <>
               <div className="sep" />

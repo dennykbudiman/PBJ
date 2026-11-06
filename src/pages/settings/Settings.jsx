@@ -22,7 +22,7 @@ const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'f
 // shop_settings columns edited on this page, with how each is read from the form.
 const TEXT = ['shop_name', 'legal_name', 'npwp', 'address', 'phone', 'email', 'bank_details', 'terms_id', 'terms_en', 'tax_name']
 const CHOICE = ['pkp_status', 'timezone', 'default_app_language', 'default_print_language', 'shop_supplies_type', 'shop_supplies_base']
-const FLAG = ['shop_supplies_enabled', 'shop_supplies_taxable', 'new_items_taxable', 'auto_approve']
+const FLAG = ['shop_supplies_enabled', 'shop_supplies_taxable', 'new_items_taxable', 'auto_approve', 'auto_concern_services', 'auto_workflow']
 const DECIMAL = ['tax_rate', 'default_markup_pct']
 const MONEY = ['shop_supplies_min', 'shop_supplies_max']
 const INT = ['default_payment_terms_days', 'due_soon_days', 'due_soon_km']
@@ -331,6 +331,14 @@ export default function Settings() {
             <div className="sectionlabel">{t('set138.workParts')}</div>
             <Toggle checked={form.auto_approve} onChange={set('auto_approve')} disabled={dis} label={t('set138.autoApprove')} />
             <div className="hint">{t(form.auto_approve ? 'set138.autoApproveOn' : 'set138.autoApproveOff')}</div>
+            {settings.auto_concern_services !== undefined && <>
+              <Toggle checked={form.auto_concern_services} onChange={set('auto_concern_services')} disabled={dis} label={t('u139.autoConcern')} />
+              <div className="hint">{t('u139.autoConcernHint')}</div>
+            </>}
+            {settings.auto_workflow !== undefined && <>
+              <Toggle checked={form.auto_workflow} onChange={set('auto_workflow')} disabled={dis} label={t('u139.autoWorkflow')} />
+              <div className="hint">{t('u139.autoWorkflowHint')}</div>
+            </>}
             <div className="grid3" style={{ marginTop: 12 }}>
               <Input label={t('set138.markup')} value={form.default_markup_pct} onChange={set('default_markup_pct')} disabled={dis} inputMode="decimal" suffix="%" error={errors.default_markup_pct} />
             </div>

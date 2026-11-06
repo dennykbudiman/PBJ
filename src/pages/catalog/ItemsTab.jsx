@@ -7,7 +7,7 @@ import { categoryPath } from './useCatalogData'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
 import History from './History'
 import TypedParts from './TypedParts'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { num, parseDecimal, readAmount, rp } from '../../lib/format'
@@ -151,7 +151,7 @@ function emptyItem(type, settings, rates) {
     cost: 0, price: 0, markup_pct: type === 'part' ? Number(settings?.default_markup_pct ?? 0) : null, default_qty: 1, labor_hours: null, labor_rate_id: type === 'labor' ? defRate?.id || '' : '',
     fee_kind: type === 'fee' ? 'fixed' : null, fee_value: null, taxable: Boolean(settings?.new_items_taxable),
     show_on_invoice: true, show_qty_price: true, track_inventory: type === 'part', qty_on_hand: 0, reorder_point: null,
-    has_core: false, core_cost: 0, tire_size: '', notes: '', active: true, alt_numbers: '', fits: '',
+    has_core: false, core_cost: 0, tire_size: '', notes: '', active: true, alt_numbers: '', fits: '', unit: '',
   }
 }
 
@@ -169,7 +169,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
     taxable: src.taxable, show_on_invoice: src.show_on_invoice, show_qty_price: src.show_qty_price,
     track_inventory: src.track_inventory, reorder_point: dec(src.reorder_point), opening: '',
     has_core: src.has_core, core_cost: amt(src.core_cost), tire_size: src.tire_size || '', notes: src.notes || '', active: src.active,
-    alt_numbers: src.alt_numbers || '', fits: src.fits || '',
+    alt_numbers: src.alt_numbers || '', fits: src.fits || '', unit: src.unit || '',
   }))
   const initialFees = useMemo(() => data.itemFees.filter((x) => x.item_id === item?.id).map((x) => x.fee_item_id), [data.itemFees, item?.id])
   const [fees, setFees] = useState(initialFees)
@@ -274,6 +274,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
       tire_size: type === 'part' ? f.tire_size.trim() || null : null,
       alt_numbers: type === 'part' ? f.alt_numbers.trim() || null : null,
       fits: type === 'part' ? f.fits.trim() || null : null,
+      unit: type === 'part' ? f.unit.trim() || null : null,
     }
     setBusy(true)
     setMsg(null)
@@ -397,6 +398,9 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
 
       {type === 'part' && (
         <Section title={t('cat.inventory')}>
+          <div className="grid4" style={{ marginBottom: 10 }}>
+            <Input label={t('cat.unit')} value={f.unit} onChange={set('unit')} disabled={dis} maxLength={12} placeholder="L, pcs, set" hint={t('cat.unitHint')} />
+          </div>
           <Toggle checked={f.track_inventory} onChange={set('track_inventory')} disabled={dis || (!isNew && onHand !== 0 && f.track_inventory)} label={t('cat.trackInventory')} />
           {!isNew && onHand !== 0 && <div className="hint">{t('cat.trackLocked')}</div>}
           {f.track_inventory && (
@@ -412,6 +416,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
             </div>
           )}
           {f.track_inventory && <div className="hint">{isNew ? t('cat.openingHint') : t('cat.stockHint')}</div>}
+          {!isNew && item.track_inventory && <div className="mt"><Link className="small" to={`/inventory/stock/${item.id}`}>{t('sc.card')} →</Link></div>}
           {!isNew && item.track_inventory && canAdjust && <StockAdjust item={item} onHand={onHand} dirty={dirty} onDone={onAdjusted} />}
         </Section>
       )}
@@ -432,7 +437,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
 
 // Owners and Admins can correct the live stock count. It takes a deliberate click, a new count
 // and a reason; the database works out the difference from the live count and logs who did it.
-function StockAdjust({ item, onHand, dirty, onDone }) {
+export function StockAdjust({ item, onHand, dirty, onDone }) {
   const { t } = useT()
   const toast = useToast()
   const [open, setOpen] = useState(false)

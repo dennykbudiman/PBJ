@@ -16,6 +16,17 @@ async function inChunks(ids, build) {
   return { data: out, error: null }
 }
 
+// What each job is waiting for (migration 139), 150 jobs at a time. A database without it yet: the column stays empty.
+async function waitingFor(ids) {
+  const out = []
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await supabase.rpc('jobs_waiting', { p_ids: ids.slice(i, i + 150) })
+    if (error) return { data: [] }
+    out.push(...(data || []))
+  }
+  return { data: out }
+}
+
 // Everything the Work board shows: jobs still in the shop (not closed, not picked up),
 // with their company, vehicle, main contact, technicians, labour hours, inspections and next booking.
 export function useBoardData() {
@@ -32,10 +43,11 @@ export function useBoardData() {
       selectAll(() => supabase.from('customer_contacts').select('id, customer_id, name, phone, is_primary').order('is_primary', { ascending: false }).order('id')),
     ])
     const ids = (jobs.data || []).map((j) => j.id)
-    const [services, inspections, appts] = await Promise.all([
+    const [services, inspections, appts, waiting] = await Promise.all([
       ids.length ? inChunks(ids, (c) => supabase.from('ro_services').select('id, ro_id, technician_id, approval_status, work_status').in('ro_id', c).order('id')) : { data: [] },
       ids.length ? inChunks(ids, (c) => supabase.from('ro_inspections').select('id, ro_id, technician_id').in('ro_id', c).order('id')) : { data: [] },
       ids.length ? inChunks(ids, (c) => supabase.from('appointments').select('id, ro_id, start_time, end_time, status, technician_id').in('ro_id', c).order('start_time').order('id')) : { data: [] },
+      ids.length ? waitingFor(ids) : { data: [] },
     ])
     const svcIds = (services.data || []).filter((s) => s.approval_status !== 'declined' && s.approval_status !== 'deferred').map((s) => s.id)
     const labor = svcIds.length
@@ -58,6 +70,7 @@ export function useBoardData() {
     for (const it of labor.data || []) { const j = svcJob[it.service_id]; hours[j] = (hours[j] || 0) + Number(it.qty || 0) }
     const contactBy = {}
     for (const c of contacts.data || []) if (!contactBy[c.customer_id]) contactBy[c.customer_id] = c
+    const waitBy = Object.fromEntries((waiting.data || []).map((w) => [w.ro_id, w]))
     const now = Date.now()
 
     setData({
@@ -79,6 +92,7 @@ export function useBoardData() {
           techs,
           appt: next,
           upcoming,
+          wait: waitBy[j.id] || null,
         }
       }),
       customer: Object.fromEntries((customers.data || []).map((c) => [c.id, c])),

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Badge, Button, Empty, PageHead, useToast } from '../../components/ui'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
-import { num } from '../../lib/format'
+import { num, qtyU } from '../../lib/format'
 import { STOCK_COLOR, stockState } from '../../lib/inventory'
 import { SearchBox } from '../catalog/common'
 import OrderModal from './OrderModal'
@@ -97,11 +97,11 @@ export default function StockTab({ data, reload, go, canEdit, showCost }) {
                 <tr key={x.id}>
                   {canEdit && <td><Tick checked={sel.has(x.id)} onChange={(v) => toggle(x.id, v)} label={t('inv.order.pick', { name: x.name })} /></td>}
                   <td>
-                    <Link className="rowlink" to={`/catalog/parts/${x.id}`}>{x.name}</Link>
+                    <Link className="rowlink" to={`/inventory/stock/${x.id}`}>{x.name}</Link>
                     <div className="muted small">{[x.code, x.brand].filter(Boolean).join(' · ')}{!x.active ? ` · ${t('inv.inactive')}` : ''}</div>
                   </td>
                   <td className="wide-only">{data.supplierById[x.supplier_id]?.name || <span className="muted">—</span>}</td>
-                  <td className="num"><b>{num(s.onHand, 2)}</b></td>
+                  <td className="num"><b>{qtyU(s.onHand, x.unit)}</b></td>
                   <td className="num wide-only">{s.onEst ? num(s.onEst, 2) : <span className="muted">0</span>}</td>
                   <td className="num" style={{ color: s.available < 0 ? 'var(--red)' : undefined, fontWeight: s.available < 0 ? 800 : undefined }}>{num(s.available, 2)}</td>
                   <td className="num">{s.onOrder ? <Link to={`/inventory/purchase-orders?part=${x.id}`}>{num(s.onOrder, 2)}</Link> : <span className="muted">0</span>}</td>

@@ -13,6 +13,7 @@ import { APPT_COLOR, addDays, clock, dayLabel, daysBetween, shopParts } from '..
 import { MoreMenu } from '../jobs/common'
 import { useStaff } from '../jobs/useJobData'
 import AppointmentModal from '../calendar/AppointmentModal'
+import { WaitingTag } from '../../components/Waiting'
 import { useBoardData } from './useBoardData'
 
 // Board columns, left to right. Invoiced and Paid are set by invoicing and payments, so cards can't be dropped there.
@@ -36,7 +37,7 @@ export default function BoardPage() {
   const location = useLocation()
   const toast = useToast()
   const { can } = useAuth()
-  const { timezone } = useShop()
+  const { timezone, settings } = useShop()
   const staff = useStaff()
   const { data, error, reload } = useBoardData()
   const view = new URLSearchParams(location.search).get('view') === 'list' ? 'list' : 'kanban'
@@ -69,6 +70,9 @@ export default function BoardPage() {
   // back to Estimate offers to cancel a booking still to come, and Scheduled without a booking opens the booking form.
   async function move(job, status) {
     if (job.workflow_status === status) return
+    // Done finishes the job's approved work too when the status moves by itself (migration 139): ask first.
+    if (status === 'completed' && settings?.auto_workflow
+      && !(await confirm({ title: t('job.wf.completed'), text: t('u139.toDone'), yes: t('u139.toDoneYes') }))) return
     const upcoming = job.upcoming // the next booking not yet arrived, cancelled or past
     let cancelBooking = false
     if (status === 'estimate' && upcoming) {
@@ -256,6 +260,7 @@ function JobCard({ job, data, staff, today, canEdit, draggable, dragging, onDrag
           return <span key={id} className="avatar tiny" title={name} aria-label={name}>{initials(name)}</span>
         })}
       </div>
+      {job.wait && job.wait.kind !== 'pickup' && <div className="bcard-wait"><WaitingTag kind={job.wait.kind} info={job.wait.info} /></div>}
       <div className="bcard-foot">
         <span title={t('board.servicesTitle')}><Icon name="wrench" size={12} /> {job.done}/{job.services}</span>
         <span title={t('board.inspTitle')}><Icon name="clipboard" size={12} /> {job.inspections}</span>
@@ -288,13 +293,13 @@ function BoardList({ jobs, data, today }) {
   if (!rows.length) return <div className="card"><Empty icon="search" title={t('cust.noMatch')}>{t('cust.noMatchText')}</Empty></div>
   return (
     <>
-      <div className="table">
+      <div className="table boardlist">
         <table>
           <thead>
             <tr>
               {th('job', t('jobs.col.job'))}<th>{t('board.col.invoice')}</th><th>{t('job.company')}</th><th>{t('job.vehicle')}</th>
-              {th('status', t('job.workflow'))}<th>{t('job.priority')}</th><th>{t('board.col.approval')}</th>
-              {th('appt', t('board.col.appt'))}<th className="num">{t('board.col.hours')}</th>{th('total', t('job.total'), 'num')}
+              {th('status', t('job.workflow'))}<th>{t('wait.col')}</th><th>{t('job.priority')}</th><th>{t('board.col.approval')}</th>
+              {th('appt', t('board.col.appt'))}<th className="num hrs">{t('board.col.hours')}</th>{th('total', t('job.total'), 'num')}
             </tr>
           </thead>
           <tbody>
@@ -305,12 +310,13 @@ function BoardList({ jobs, data, today }) {
                   <td><Link className="rowlink" to={`/jobs/${j.id}`} onClick={(e) => e.stopPropagation()}>#{jobNo(j.job_number)}</Link></td>
                   <td className="muted nowrap">{j.invoice_number ? invoiceNo(j.invoice_number) : '—'}</td>
                   <td>{data.customer[j.customer_id]?.display_name || '—'}</td>
-                  <td><b>{v?.plate}</b> <span className="muted small">{v ? vehicleName(v) : ''}</span></td>
+                  <td><b className="nowrap">{v?.plate}</b><div className="muted small">{v ? vehicleName(v) : ''}</div></td>
                   <td><Badge color={WORKFLOW_COLOR[j.workflow_status]}>{t(`job.wf.${j.workflow_status}`)}</Badge></td>
+                  <td className="waitcell">{j.wait ? <WaitingTag kind={j.wait.kind} info={j.wait.info} /> : <span className="muted">—</span>}</td>
                   <td><Badge color={PRIORITY_COLOR[j.priority]}>{t(`job.pri.${j.priority}`)}</Badge></td>
                   <td>{j.pending > 0 ? <Badge color="amber">{t('board.pending', { n: j.pending })}</Badge> : j.approved > 0 ? <Badge color="green">{t('board.approved')}</Badge> : <span className="muted">—</span>}</td>
                   <td>{j.appt ? <span className="nowrap"><span className={`dot d-${APPT_COLOR[j.appt.status]}`} /> {apptWhen(j.appt, today, timezone, lang, t)}</span> : <span className="muted">—</span>}</td>
-                  <td className="num">{num(j.hours, 2)}</td>
+                  <td className="num hrs">{num(j.hours, 2)}</td>
                   <td className="num">{rp(j.total)}</td>
                 </tr>
               )

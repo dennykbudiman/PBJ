@@ -41,17 +41,33 @@ async function loadTyped() {
     if (!groups.has(k)) groups.set(k, { key: k, name: String(name).trim(), job: [], po: [] })
     return groups.get(k)
   }
-  for (const l of jobLines) group(l.name).job.push({ ...l, jobRow: jobById[roOf[l.service_id]] })
-  for (const l of poLines) group(l.name).po.push({ ...l, poRow: poById[l.po_id] })
+  const jobRows = jobLines.map((l) => ({ ...l, jobRow: jobById[roOf[l.service_id]] }))
+  const poRows = poLines.map((l) => ({ ...l, poRow: poById[l.po_id] }))
+  for (const l of jobRows) group(l.name).job.push(l)
+  for (const l of poRows) group(l.name).po.push(l)
+  // A job line and the PO line ordered for it belong together even when they were typed differently (a received PO
+  // line and its open job line can only be added together, migration 139).
+  for (const g of groups.values()) {
+    for (const l of poRows) if (!g.po.includes(l) && g.job.some((j) => j.id === l.ro_service_item_id)) g.po.push(l)
+    for (const l of [...g.po]) {
+      const j = jobRows.find((x) => x.id === l.ro_service_item_id)
+      if (j && !g.job.includes(j)) g.job.push(j)
+    }
+  }
   return { groups: [...groups.values()].sort((a, b) => a.name.localeCompare(b.name)) }
 }
 
 // What linking these lines does to stock: received on POs − used on invoiced jobs (lines on open jobs come off the
-// shelf when their job is invoiced, like any catalog part).
+// shelf when their job is invoiced, like any catalog part). What was received for an open job line added with it
+// always goes into stock (migration 139): it comes off again when that job is invoiced, so it never ends below 0.
 function stockEffect(g, pickedJob, pickedPo) {
-  const received = g.po.filter((l) => pickedPo.has(l.id) && Number(l.qty_delivered) > 0).reduce((a, l) => a + Number(l.qty_delivered) - Number(l.qty_returned || 0), 0)
+  const openJob = new Set(g.job.filter((l) => pickedJob.has(l.id) && l.jobRow?.order_status !== 'invoice').map((l) => l.id))
+  const got = (l) => Number(l.qty_delivered) - Number(l.qty_returned || 0)
+  const rec = g.po.filter((l) => pickedPo.has(l.id) && Number(l.qty_delivered) > 0)
+  const forOpen = rec.filter((l) => openJob.has(l.ro_service_item_id)).reduce((a, l) => a + got(l), 0)
+  const received = rec.filter((l) => !openJob.has(l.ro_service_item_id)).reduce((a, l) => a + got(l), 0)
   const used = g.job.filter((l) => pickedJob.has(l.id) && l.jobRow?.order_status === 'invoice').reduce((a, l) => a + Number(l.qty), 0)
-  return { received, used, change: Math.round((received - used) * 100) / 100 }
+  return { received, used, forOpen, change: Math.round((received - used) * 100) / 100 }
 }
 const halfOpen = (l) => Number(l.qty_delivered) > 0 && Number(l.qty_ordered) - Number(l.qty_delivered) - Number(l.qty_cancelled) > 0
 
@@ -204,6 +220,8 @@ function AddTyped({ group: g, data, onClose, onDone }) {
       ))}
 
       <div className="sectionlabel">{t('tp.stock')}</div>
+      {/* Nothing received outside open jobs and nothing used: there's no stock choice to make (migration 139). */}
+      {eff.change !== 0 && <>
       <label className="inlinecheck" style={{ display: 'flex', opacity: canCount ? 1 : 0.55 }}>
         <input type="radio" checked={count} disabled={!canCount} onChange={() => setCount(true)} />
         <span>{t('tp.count', { received: num(eff.received, 2), used: num(eff.used, 2), change: (eff.change > 0 ? '+' : '') + num(eff.change, 2) })}</span>
@@ -212,7 +230,9 @@ function AddTyped({ group: g, data, onClose, onDone }) {
         <input type="radio" checked={!count} onChange={() => setCount(false)} />
         <span>{t('tp.zero')}</span>
       </label>
-      {!canCount && eff.change !== 0 && <div className="hint">{t('tp.countOwner')}</div>}
+      {!canCount && <div className="hint">{t('tp.countOwner')}</div>}
+      </>}
+      {eff.forOpen > 0 && <div className="hint">{t('u139.forOpenJobs', { n: num(eff.forOpen, 2) })}</div>}
       <div className="hint">{t('tp.stockHint')}</div>
     </Modal>
   )

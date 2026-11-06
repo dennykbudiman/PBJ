@@ -11,6 +11,7 @@ import { supabase, errorText } from '../../lib/supabase'
 import { invoiceNo, jobNo, km, num, rp } from '../../lib/format'
 import { usePageTitle } from '../../lib/branding'
 import { DriverText } from '../../components/DriverText'
+import LastService from '../../components/LastService'
 import { plateDriver, vehicleName } from '../../lib/customers'
 import { PRIORITY_COLOR, WORKFLOW_COLOR, splitConcerns } from '../../lib/jobs'
 import { useCatalogData } from '../catalog/useCatalogData'
@@ -113,12 +114,7 @@ export default function JobPage({ id }) {
   async function saveOdo(field, val, reset) {
     const n = String(val).trim() ? Number(String(val).replace(/[.\s]/g, '')) : null
     if (n !== null && (!Number.isInteger(n) || n < 0 || n > 9999999)) { reset(); return false }
-    if (n !== null) {
-      // km out below km in can't be invoiced, so it isn't saved (fix the km in first if that one is wrong).
-      if (field === 'odometer_out' && ro.odometer_in != null && n < ro.odometer_in) {
-        toast(t('km.outBelowInNo', { out: km(n), in: km(ro.odometer_in) }), 'err'); reset(); return false
-      } else if (!(await confirmKm({ value: n, vehicleId: ro.vehicle_id, excludeRo: ro.id, ownKm: [ro.odometer_in, ro.odometer_out], confirm, t, fmt: km, jobNo }))) { reset(); return false }
-    }
+    if (n !== null && !(await confirmKm({ value: n, vehicleId: ro.vehicle_id, excludeRo: ro.id, ownKm: [ro.odometer_in, ro.odometer_out], confirm, t, fmt: km, jobNo }))) { reset(); return false }
     return run(() => supabase.from('repair_orders').update({ [field]: n }).eq('id', ro.id))
   }
 
@@ -161,11 +157,9 @@ export default function JobPage({ id }) {
                     <BlurInput className="input cell num" style={{ width: 110 }} disabled={!editable} value={ro.odometer_in != null ? num(ro.odometer_in) : ''} placeholder="km" aria-label={t('job.odometerIn')}
                       onCommit={(val, reset) => saveOdo('odometer_in', val, reset)} />
                   </label>
-                  <label className="mini">{t('job.odoOut')}
-                    <BlurInput className="input cell num" style={{ width: 110 }} disabled={!editable} value={ro.odometer_out != null ? num(ro.odometer_out) : ''} placeholder="km" aria-label={t('job.odometerOut')}
-                      onCommit={(val, reset) => saveOdo('odometer_out', val, reset)} />
-                  </label>
+                  {/* Km out was dropped (Denny, Nov 5, migration 139): only the km in is recorded. */}
                 </div>
+                {v?.id && <LastService vehicleId={v.id} excludeRo={ro.id} />}
                 {/* Who brought it in (migration 136): printed on the estimate and invoice; locked once invoiced. */}
                 {editable ? (
                   <div className="row wrap" style={{ gap: 8, marginTop: 8 }}>

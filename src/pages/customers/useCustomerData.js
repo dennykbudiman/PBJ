@@ -58,14 +58,18 @@ export function useCustomerData(timezone) {
       if (!s) continue
       if (v.status !== 'sold') s.vehicles += 1
       else s.sold += 1
-      if (v.status === 'in_shop') s.inShop += 1
     }
+    // "N di bengkel": trucks here on an open job, as on the dashboard (Nov 6; nothing ever set a vehicle to "in shop").
+    const HERE = ['arrived', 'in_progress', 'waiting_parts', 'completed']
+    const hereVehicles = {}
     for (const j of jobs.data ?? []) {
       const s = byCustomer[j.customer_id]
       if (!s) continue
+      if (j.order_status === 'estimate' && !j.archived_at && HERE.includes(j.workflow_status)) (hereVehicles[j.customer_id] ||= new Set()).add(j.vehicle_id)
       if (j.order_status === 'estimate') s.notInvoiced += 1
       else { s.sales += Number(j.total) || 0; s.invoices += 1 }
     }
+    for (const [cid, set] of Object.entries(hereVehicles)) byCustomer[cid].inShop = set.size
     for (const b of balances.data ?? []) {
       const s = byCustomer[b.customer_id]
       if (!s) continue

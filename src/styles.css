@@ -768,3 +768,29 @@ span.seg-btn { cursor: default; }
 .altbox { display: flex; flex-direction: column; gap: 0; }
 .altrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
 .altrow:last-child { border-bottom: none; }
+
+/* ---------- Update 139 (Nov 6): Hari ini, "Menunggu apa", stock card ---------- */
+.daygrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.daygrid > .card { margin-top: 0; }
+.daytwo { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: start; }
+.daytwo > div { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.daycard { margin-top: 0; min-width: 0; }
+@media (max-width: 1100px) { .daytwo { grid-template-columns: minmax(0, 1fr); } }
+td.num.neg, .neg { color: var(--red); font-weight: 800; }
+tr.totalrow td { border-top: 2px solid var(--line); }
+.waitchip { white-space: normal; text-align: left; max-width: 100%; line-height: 1.35; }
+.waitlink:hover .waitchip { text-decoration: underline; }
+.waitcell { min-width: 180px; }
+.scgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.scgrid > .card { margin-top: 0; }
+.scfilter { display: flex; gap: 6px; flex-wrap: wrap; }
+@media print {
+  .app .topnav, .app .subtabs, .app .btn { display: none !important; }
+  .app .content { padding: 0; }
+  .app .card { box-shadow: none; break-inside: avoid; }
+  .today-page .daytwo { grid-template-columns: minmax(0, 1fr); }
+}
+.bcard-wait { min-width: 0; }
+.bcard-wait .waitchip { font-size: 10.5px; }
+@media (max-width: 1500px) { .boardlist .hrs { display: none; } .boardlist .waitcell { min-width: 160px; } }
+@media (max-width: 700px) { .sc-wide { display: none; } }

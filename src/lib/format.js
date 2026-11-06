@@ -14,6 +14,12 @@ export function num(n, digits = 0) {
   return new Intl.NumberFormat('id-ID', { maximumFractionDigits: digits }).format(Number(n))
 }
 
+// A quantity with the part's unit when it has one: "9 L", "2 pcs", "1,5" (migration 139).
+export function qtyU(n, unit, digits = 2) {
+  if (n === null || n === undefined || n === '') return '—'
+  return unit ? `${num(n, digits)} ${unit}` : num(n, digits)
+}
+
 export function km(n) {
   if (n === null || n === undefined || n === '') return '—'
   return `${num(n)} km`

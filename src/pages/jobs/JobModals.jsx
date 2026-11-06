@@ -132,21 +132,27 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const { t, lang } = useT()
   const { timezone } = useShop()
   const ro = job.ro
-  const pending = job.services.filter((s) => s.approval_status === 'pending')
-  const approved = job.services.filter((s) => s.approval_status === 'approved')
+  // Services nobody worked on (no lines, not started, no mechanic, no package), e.g. made from a complaint that needed
+  // nothing: removed when the invoice is made instead of blocking it (migration 139).
+  const empty = job.services.filter((s) => ['approved', 'pending'].includes(s.approval_status) && s.work_status === 'todo' && !s.technician_id
+    && !s.template_id && !job.items.some((l) => l.service_id === s.id))
+  const isEmpty = (s) => empty.some((x) => x.id === s.id)
+  const pending = job.services.filter((s) => s.approval_status === 'pending' && !isEmpty(s))
+  const approved = job.services.filter((s) => s.approval_status === 'approved' && !isEmpty(s))
   const terms = job.customer?.payment_terms_days ?? settings?.default_payment_terms_days ?? 30
   const today = shopToday(timezone)
   const due = new Date(`${today}T00:00:00Z`)
   due.setUTCDate(due.getUTCDate() + Number(terms))
-  // Denny, Oct 7: an invoice needs the km out and a technician on every approved service.
-  const noKmOut = ro.odometer_out == null
-  const kmBelow = !noKmOut && ro.odometer_in != null && Number(ro.odometer_out) < Number(ro.odometer_in)
+  // Denny, Oct 7: an invoice needs a technician on every approved service (km out no longer needed: Nov 5).
+  // Part lines still at Rp 0 are only a warning (e.g. a part ordered for the job whose price wasn't filled in).
+  const zeroParts = job.items.filter((l) => l.item_type === 'part' && Number(l.price) === 0 && Number(l.qty) > 0
+    && approved.some((s) => s.id === l.service_id && s.flat_price == null))
   // A technician who has since been disabled doesn't count.
   const noTech = approved.filter((s) => !s.technician_id || (staff?.length > 0 && !staff.some((p) => p.id === s.technician_id)))
   // More money taken than the invoice total: the database refuses until the difference is refunded.
   const cash = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
   const overpaid = Math.max(0, cash - Number(ro.total))
-  const blocked = pending.length > 0 || approved.length === 0 || noKmOut || kmBelow || noTech.length > 0 || overpaid > 0
+  const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0
   // Warnings only (the invoice can still be made): parts that would go below zero on the shelf, the company's credit
   // limit, and companies that aren't on account (pay at pickup).
   const [check, setCheck] = useState({ short: [], owed: null })
@@ -178,6 +184,10 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   async function go() {
     let no = null
     const ok = await run(async () => {
+      if (empty.length) {
+        const d = await supabase.from('ro_services').delete().in('id', empty.map((s) => s.id))
+        if (d.error) return d
+      }
       const r = await supabase.rpc('convert_to_invoice', { p_ro: ro.id })
       no = r.data
       return r
@@ -189,8 +199,8 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
       footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" onClick={go} loading={busy} disabled={blocked}>{t('job.createInvoiceYes')}</Button></>}>
       {pending.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.stillPending', { n: pending.length, names: pending.map((s) => s.name).join(', ') })}</Notice>}
       {pending.length === 0 && approved.length === 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.noneApproved')}</Notice>}
-      {noKmOut && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needKmOut')}</Notice>}
-      {kmBelow && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.kmOutBelow')}</Notice>}
+      {empty.length > 0 && <Notice kind="info" style={{ marginBottom: 10 }}>{t('u139.emptyRemoved', { names: empty.map((s) => s.name).join(', ') })}</Notice>}
+      {zeroParts.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('u139.zeroParts', { names: zeroParts.map((l) => l.name).join(', ') })}</Notice>}
       {noTech.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needTech', { names: noTech.map((s) => s.name).join(', ') })}</Notice>}
       {overpaid > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overpaidFirst', { amount: rp(overpaid) })}</Notice>}
       {check.short.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.stockShortIntro')} {check.short.join('; ')}</Notice>}

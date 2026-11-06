@@ -12,6 +12,7 @@ import { setRouteTitle } from '../lib/branding'
 
 export const NAV = [
   { to: '/', key: 'nav.dashboard', icon: 'layout-dashboard', end: true },
+  { to: '/today', key: 'nav.today', icon: 'clipboard' },
   { to: '/board', key: 'nav.board', icon: 'layout-kanban' },
   { to: '/calendar', key: 'nav.calendar', icon: 'calendar' },
   { to: '/customers', key: 'nav.customers', icon: 'users' },
@@ -141,6 +142,7 @@ export function routeTitleFor(pathname, t, isFleet) {
   const [area, sub] = pathname.split('/').filter(Boolean)
   if (!area) return t('nav.dashboard')
   if (area === 'board') return t('nav.board')
+  if (area === 'today') return t('nav.today')
   if (area === 'calendar') return t('nav.calendar')
   if (area === 'search') return t('title.search')
   if (area === 'settings') return t('nav.settings')

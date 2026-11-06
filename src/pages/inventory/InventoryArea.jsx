@@ -7,6 +7,7 @@ import { useT } from '../../lib/i18n'
 import { errorText } from '../../lib/supabase'
 import { useInventoryData } from './useInventoryData'
 import StockTab from './StockTab'
+import StockCard from './StockCard'
 import PurchaseOrdersTab from './PurchaseOrdersTab'
 import PoPage from './PoPage'
 import ReturnsTab from './ReturnsTab'
@@ -48,7 +49,7 @@ export default function InventoryArea() {
   else if (tab === 'returns') body = <ReturnsTab {...props} />
   else if (tab === 'cores') body = <CoresTab {...props} />
   else if (tab === 'bills') body = <BillsTab {...props} />
-  else body = <StockTab {...props} showCost={showCost} />
+  else body = id ? <StockCard key={id} id={id} /> : <StockTab {...props} showCost={showCost} />
 
   return (
     <Page tabs={tabBar}>
