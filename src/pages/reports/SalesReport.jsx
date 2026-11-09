@@ -8,6 +8,8 @@ import { downloadCsv, groupBy, sumBy } from '../../lib/reports'
 import { Kpi, ReportBar, ReportError, companiesOf, useCompany, usePeriod, useReport } from './ReportsArea'
 
 const MONEY = ['parts', 'labor', 'sublet', 'fees', 'discounts', 'subtotal', 'tax', 'total']
+// 142: labour "tidak ditagih" (its value, not in the total) and what the PTs paid their suppliers directly (in the total)
+const EXTRA = ['labor_waived', 'settled_direct']
 
 // Reports → Sales: invoices issued in the period, split into parts, labor, sublet, fees and discounts.
 export default function SalesReport() {
@@ -25,7 +27,7 @@ export default function SalesReport() {
   const voidedHere = voidList.filter((v) => !(v.invoiced_on >= period.from && v.invoiced_on <= period.to))
   const sumTotal = (vs) => vs.reduce((a, v) => a + Number(v.total), 0)
   const list = useMemo(() => (rows || []).filter((r) => !company || r.customer_id === company), [rows, company])
-  const tot = sumBy(list, MONEY)
+  const tot = sumBy(list, [...MONEY, ...EXTRA])
   // Long periods group by month, short ones by day.
   const by = view === 'auto' ? (daysBetween(period.from, period.to) > 62 ? 'month' : 'day') : view
 
@@ -42,9 +44,9 @@ export default function SalesReport() {
   }, [list, by, lang])
 
   function csv() {
-    const head = [t('rep.col.invoice'), t('rep.col.date'), t('rep.col.job'), t('rep.col.company'), t('rep.col.plate'), ...MONEY.map((m) => t(`rep.m.${m}`)), t('rep.col.paid'), t('rep.col.balance')]
+    const head = [t('rep.col.invoice'), t('rep.col.date'), t('rep.col.job'), t('rep.col.company'), t('rep.col.plate'), ...MONEY.map((m) => t(`rep.m.${m}`)), t('u142.repWaived'), t('u142.repSettled'), t('rep.col.paid'), t('rep.col.balance')]
     downloadCsv(`sales-${period.from}-${period.to}.csv`, head,
-      list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate, ...MONEY.map((m) => Number(r[m])), Number(r.paid), Number(r.balance)]))
+      list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate, ...MONEY.map((m) => Number(r[m])), ...EXTRA.map((m) => Number(r[m] || 0)), Number(r.paid), Number(r.balance)]))
   }
 
   return (
@@ -85,6 +87,8 @@ export default function SalesReport() {
       <div className="posum muted" style={{ marginBottom: 14 }}>
         {['parts', 'labor', 'sublet', 'fees'].map((m) => <span key={m}>{t(`rep.m.${m}`)} <b className="ink">{rp(tot[m])}</b></span>)}
         <span>{t('rep.m.discounts')} <b className="ink">{tot.discounts ? `-${rp(tot.discounts)}` : rp(0)}</b></span>
+        {tot.labor_waived > 0 && <span>{t('u142.repWaived')} <b className="ink">{rp(tot.labor_waived)}</b></span>}
+        {tot.settled_direct > 0 && <span>{t('u142.repSettled')} <b className="ink">{rp(tot.settled_direct)}</b></span>}
       </div>
       {error ? null : rows === null ? <div className="muted">{t('common.loading')}</div> : list.length === 0 ? (
         <div className="card"><Empty icon="chart-bar" title={t('rep.empty')}>{t('rep.sales.emptyText')}</Empty></div>

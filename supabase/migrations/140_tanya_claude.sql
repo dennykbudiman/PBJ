@@ -164,7 +164,8 @@ begin
   if p_idr_per_usd is null or p_idr_per_usd < 1000 or p_idr_per_usd > 100000 then raise exception 'The dollar rate must be 1.000 to 100.000'; end if;
   if coalesce(p_model_mode, '') not in ('auto', 'sonnet', 'opus') then raise exception 'Unknown model choice'; end if;
   update tanya_settings set enabled = coalesce(p_enabled, enabled), daily_limit = p_daily_limit, monthly_cap_idr = p_monthly_cap_idr,
-         idr_per_usd = p_idr_per_usd, model_mode = p_model_mode, updated_at = now(), updated_by = auth.uid();
+         idr_per_usd = p_idr_per_usd, model_mode = p_model_mode, updated_at = now(), updated_by = auth.uid()
+   where id; -- the one settings row (Supabase refuses an UPDATE without WHERE from the app)
 end $$;
 revoke execute on function public.tanya_save_settings(boolean, int, numeric, numeric, text) from public, anon;
 grant execute on function public.tanya_save_settings(boolean, int, numeric, numeric, text) to authenticated;

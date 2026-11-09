@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { fmtDate, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { addDays } from '../../lib/calendar'
-import { lineDue, lineOwed, owedQty } from '../../lib/inventory'
+import { lineDue, lineOwed, owedQty, poPaidByPt } from '../../lib/inventory'
 import { useRun } from '../jobs/common'
 import { Tick } from './bits'
 import { PayModal } from './PoModals'
@@ -29,7 +29,7 @@ export default function BillsTab({ data, reload, canPay: canEdit }) {
     for (const l of data.lines) {
       if (owedQty(l) <= 0) continue
       const po = data.poById[l.po_id]
-      if (!po) continue
+      if (!po || poPaidByPt(po)) continue // the PT pays these itself (142): see "Tagihan PT"
       const sup = data.supplierById[po.supplier_id]
       const due = lineDue(l, po, sup)
       const amount = lineOwed(l, po)

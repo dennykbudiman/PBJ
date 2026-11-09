@@ -21,8 +21,10 @@ export function PoBadge({ status }) {
   return <Badge color={PO_COLOR[status]}>{t(`inv.po.st.${status}`)}</Badge>
 }
 
-export function PayBadge({ status }) {
+export function PayBadge({ status, payer }) {
   const { t } = useT()
+  // a PO the PT pays its supplier for directly (142)
+  if (payer) return <Badge color="gray" title={t('u142.paidByPtTitle', { payer })}>{t('u142.paidByPt')}</Badge>
   return <Badge color={PAY_COLOR[status]}>{t(`inv.pay.st.${status}`)}</Badge>
 }
 

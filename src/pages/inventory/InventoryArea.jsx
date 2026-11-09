@@ -13,8 +13,10 @@ import PoPage from './PoPage'
 import ReturnsTab from './ReturnsTab'
 import CoresTab from './CoresTab'
 import BillsTab from './BillsTab'
+import PtBillsTab from './PtBillsTab'
+import DrumsTab from './DrumsTab'
 
-export const INVENTORY_TABS = ['stock', 'purchase-orders', 'returns', 'cores', 'bills']
+export const INVENTORY_TABS = ['stock', 'purchase-orders', 'returns', 'cores', 'bills', 'pt-bills', 'drums']
 
 // /inventory → Stock, /inventory/<tab>, /inventory/purchase-orders/<id>
 export function parseInventoryPath(pathname) {
@@ -33,7 +35,7 @@ export default function InventoryArea() {
   const showCost = can('view_costs')
   const showSupplierMoney = showCost || can('pay_supplier_bills')
   const { tab: asked, id } = parseInventoryPath(location.pathname)
-  const tabs = INVENTORY_TABS.filter((x) => x !== 'bills' || showSupplierMoney)
+  const tabs = INVENTORY_TABS.filter((x) => !['bills', 'pt-bills'].includes(x) || showSupplierMoney)
   const tab = tabs.includes(asked) ? asked : 'stock'
   const { data, error, reload } = useInventoryData()
   const go = (path) => navigate(path)
@@ -49,6 +51,8 @@ export default function InventoryArea() {
   else if (tab === 'returns') body = <ReturnsTab {...props} />
   else if (tab === 'cores') body = <CoresTab {...props} />
   else if (tab === 'bills') body = <BillsTab {...props} />
+  else if (tab === 'pt-bills') body = <PtBillsTab {...props} />
+  else if (tab === 'drums') body = <DrumsTab {...props} />
   else body = id ? <StockCard key={id} id={id} /> : <StockTab {...props} showCost={showCost} />
 
   return (

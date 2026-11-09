@@ -86,6 +86,7 @@ function SupplierEditor({ supplier, data, canEdit, onClose, onSaved, onDeleted }
     name: s.name || '', type: s.type || 'internal', contact_name: s.contact_name || '', phone: s.phone || '', email: s.email || '',
     address: s.address || '', account_number: s.account_number || '', terms: s.payment_terms_days == null ? '' : String(s.payment_terms_days),
     pinned_notes: s.pinned_notes || '', active: supplier ? supplier.active : true,
+    charges_tax: supplier ? supplier.charges_tax !== false : true,
   }))
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
@@ -107,7 +108,7 @@ function SupplierEditor({ supplier, data, canEdit, onClose, onSaved, onDeleted }
     const row = {
       name: f.name.trim(), type: f.type, contact_name: f.contact_name.trim() || null, phone: f.phone.trim() || null,
       email: f.email.trim() || null, address: f.address.trim() || null, ...(seeAccount ? { account_number: f.account_number.trim() || null } : {}),
-      payment_terms_days: terms, pinned_notes: f.pinned_notes.trim() || null, active: f.active,
+      payment_terms_days: terms, pinned_notes: f.pinned_notes.trim() || null, active: f.active, charges_tax: f.charges_tax,
     }
     setBusy(true)
     setMsg(null)
@@ -149,6 +150,9 @@ function SupplierEditor({ supplier, data, canEdit, onClose, onSaved, onDeleted }
       </Section>
       <Section title={t('cat.settings')}>
         <Textarea label={t('cat.pinnedNotes')} value={f.pinned_notes} onChange={set('pinned_notes')} disabled={dis} rows={2} hint={t('cat.pinnedHint')} />
+        {/* 142: a supplier that doesn't charge PPN gives its new POs 0% PPN */}
+        <div className="mt"><Toggle checked={f.charges_tax} onChange={set('charges_tax')} disabled={dis} label={t('u142.chargesTax')} /></div>
+        <div className="hint">{t('u142.chargesTaxHint')}</div>
         <div className="mt"><Toggle checked={f.active} onChange={set('active')} disabled={dis} label={t('cat.activeLabel')} /></div>
       </Section>
       {parts.length > 0 && (

@@ -38,7 +38,7 @@ export default function PrintPo() {
         job.data ? supabase.from('vehicles').select('plate, year, make, model, driver_name').eq('id', job.data.vehicle_id).maybeSingle() : { data: null },
         job.data ? supabase.from('ro_services').select('technician_id, position').eq('ro_id', job.data.id).order('position') : { data: [] },
         // The company the job is for: it stamps and pays for this PO (Denny, item 16, Nov 5).
-        job.data?.customer_id ? supabase.from('customers').select('display_name').eq('id', job.data.customer_id).maybeSingle() : { data: null },
+        job.data?.customer_id ? supabase.from('customers').select('display_name, payer_name').eq('id', job.data.customer_id).maybeSingle() : { data: null },
       ])
       // Names for the signature boxes: the job's advisor (a stock PO: whoever made it) and the job's mechanics.
       const advisorId = job.data ? job.data.service_advisor_id : po.data.created_by
@@ -49,6 +49,8 @@ export default function PrintPo() {
       const nameOf = (pid) => (people.data || []).find((x) => x.id === pid)?.name || ''
       setError(lines.error || sup.error || job.error || null)
       setD({ po: po.data, lines: (lines.data || []).filter((l) => Number(l.qty_ordered) > Number(l.qty_cancelled)), sup: sup.data, job: job.data, veh: veh.data, owner: owner.data?.display_name || '',
+        // who the supplier bills (142): the paying PT of the job's company, or the PT named on a stock PO
+        billTo: po.data.paid_by_name || (po.data.paid_by_pt ? owner.data?.payer_name || owner.data?.display_name || '' : ''),
         advisor: nameOf(advisorId), mechanics: techIds.map(nameOf).filter(Boolean).join(', ') })
     })()
     return () => { live = false }
@@ -58,7 +60,7 @@ export default function PrintPo() {
   if (error === 'missing') return <div className="print-msg">{tUi('inv.po.notFound')} · <Link to="/inventory/purchase-orders">{tUi('inv.po.back')}</Link></div>
   if (!d || !settings) return <div className="print-msg">{error ? errorText(error, tUi) : tUi('common.loading')}</div>
 
-  const { po, lines, sup, job, veh, owner, advisor, mechanics } = d
+  const { po, lines, sup, job, veh, owner, advisor, mechanics, billTo } = d
   const lang = params.get('lang') || settings.default_print_language || 'id'
   const t = (key, vars) => translate(lang, key, vars)
   const setLang = (v) => { const p = new URLSearchParams(location.search); p.set('lang', v); navigate(`${location.pathname}?${p.toString()}`, { replace: true }) }
@@ -118,6 +120,7 @@ export default function PrintPo() {
             <b>{shop.shop_name || shop.legal_name}</b>
             {shop.address && <div className="pre">{shop.address}</div>}
             {shop.phone && <div>{shop.phone}</div>}
+            {!veh && billTo && <div style={{ marginTop: 6 }}>{t('u142.billTo')}: <b>{billTo}</b></div>}
           </div>
           {veh && (
             <div>
@@ -126,6 +129,7 @@ export default function PrintPo() {
               {vehicleName(veh) && <div>{vehicleName(veh)}</div>}
               {driver && <div>{t('pr.driver')}: {driver}</div>}
               {owner && <div>{t('pr.owner')}: <b>{owner}</b></div>}
+              {billTo && <div>{t('u142.billTo')}: <b>{billTo}</b></div>}
             </div>
           )}
         </section>
@@ -140,7 +144,7 @@ export default function PrintPo() {
               return (
                 <React.Fragment key={l.id}>
                   <tr>
-                    <td>{l.name}</td><td>{l.part_number || ''}</td><td className="num">{num(q, 2)}</td>
+                    <td>{l.name}{l.line_type === 'sublet' && <div className="small">{t('u141.outsideWork')}</div>}</td><td>{l.part_number || ''}</td><td className="num">{num(q, 2)}</td>
                     {money && <td className="num">{rp(l.cost)}</td>}{money && <td className="num">{rp(lineAmount(l.cost, 0, q, false, 0))}</td>}
                   </tr>
                   {money && Number(l.core_cost) > 0 && <tr><td className="ind small">{t('pr.coreCharge', { name: l.name })}</td><td /><td className="num">{num(q, 2)}</td><td className="num">{rp(l.core_cost)}</td><td className="num">{rp(lineAmount(0, l.core_cost, q, false, 0))}</td></tr>}

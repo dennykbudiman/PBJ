@@ -43,6 +43,7 @@ Armada saya, dengan tab: Pelanggan, Kendaraan, Jadwal servis, Repair order, Invo
 - Halaman pekerjaan: atas (kendaraan, km masuk, keluhan, alur kerja); tab Servis (part, jasa, harga, status persetujuan); tab Keluhan dan Inspeksi (hijau Baik, kuning Segera, merah Sekarang); kanan (Persetujuan, janji, status order, pembayaran, total).
 - Alur kerja: Estimasi → Dijadwalkan → Sudah datang → Dikerjakan → Menunggu part → Selesai → Di-invoice → Lunas.
 - Invoice menampilkan nomor, jatuh tempo, no. faktur pajak (bila ada), pembayaran yang masuk dan sisa tagihan.
+- Bila perusahaan membayar suppliernya sendiri: part dan pekerjaan luar tetap tertulis dengan harganya, lalu baris "Dibayar langsung ke supplier oleh <PT>" menguranginya, jadi part itu tidak ditagih lagi oleh bengkel. Jasa yang tidak ditagih tertulis "tidak ditagih" (Rp 0) dan nilainya di bawah total.
 - Saat ini jasa (ongkos kerja) belum ditagihkan ke armada; setiap PT membayar part-nya sendiri lewat PO yang dicap PT itu.
 - Data salah (odometer, keluhan, alamat, NPWP): minta bengkel memperbaikinya.
 
@@ -79,7 +80,7 @@ Catatan: bengkel saat ini memakai persetujuan otomatis, jadi servis baru biasany
 - **Ingin membuat janji servis.** Hubungi bengkel; fleet manager tidak bisa membuat janji atau pekerjaan.
 - **Kendaraan atau perusahaan kami tidak muncul.** Minta bengkel menautkan perusahaan itu ke akun Anda, atau memindahkan kendaraan ke perusahaan yang benar.
 - **Rekan kerja perlu akses.** Minta bengkel mengundangnya sebagai fleet manager; jangan berbagi akun.
-- **Kenapa tidak ada biaya jasa di invoice?** Saat ini jasa belum ditagihkan ke armada.
+- **Kenapa biaya jasa tertulis "tidak ditagih"?** Saat ini jasa belum ditagihkan ke armada; nilainya hanya dicatat.
 - **Status truk saya?** Lihat alur kerja di halaman pekerjaannya (Repair order).
 
 ## Tanya Claude (bantuan ini)

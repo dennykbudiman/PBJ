@@ -98,6 +98,7 @@ export function sparePoParts(poLines, jobItems, services, returnedOf = () => 0, 
   }
   const out = new Map()
   for (const l of poLines || []) {
+    if (l.line_type === 'sublet') continue // outside work never goes to stock (141)
     const got = Number(l.qty_delivered || 0) - Number(returnedOf(l) || 0)
     if (got <= 0) continue
     const n = need.get(key(l)) || 0
@@ -107,3 +108,64 @@ export function sparePoParts(poLines, jobItems, services, returnedOf = () => 0, 
   }
   return out
 }
+
+// Lines on a job's POs that aren't on the job (141, Denny Nov 9): not linked to a job line and not fully cancelled.
+// Each gets `match`: an unlinked job line of the same kind (part / sublet) and the same part (catalog part, else name)
+// to link it to instead of adding a copy. Job lines are matched once, in PO order.
+// pos: the job's POs (cancelled ones are skipped); linkOf: typed-in PO line → catalog part (138).
+export function poLinesNotOnJob(pos, poLines, jobItems, services, linkOf = {}) {
+  const openPo = new Set((pos || []).filter((p) => p.status !== 'cancelled').map((p) => p.id))
+  const live = new Set((services || []).filter((s) => s.approval_status === 'approved' || s.approval_status === 'pending').map((s) => s.id))
+  const key = (x, type) => {
+    const c = x.catalog_item_id || linkOf[x.id]
+    return `${type}|${c ? `c:${c}` : `n:${String(x.name || '').trim().toLowerCase()}`}`
+  }
+  const free = new Map()
+  for (const i of jobItems || []) {
+    if (!['part', 'sublet'].includes(i.item_type) || i.po_item_id || i.stock_deducted || !live.has(i.service_id)) continue
+    const k = key(i, i.item_type)
+    if (!free.has(k)) free.set(k, [])
+    free.get(k).push(i)
+  }
+  const out = []
+  for (const l of poLines || []) {
+    if (!openPo.has(l.po_id) || l.ro_service_item_id) continue
+    // a typed-in part added to the catalog after it arrived is stock now; it goes on the job as the catalog part
+    if (!l.catalog_item_id && linkOf[l.id] && Number(l.qty_delivered) > 0) continue
+    if (Number(l.qty_ordered) - Number(l.qty_cancelled) - Number(l.qty_returned || 0) <= 0) continue
+    const list = free.get(key(l, l.line_type || 'part'))
+    out.push({ line: l, match: list?.length ? list.shift() : null })
+  }
+  return out
+}
+
+// A PO the PT pays its supplier for directly (142): a job's PO of a company with "Part dibayar langsung", or a stock
+// PO (e.g. an oil drum) that names the PT that paid it. It isn't one of the shop's supplier bills.
+export const poPaidByPt = (po) => !!po && (!!po.paid_by_pt || !!po.paid_by_name)
+// The paying PT's name: for a job's PO its company's "PT pembayar" (else its name); for a stock PO the name on it.
+export function poPayer(po, data) {
+  if (!po) return null
+  if (po.paid_by_name) return po.paid_by_name
+  if (!po.paid_by_pt) return null
+  const job = po.ro_id ? data?.jobById?.[po.ro_id] : null
+  const c = job ? data?.customerById?.[job.customer_id] : null
+  return c ? (c.payer_name || c.display_name) : 'PT'
+}
+
+// PPN while the shop is non-PKP (142): the shop can't claim the supplier's PPN back, so on the job a PO line's cost
+// (before PPN) counts with the PO's PPN added; a job cost goes to the PO with it taken out. A PKP shop: the same number.
+// Whole rupiah, rounded like the database (the rate in hundredths, so the sums are exact).
+const r100 = (rate) => Math.round(n(rate) * 100)
+export const isNonPkp = (settings) => settings?.pkp_status === 'non_pkp'
+export function poToJobCost(cost, taxable, rate, nonPkp) {
+  if (cost == null || cost === '') return cost
+  if (!nonPkp || !taxable || !(n(rate) > 0)) return n(cost)
+  return Math.round(Math.round(n(cost)) * (10000 + r100(rate)) / 10000)
+}
+export function jobToPoCost(cost, taxable, rate, nonPkp) {
+  if (cost == null || cost === '') return cost
+  if (!nonPkp || !taxable || !(n(rate) > 0)) return n(cost)
+  return Math.round(Math.round(n(cost)) * 10000 / (10000 + r100(rate)))
+}
+// a new PO's PPN: the shop's rate, or 0 for a supplier that doesn't charge PPN
+export const supplierTaxRate = (supplier, shopRate) => (supplier && supplier.charges_tax === false ? 0 : n(shopRate))

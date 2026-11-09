@@ -161,7 +161,8 @@ export default function PrintJob() {
                         <td className="num">{hide && flat ? num(l.qty, 2) : hide ? '' : `${num(l.qty, 2)}${l.item_type === 'labor' ? ` ${t('pr.hrs')}` : ''}`}</td>
                         <td className="num">{hide ? '' : rp(l.price)}</td>
                         <td className="num">{hide || !disc ? '' : `-${rp(disc)}`}</td>
-                        <td className="num">{flat ? '' : rp(lineNet(l))}</td>
+                        <td className="num">{flat ? '' : l.item_type === 'labor' && Number(ro.labor_waived) > 0 && Number(lineNet(l)) > 0
+                          ? <><span className="small">{t('u142.notCharged')}</span><div>{rp(0)}</div></> : rp(lineNet(l))}</td>
                       </tr>
                       {Number(l.core_charge) > 0 && (
                         <tr><td className="ind small">{t('pr.coreCharge', { name: l.name })}</td><td className="num">{flat ? '' : num(l.qty, 2)}</td><td className="num">{flat ? '' : rp(l.core_charge)}</td><td /><td className="num">{flat ? '' : rp(Math.round(Number(l.core_charge) * Number(l.qty)))}</td></tr>
@@ -213,7 +214,7 @@ export default function PrintJob() {
           <table className="doc-totals">
             <tbody>
               {Number(ro.parts_total) > 0 && <tr><th>{t('pr.parts')}</th><td>{rp(ro.parts_total)}</td></tr>}
-              {Number(ro.labor_total) > 0 && <tr><th>{t('pr.labor')}</th><td>{rp(ro.labor_total)}</td></tr>}
+              {(Number(ro.labor_total) > 0 || Number(ro.labor_waived) > 0) && <tr><th>{t('pr.labor')}</th><td>{rp(ro.labor_total)}</td></tr>}
               {Number(ro.other_total) > 0 && <tr><th>{t('pr.sublet')}</th><td>{rp(ro.other_total)}</td></tr>}
               {Number(ro.service_fees_total) > 0 && <tr><th>{t('pr.fees')}</th><td>{rp(ro.service_fees_total)}</td></tr>}
               {Number(ro.service_discount_total) > 0 && <tr><th>{t('pr.serviceDiscounts')}</th><td>-{rp(ro.service_discount_total)}</td></tr>}
@@ -223,8 +224,11 @@ export default function PrintJob() {
               {/* No PPN charged: the line is left out (Denny, Nov 5). */}
               {Number(ro.tax_total) !== 0 && <tr><th>{taxRate > 0 ? t('pr.tax', { tax: taxName, rate: num(taxRate, 2), base: rp(ro.taxable_base) }) : taxName}</th><td>{rp(ro.tax_total)}</td></tr>}
               <tr className="grand"><th>{t('pr.total')}</th><td>{rp(ro.total)}</td></tr>
+              {/* parts and outside work the PT pays its suppliers for directly (142) */}
+              {Number(ro.settled_direct) > 0 && <tr><th>{t('u142.settledRow', { payer: job.customer?.payer_name || job.customer?.display_name || 'PT' })}</th><td>-{rp(ro.settled_direct)}</td></tr>}
               {Number(ro.paid_total) > 0 && <tr><th>{doc === 'invoice' ? t('pr.paid') : t('pr.deposit')}</th><td>-{rp(ro.paid_total)}</td></tr>}
               {doc === 'invoice' && <tr className="grand"><th>{t('pr.balance')}</th><td>{rp(ro.balance)}</td></tr>}
+              {Number(ro.labor_waived) > 0 && <tr className="small"><th>{t('u142.labourWaivedPrint')}</th><td>{rp(ro.labor_waived)}</td></tr>}
             </tbody>
           </table>
         </section>

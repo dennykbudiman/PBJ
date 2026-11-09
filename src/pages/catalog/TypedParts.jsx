@@ -16,7 +16,7 @@ const norm = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase()
 async function loadTyped() {
   const [items, pol, links] = await Promise.all([
     supabase.from('ro_service_items_read').select('id, service_id, name, qty, cost, price, po_item_id').eq('item_type', 'part').is('catalog_item_id', null),
-    supabase.from('purchase_order_items_read').select('id, po_id, name, part_number, cost, qty_ordered, qty_delivered, qty_cancelled, qty_returned, ro_service_item_id').is('catalog_item_id', null),
+    supabase.from('purchase_order_items_read').select('id, po_id, name, part_number, cost, qty_ordered, qty_delivered, qty_cancelled, qty_returned, ro_service_item_id').is('catalog_item_id', null).eq('line_type', 'part'),
     supabase.from('typed_part_links').select('line_id'),
   ])
   const err = items.error || pol.error || links.error

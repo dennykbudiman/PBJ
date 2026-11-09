@@ -34,8 +34,10 @@ export function useInventoryData() {
     const jobs = await selectIn('repair_orders', 'id, job_number, vehicle_id, customer_id, order_status, invoice_number, closed_at', 'id', roIds)
     const vIds = [...new Set((jobs.data || []).map((j) => j.vehicle_id).filter(Boolean))]
     const vehicles = await selectIn('vehicles', 'id, plate, make, model, year', 'id', vIds)
+    // the companies' paying PTs (142): who pays a job's PO
+    const customers = await selectAll(() => supabase.from('customers').select('id, display_name, payer_name, paid_direct').order('display_name').order('id'))
     if (n !== loads.current) return
-    const all = { items, stock, suppliers, pos, lines, returns, cores, payments, jobs, vehicles }
+    const all = { items, stock, suppliers, pos, lines, returns, cores, payments, jobs, vehicles, customers }
     setError(Object.values(all).find((r) => r.error)?.error || null)
     const d = Object.fromEntries(Object.entries(all).map(([k, v]) => [k, v.data ?? []]))
     d.version = n
@@ -46,6 +48,7 @@ export function useInventoryData() {
     d.lineById = Object.fromEntries(d.lines.map((x) => [x.id, x]))
     d.jobById = Object.fromEntries(d.jobs.map((x) => [x.id, x]))
     d.vehicleById = Object.fromEntries(d.vehicles.map((x) => [x.id, x]))
+    d.customerById = Object.fromEntries(d.customers.map((x) => [x.id, x]))
     d.linesByPo = {}
     for (const l of d.lines) (d.linesByPo[l.po_id] ||= []).push(l)
     setData(d)

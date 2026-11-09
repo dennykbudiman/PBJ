@@ -26,6 +26,8 @@ import DueBanner from './DueWork'
 import { addBundleService } from './ServicesTab'
 import AppointmentModal from '../calendar/AppointmentModal'
 import OrderModal from '../inventory/OrderModal'
+import AddToJobModal from '../inventory/AddToJobModal'
+import { poLinesNotOnJob } from '../../lib/inventory'
 import { PartsOrdersCard, partCandidates } from './JobParts'
 import { ApprovalModal, CreditModal, DiscountModal, FeeModal, FleetDecisionModal, InvoiceModal, PayBackCreditModal, PaymentModal, ReasonModal } from './JobModals'
 
@@ -94,6 +96,8 @@ export default function JobPage({ id }) {
   // Parts are ordered from an open estimate by whoever manages inventory; deliveries land on the shelf.
   const canOrder = can('manage_inventory') && !invoiced && !closed
   const candidates = canOrder ? partCandidates(job, cat, t) : []
+  // PO lines not on the job yet can be put on it by whoever edits jobs and orders parts (141)
+  const canAddFromPo = canOrder && canEdit
   const open = (kind, extra = {}) => setModal({ kind, ...extra })
   const close = () => setModal(null)
   const v = job.vehicle
@@ -228,7 +232,8 @@ export default function JobPage({ id }) {
           <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')}
             fleetCanDecide={isFleet && !invoiced && !closed} onFleetDecide={() => open('fleet')} />
           <AppointmentsCard job={job} staff={staff} canBook={editable} onOpen={(a) => open('appt', { appointment: a })} onNew={() => open('appt', {})} />
-          {!isFleet && <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')} />}
+          {!isFleet && <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')}
+            canAdd={canAddFromPo} onAddFromPo={() => open('addFromPo')} />}
           <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} canFaktur={canEdit || canPay} editable={editable} canVoid={canVoid && invoiced}
             run={run} onInvoice={() => open('invoice')} onVoid={() => open('void')} />
           <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canRefund} canFixPaid={canVoid} canCredit={canPay || canIssue || canRefund}
@@ -249,6 +254,10 @@ export default function JobPage({ id }) {
           if (partial) toast(partial, 'err')
           else toast(made.length === 1 ? t('inv.order.madeOne', { no: made[0].po_number || '' }) : t('inv.order.madeMany', { n: made.length }))
         }} />
+      <AddToJobModal open={modal?.kind === 'addFromPo'} onClose={close} jobNoText={jobNo(ro.job_number)} showCost={showCost}
+        entries={modal?.kind === 'addFromPo' ? poLinesNotOnJob(job.pos, job.poLines, job.items, job.services, job.poLineLinks || {}) : []}
+        services={job.services} items={job.items} poNoOf={(l) => job.pos.find((p) => p.id === l.po_id)?.po_number || '—'}
+        onDone={(n, partial) => { close(); reload(); if (partial) toast(partial, 'err'); else toast(t('u141.done', { n })) }} />
       <ApprovalModal open={modal?.kind === 'approval'} onClose={close} job={job} preselect={modal?.preselect} run={run} busy={busy} />
       {isFleet && <FleetDecisionModal open={modal?.kind === 'fleet'} onClose={close} job={job} run={run} busy={busy} />}
       <InvoiceModal open={modal?.kind === 'invoice'} onClose={close} job={job} settings={settings} staff={staff} run={runStock} busy={busy} />

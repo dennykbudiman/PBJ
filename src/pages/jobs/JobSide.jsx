@@ -150,11 +150,14 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
       <h2>{t('job.totals')}</h2>
       <TotalRow label={t('job.parts')} value={ro.parts_total} />
       <TotalRow label={t('job.labor')} value={ro.labor_total} />
+      {/* labour "tidak ditagih" (142): its value, not in the total */}
+      {Number(ro.labor_waived) > 0 && <div className="trow muted small"><span>{t('u142.labourWaivedRow')}</span><span className="trow-val">{rp(ro.labor_waived)}</span></div>}
       {Number(ro.other_total) > 0 && <TotalRow label={t('job.sublet')} value={ro.other_total} />}
       {Number(ro.item_discount_total) > 0 && <div className="trow muted small"><span>{t('job.itemDiscountIncl')}</span><span className="trow-val">{rp(ro.item_discount_total)}</span></div>}
       {Number(ro.service_fees_total) > 0 && <TotalRow label={t('job.serviceFees')} value={ro.service_fees_total} />}
       {Number(ro.service_discount_total) > 0 && <TotalRow label={t('job.serviceDiscounts')} value={ro.service_discount_total} negative />}
-      {job.fees.map((f) => (
+      {/* a fee at Rp 0 (e.g. shop supplies at 0%) only shows while the job can still be edited, so its rate can be changed */}
+      {job.fees.filter((f) => editable || Number(f.amount) > 0).map((f) => (
         <div key={f.id} className="trow">
           <span>
             {f.is_shop_supplies ? t('job.shopSupplies') : f.name}
@@ -189,6 +192,8 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
       {Number(ro.tax_total) !== 0 && <TotalRow label={job.customer?.tax_exempt ? t('job.taxExempt', { tax: settingsForTax?.tax_name || 'PPN' }) : t('job.taxLine', { tax: settingsForTax?.tax_name || 'PPN', rate: num(taxRate, 2), base: rp(ro.taxable_base) })} value={ro.tax_total} />}
       <div className="trule" />
       <TotalRow label={t('job.total')} value={ro.total} strong />
+      {/* parts and outside work the PT pays its suppliers for directly (142) */}
+      {Number(ro.settled_direct) > 0 && <TotalRow label={t('u142.settledRow', { payer: job.customer?.payer_name || job.customer?.display_name || 'PT' })} value={ro.settled_direct} negative />}
       <TotalRow label={t('job.paidToDate')} value={ro.paid_total} muted />
       {credits > 0 && <div className="trow muted small"><span>{t('job.ofWhichCredit')}</span><span className="trow-val">{rp(credits)}</span></div>}
       <TotalRow label={t('job.balance')} value={ro.balance} strong />
@@ -239,7 +244,8 @@ export function ProfitCard({ job }) {
   const rev = (l) => lineNet(l) * scale[l.service_id]
   const partsRev = Math.round(sum('part', rev))
   const partsCost = sum('part', (l) => Math.round(Number(l.cost) * Number(l.qty)))
-  const laborRev = Math.round(sum('labor', rev))
+  // labour "tidak ditagih" (142) earns nothing
+  const laborRev = Number(job.ro.labor_waived) > 0 ? 0 : Math.round(sum('labor', rev))
   const laborCost = sum('labor', (l) => Math.round(Number(l.cost) * Number(l.qty)))
   const subRev = Math.round(sum('sublet', rev))
   const subCost = sum('sublet', (l) => Math.round(Number(l.cost) * Number(l.qty)))

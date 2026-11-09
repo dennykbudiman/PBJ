@@ -151,7 +151,8 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const noTech = approved.filter((s) => !s.technician_id || (staff?.length > 0 && !staff.some((p) => p.id === s.technician_id)))
   // More money taken than the invoice total: the database refuses until the difference is refunded.
   const cash = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
-  const overpaid = Math.max(0, cash - Number(ro.total))
+  // (what the shop is owed: the total less what the PT paid its suppliers directly, 142)
+  const overpaid = Math.max(0, cash - (Number(ro.total) - Number(ro.settled_direct || 0)))
   const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0
   // Warnings only (the invoice can still be made): parts that would go below zero on the shelf, the company's credit
   // limit, and companies that aren't on account (pay at pickup).
@@ -210,6 +211,9 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
         <div><span>{t('job.billTo')}</span><b>{job.customer?.legal_name || job.customer?.display_name}</b></div>
         <div><span>{t('job.approvedServices')}</span><b>{approved.length}</b></div>
         <div><span>{t('job.total')}</span><b>{rp(ro.total)}</b></div>
+        {Number(ro.settled_direct) > 0 && <div><span>{t('u142.settledRow', { payer: job.customer?.payer_name || job.customer?.display_name || 'PT' })}</span><b>-{rp(ro.settled_direct)}</b></div>}
+        {Number(ro.settled_direct) > 0 && <div><span>{t('job.balance')}</span><b>{rp(Math.max(Number(ro.balance), 0))}</b></div>}
+        {Number(ro.labor_waived) > 0 && <div><span>{t('u142.labourWaivedRow')}</span><b>{rp(ro.labor_waived)}</b></div>}
         <div><span>{t('job.dueDate')}</span><b>{fmtDate(due.toISOString().slice(0, 10), lang)} ({t('job.netDays', { n: terms })})</b></div>
       </div>
       <div className="hint">{t('job.invoiceHint')}</div>

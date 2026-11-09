@@ -3,13 +3,20 @@ import { Button, Modal, Notice } from '../../components/ui'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { num, parseDecimal, readAmount, rp } from '../../lib/format'
-import { lineAmount } from '../../lib/inventory'
+import { useShop } from '../../context/ShopContext'
+import { isNonPkp, jobToPoCost, lineAmount, supplierTaxRate } from '../../lib/inventory'
 import { Tick } from './bits'
 
 // Order parts: pick the lines, their supplier, quantity and cost. One purchase order is made per supplier.
-// candidates: [{ key, catalog_item_id, ro_service_item_id, name, part_number, cost, core_cost, taxable, qty, supplier_id, checked, note }]
+// candidates: [{ key, catalog_item_id, ro_service_item_id, name, part_number, cost, core_cost, taxable, qty, supplier_id, checked, note, line_type }]
+// A sublet line (outside work, 141) can go to any supplier, a part only to a parts supplier.
+// The PPN of each PO comes from its supplier (142: a supplier can be set to not charge PPN). While the shop is non-PKP
+// the cost typed here is what the shop pays, PPN included (as on the job); the PO gets it before PPN.
 export default function OrderModal({ open, onClose, title, intro, candidates, suppliers, roId, taxRate, showCost, onDone }) {
   const { t } = useT()
+  const { settings } = useShop()
+  const nonPkp = isNonPkp(settings)
+  const rateOf = (sid) => supplierTaxRate(suppliers.find((x) => x.id === sid), taxRate)
   const [rows, setRows] = useState([])
   const [errors, setErrors] = useState({})
   const [busy, setBusy] = useState(false)
@@ -17,10 +24,14 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
   const running = useRef(false)
   useEffect(() => {
     if (!open) return
-    setRows((candidates || []).map((c) => ({ ...c, qtyText: num(c.qty, 2), costText: num(c.cost), supplier_id: c.supplier_id || '' })))
+    // a part's default supplier that is a sublet shop (or inactive) isn't offered for it, so it starts empty
+    const allowed = (c, id) => suppliers.some((x) => x.id === id && x.active !== false && (c.line_type === 'sublet' || x.type !== 'sublet'))
+    setRows((candidates || []).map((c) => ({ ...c, qtyText: num(c.qty, 2), costText: num(c.cost), supplier_id: c.supplier_id && allowed(c, c.supplier_id) ? c.supplier_id : '' })))
     setErrors({}); setFail(null)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const active = suppliers.filter((s) => s.active !== false && s.type !== 'sublet')
+  const subletShops = suppliers.filter((s) => s.active !== false && s.type === 'sublet')
+  const anySublet = rows.some((r) => r.line_type === 'sublet')
   const set = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
   const picked = rows.filter((r) => r.checked)
   const groups = useMemo(() => {
@@ -50,12 +61,14 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
       for (const r of ready) (bySup[r.supplier_id] ||= []).push(r)
       for (const [sid, list] of Object.entries(bySup)) {
         const sup = suppliers.find((s) => s.id === sid)
+        const rate = rateOf(sid)
         // Made as a draft first, so a PO whose lines fail can be removed again.
         const po = await supabase.from('purchase_orders').insert({ supplier_id: sid, ro_id: roId || null, status: 'draft', payment_terms_days: sup?.payment_terms_days ?? null }).select().single()
         if (po.error) throw po.error
         const ins = await supabase.from('purchase_order_items').insert(list.map((r) => ({
-          po_id: po.data.id, catalog_item_id: r.catalog_item_id || null, ro_service_item_id: r.ro_service_item_id || null,
-          name: r.name, part_number: r.part_number || null, cost: r.cost, core_cost: Number(r.core_cost) || 0, taxable: !!r.taxable, qty_ordered: r.qty,
+          po_id: po.data.id, catalog_item_id: r.catalog_item_id || null, ro_service_item_id: r.ro_service_item_id || null, line_type: r.line_type === 'sublet' ? 'sublet' : 'part',
+          name: r.name, part_number: r.part_number || null, cost: jobToPoCost(r.cost, rate > 0, rate, nonPkp), core_cost: Number(r.core_cost) || 0,
+          taxable: rate > 0, qty_ordered: r.qty,
         })))
         if (ins.error) { await supabase.from('purchase_orders').delete().eq('id', po.data.id); throw ins.error }
         if (status === 'ordered') {
@@ -90,7 +103,7 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
           <table>
             <thead><tr>
               <th style={{ width: 28 }} /><th>{t('inv.col.part')}</th><th>{t('inv.col.supplier')}</th><th className="num">{t('inv.col.qty')}</th>
-              {showCost && <th className="num">{t('inv.col.unitCost')}</th>}{showCost && <th className="num">{t('inv.col.amount')}</th>}
+              {showCost && <th className="num">{nonPkp ? t('u142.costInclTax') : t('inv.col.unitCost')}</th>}{showCost && <th className="num">{t('inv.col.amount')}</th>}
             </tr></thead>
             <tbody>
               {rows.map((r) => {
@@ -99,12 +112,15 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
                 return (
                   <tr key={r.key} className={r.checked ? '' : 'dim'}>
                     <td><Tick checked={!!r.checked} onChange={(v) => set(r.key, { checked: v })} label={t('inv.order.pick', { name: r.name })} /></td>
-                    <td><b>{r.name}</b>{r.part_number && <span className="muted small"> · {r.part_number}</span>}{r.note && <div className="small muted">{r.note}</div>}</td>
+                    <td><b>{r.name}</b>{r.part_number && <span className="muted small"> · {r.part_number}</span>}{r.line_type === 'sublet' && <div className="small muted">{t('u141.subletNote')}</div>}{r.note && <div className="small muted">{r.note}</div>}</td>
                     <td>
                       <select className={`select cell boxed ${errors[`${r.key}.s`] ? 'invalid' : ''}`} value={r.supplier_id} disabled={!r.checked}
                         onChange={(e) => set(r.key, { supplier_id: e.target.value })} aria-label={t('inv.order.supplierFor', { name: r.name })}>
                         <option value="">{t('inv.order.chooseSupplier')}</option>
                         {active.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {r.line_type === 'sublet' && subletShops.length > 0 && (
+                          <optgroup label={t('u141.subletShops')}>{subletShops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>
+                        )}
                       </select>
                       {errors[`${r.key}.s`] && <div className="error small">{errors[`${r.key}.s`]}</div>}
                     </td>
@@ -120,7 +136,10 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
                         {errors[`${r.key}.c`] && <div className="error small">{errors[`${r.key}.c`]}</div>}
                       </td>
                     )}
-                    {showCost && <td className="num nowrap">{rp(lineAmount(c, r.core_cost, q, r.taxable, taxRate))}</td>}
+                    {showCost && (() => {
+                      const rate = r.supplier_id ? rateOf(r.supplier_id) : 0
+                      return <td className="num nowrap">{rp(lineAmount(jobToPoCost(c, rate > 0, rate, nonPkp), r.core_cost, q, rate > 0, rate))}</td>
+                    })()}
                   </tr>
                 )
               })}
@@ -128,7 +147,8 @@ export default function OrderModal({ open, onClose, title, intro, candidates, su
           </table>
         </div>
       )}
-      {showCost && <div className="hint">{t('inv.order.costHint')}</div>}
+      {showCost && <div className="hint">{t('inv.order.costHint')}{nonPkp && <> {t('u142.orderNonPkpHint')}</>}</div>}
+      {anySublet && <div className="hint">{t('u141.supplierHint')}</div>}
     </Modal>
   )
 }

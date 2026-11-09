@@ -3,13 +3,20 @@ import { Link } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
 import { num } from '../../lib/format'
-import { openQty, sparePoParts, stockState } from '../../lib/inventory'
+import { openQty, poLinesNotOnJob, sparePoParts, stockState } from '../../lib/inventory'
 import { PoBadge } from '../inventory/bits'
 
-// Part lines on this job that could still be ordered: on pending or approved work and not already on a PO.
+// Part and sublet lines on this job that could still be ordered: on pending or approved work and not already on a PO.
+// Sublet lines (outside work, 141) start unticked and with no supplier: not every one needs a PO.
 export function partCandidates(job, cat, t) {
   const live = new Set(job.services.filter((s) => s.approval_status === 'pending' || s.approval_status === 'approved').map((s) => s.id))
-  return job.items.filter((l) => l.item_type === 'part' && live.has(l.service_id) && !l.po_item_id && !l.stock_deducted).map((l) => {
+  return job.items.filter((l) => ['part', 'sublet'].includes(l.item_type) && live.has(l.service_id) && !l.po_item_id && !l.stock_deducted).map((l) => {
+    if (l.item_type === 'sublet') {
+      return {
+        key: l.id, ro_service_item_id: l.id, catalog_item_id: null, name: l.name, part_number: null, cost: Number(l.cost) || 0,
+        core_cost: 0, taxable: false, qty: Number(l.qty) || 1, supplier_id: '', checked: false, note: null, line_type: 'sublet',
+      }
+    }
     const ci = l.catalog_item_id ? cat.itemById[l.catalog_item_id] : null
     const st = ci?.track_inventory ? stockState(ci, cat.stockById[ci.id]) : null
     // Ticked when the shelf can't cover it (or the part isn't stocked at all).
@@ -17,16 +24,18 @@ export function partCandidates(job, cat, t) {
     return {
       key: l.id, ro_service_item_id: l.id, catalog_item_id: l.catalog_item_id, name: l.name, part_number: ci?.code || null,
       cost: Number(l.cost) || Number(ci?.cost) || 0, core_cost: ci?.has_core ? Number(ci.core_cost) || 0 : 0, taxable: !!ci?.taxable,
-      qty: Number(l.qty), supplier_id: ci?.supplier_id || '', checked: short,
+      qty: Number(l.qty), supplier_id: ci?.supplier_id || '', checked: short, line_type: 'part',
       note: st ? t('job.po.stockNote', { n: num(st.onHand, 2) }) : ci ? t('job.po.notTracked') : t('job.po.notInCatalog'),
     }
   })
 }
 
 // Side card: the purchase orders raised for this job, and a way to order its parts.
-export function PartsOrdersCard({ job, cat, canOrder, candidates, onOrder }) {
+// PO lines not on the job: `canAdd` (job open, may edit jobs and order) shows "Put on the job" (141).
+export function PartsOrdersCard({ job, cat, canOrder, candidates, onOrder, canAdd, onAddFromPo }) {
   const { t } = useT()
   if (!job.pos.length && !(canOrder && candidates.length)) return null
+  const notOnJob = canAdd ? poLinesNotOnJob(job.pos, job.poLines, job.items, job.services, job.poLineLinks || {}) : []
   return (
     <section className="card side-card">
       <div className="row" style={{ gap: 8 }}>
@@ -49,6 +58,12 @@ export function PartsOrdersCard({ job, cat, canOrder, candidates, onOrder }) {
               </Link>
             )
           })}
+        </div>
+      )}
+      {notOnJob.length > 0 && (
+        <div className="row wrap small" style={{ gap: 6, marginTop: 8, color: 'var(--amber-ink, #9A5B10)' }}>
+          <span>{t('u141.notOnJob', { n: notOnJob.length })}</span>
+          <button type="button" className="linkbtn small" onClick={onAddFromPo}>{t('u141.addToJob')}</button>
         </div>
       )}
     </section>

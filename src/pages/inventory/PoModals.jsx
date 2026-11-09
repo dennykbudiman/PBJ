@@ -5,7 +5,7 @@ import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, num, parseDecimal, readAmount, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
-import { PAY_METHODS, lineAmount, lineDue, openQty, owedQty, stockState } from '../../lib/inventory'
+import { PAY_METHODS, isNonPkp, jobToPoCost, lineAmount, lineDue, openQty, owedQty, poToJobCost, stockState } from '../../lib/inventory'
 import { addDays } from '../../lib/calendar'
 
 // Tax on a cost × quantity, rounded the same way as everywhere else.
@@ -17,9 +17,15 @@ function useOnce() {
   return async (fn) => { if (r.current) return; r.current = true; try { await fn() } finally { r.current = false } }
 }
 
-// Add a part to a PO, or change one of its lines.
-export function LineModal({ open, onClose, po, line, preset, showCost, onSaved }) {
+// Add a part to a PO, or change one of its lines. On a job's PO a typed line can be outside work (sublet, 141); a
+// sublet shop's PO only takes outside work.
+// The cost here is the supplier's, before PPN. A catalog part's cost (what the shop pays) is turned into that while the
+// shop is non-PKP (142); a new line has PPN when the PO has.
+export function LineModal({ open, onClose, po, line, preset, showCost, onSaved, subletShop, jobNoText }) {
   const { t } = useT()
+  const { settings } = useShop()
+  const nonPkp = isNonPkp(settings)
+  const poTaxed = Number(po?.tax_rate) > 0
   const once = useOnce()
   const [f, setF] = useState({})
   const [err, setErr] = useState({})
@@ -28,8 +34,11 @@ export function LineModal({ open, onClose, po, line, preset, showCost, onSaved }
   useEffect(() => {
     if (!open) return
     const src = line || preset || {}
-    setF({ name: src.name || '', part_number: src.part_number || '', qty: qtyText(src.qty_ordered ?? src.qty ?? 1), cost: src.cost == null ? '' : num(src.cost),
-      core: Number(src.core_cost) ? num(src.core_cost) : '', taxable: !!src.taxable })
+    const taxable = line ? !!line.taxable : poTaxed
+    const cost = line ? src.cost : jobToPoCost(src.cost, taxable, po.tax_rate, nonPkp)
+    setF({ name: src.name || '', part_number: src.part_number || '', qty: qtyText(src.qty_ordered ?? src.qty ?? 1), cost: cost == null ? '' : num(cost),
+      core: Number(src.core_cost) ? num(src.core_cost) : '', taxable,
+      line_type: line ? line.line_type || 'part' : subletShop ? 'sublet' : 'part' })
     setErr({}); setFail(null)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? e.target.value : e }))
@@ -48,11 +57,12 @@ export function LineModal({ open, onClose, po, line, preset, showCost, onSaved }
     setErr(e)
     if (Object.keys(e).length) return
     setBusy(true)
+    const sublet = f.line_type === 'sublet'
     const row = { name: f.name.trim(), part_number: f.part_number.trim() || null, qty_ordered: qty }
-    if (!paid) Object.assign(row, { cost, core_cost: core, taxable: f.taxable })
+    if (!paid) Object.assign(row, { cost, core_cost: sublet ? 0 : core, taxable: f.taxable })
     const res = line
       ? await supabase.from('purchase_order_items').update(row).eq('id', line.id)
-      : await supabase.from('purchase_order_items').insert({ ...row, po_id: po.id, catalog_item_id: preset?.catalog_item_id || null })
+      : await supabase.from('purchase_order_items').insert({ ...row, po_id: po.id, catalog_item_id: preset?.catalog_item_id || null, line_type: preset?.catalog_item_id ? 'part' : f.line_type })
     setBusy(false)
     if (res.error) return setFail(errorText(res.error, t))
     onSaved(row)
@@ -62,14 +72,29 @@ export function LineModal({ open, onClose, po, line, preset, showCost, onSaved }
       footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{line ? t('common.save') : t('inv.line.add')}</Button></>}>
       {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
       {preset?.catalog_item_id && !line && <div className="hint" style={{ marginTop: 0 }}>{t('inv.line.fromCatalog')}</div>}
+      {!line && !preset?.catalog_item_id && po.ro_id && (
+        <label className="mini" style={{ display: 'block', marginBottom: 8 }}>{t('u141.type')}
+          <select className="select" value={f.line_type || 'part'} disabled={subletShop} onChange={(e) => setF((x) => ({ ...x, line_type: e.target.value }))} aria-label={t('u141.type')}>
+            <option value="part">{t('u141.typePart')}</option>
+            <option value="sublet">{t('u141.typeSublet')}</option>
+          </select>
+          {subletShop && <span className="hint">{t('u141.typeHintSubletShop')}</span>}
+        </label>
+      )}
+      {line?.line_type === 'sublet' && <div className="hint" style={{ marginTop: 0 }}>{t('u141.typeSublet')}</div>}
+      {line?.ro_service_item_id && <div className="hint" style={{ marginTop: 0 }}>{t('u141.linked', { no: jobNoText || '' })}</div>}
       <Input label={t('inv.line.name')} value={f.name || ''} onChange={set('name')} error={err.name} maxLength={200} autoFocus={!preset} />
       <Input label={t('inv.line.partNo')} value={f.part_number || ''} onChange={set('part_number')} maxLength={100} />
       <div className="formgrid">
         <Input label={t('inv.line.qty')} value={f.qty || ''} onChange={set('qty')} error={err.qty} inputMode="decimal" />
         {showCost && <Input label={t('inv.line.cost')} value={f.cost || ''} onChange={set('cost')} error={err.cost} prefix="Rp" inputMode="numeric" disabled={paid} />}
-        {showCost && <Input label={t('inv.line.core')} value={f.core || ''} onChange={set('core')} error={err.core} prefix="Rp" inputMode="numeric" disabled={paid} hint={t('inv.line.coreHint')} />}
+        {showCost && f.line_type !== 'sublet' && <Input label={t('inv.line.core')} value={f.core || ''} onChange={set('core')} error={err.core} prefix="Rp" inputMode="numeric" disabled={paid} hint={t('inv.line.coreHint')} />}
       </div>
       {showCost && <Toggle checked={!!f.taxable} disabled={paid} onChange={(v) => setF((x) => ({ ...x, taxable: v }))} label={t('inv.line.taxable', { rate: num(po.tax_rate, 2) })} />}
+      {showCost && !poTaxed && <div className="hint">{t('u142.poNoTax')}</div>}
+      {showCost && nonPkp && f.taxable && poTaxed && readAmount(f.cost) > 0 && (
+        <div className="hint">{t('u142.onJobWithTax', { amount: rp(poToJobCost(readAmount(f.cost), true, po.tax_rate, true)) })}</div>
+      )}
       {paid && <div className="hint">{t('inv.line.paidLocked')}</div>}
       {line && Number(line.qty_delivered) > 0 && <div className="hint">{t('inv.line.deliveredNote', { n: num(line.qty_delivered, 2) })}</div>}
     </Modal>
@@ -256,7 +281,8 @@ export function PoReturnModal({ open, onClose, data, po, lines, showCost, onDone
   const [err, setErr] = useState({})
   const [fail, setFail] = useState(null)
   const [busy, setBusy] = useState(false)
-  const rows = lines.map((l) => ({ l, left: Number(l.qty_delivered) - returnedOn(data, l) })).filter((x) => x.left > 0)
+  // outside work (sublet, 141) can't be sent back
+  const rows = lines.filter((l) => l.line_type !== 'sublet').map((l) => ({ l, left: Number(l.qty_delivered) - returnedOn(data, l) })).filter((x) => x.left > 0)
   useEffect(() => { if (open) { setQty({}); setNote(''); setErr({}); setFail(null) } }, [open])
   const amountOf = (l, q) => lineAmount(l.cost, 0, q, l.taxable, po.tax_rate)
   const picked = rows.map(({ l, left }) => ({ l, left, q: String(qty[l.id] ?? '').trim() === '' ? 0 : parseDecimal(qty[l.id]) }))

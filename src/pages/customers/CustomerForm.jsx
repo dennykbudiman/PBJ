@@ -10,6 +10,7 @@ const EMPTY = {
   type: 'fleet_internal', display_name: '', legal_name: '', npwp: '', phone: '', email: '', billing_address: '',
   payment_terms_days: '', credit_limit: '', charge_account: true, tax_exempt: false, pinned_notes: '', active: true,
   contact_name: '', contact_phone: '', contact_email: '',
+  paid_direct: false, labour_not_charged: false, payer_name: '',
 }
 
 function toForm(c) {
@@ -21,6 +22,7 @@ function toForm(c) {
     payment_terms_days: c.payment_terms_days == null ? '' : String(c.payment_terms_days),
     credit_limit: c.credit_limit == null ? '' : num(c.credit_limit),
     charge_account: c.charge_account, tax_exempt: c.tax_exempt, pinned_notes: c.pinned_notes || '', active: c.active,
+    paid_direct: !!c.paid_direct, labour_not_charged: !!c.labour_not_charged, payer_name: c.payer_name || '',
   }
 }
 
@@ -66,6 +68,7 @@ export default function CustomerForm({ open, customer, customers, onClose, onSav
       phone: f.phone.trim() || null, email: f.email.trim() || null, billing_address: f.billing_address.trim() || null,
       payment_terms_days: terms, credit_limit: limit, charge_account: f.charge_account, tax_exempt: f.tax_exempt,
       pinned_notes: f.pinned_notes.trim() || null, active: f.active,
+      paid_direct: f.paid_direct, labour_not_charged: f.labour_not_charged, payer_name: f.payer_name.trim() || null,
     }
     setBusy(true)
     setMsg(null)
@@ -113,6 +116,18 @@ export default function CustomerForm({ open, customer, customers, onClose, onSav
         <Toggle checked={f.tax_exempt} onChange={set('tax_exempt')} label={t('cust.taxExempt')} />
         {editing && <Toggle checked={f.active} onChange={set('active')} label={t('cust.activeLabel')} />}
       </div>
+      {/* How this company pays (142): parts straight to the supplier, labour not charged, and which PT pays */}
+      <div className="sectionlabel">{t('u142.howPays')}</div>
+      <div className="row wrap" style={{ gap: 22 }}>
+        <Toggle checked={f.paid_direct} onChange={set('paid_direct')} label={t('u142.paidDirect')} />
+        <Toggle checked={f.labour_not_charged} onChange={set('labour_not_charged')} label={t('u142.labourNotCharged')} />
+      </div>
+      <div className="hint">{t('u142.paidDirectHint')}</div>
+      <Input label={t('u142.payer')} value={f.payer_name} onChange={set('payer_name')} maxLength={120} list="payer-names"
+        placeholder={f.display_name || 'PT Pulau Baru Jaya'} hint={t('u142.payerHint')} />
+      <datalist id="payer-names">
+        {[...new Set((customers || []).map((c) => c.payer_name).filter(Boolean))].sort().map((n) => <option key={n} value={n} />)}
+      </datalist>
       <Textarea label={t('cust.pinnedNotes')} value={f.pinned_notes} onChange={set('pinned_notes')} rows={2} hint={t('cust.pinnedHint')} />
       {!editing && (
         <>

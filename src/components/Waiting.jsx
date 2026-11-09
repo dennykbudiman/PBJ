@@ -31,7 +31,8 @@ export function waitingText(kind, info, { t, lang, tz }) {
     case 'approval': return t('wait.approval', { n: i.pending || 0 })
     case 'part':
       if (!i.part) return t('wait.partNoPo')
-      return t('wait.part', {
+      // outside work on a PO (141) reads "Sublet: …"
+      return t(i.sublet ? 'wait.sublet' : 'wait.part', {
         part: i.parts > 1 ? t('wait.partMore', { part: i.part, n: i.parts - 1 }) : i.part,
         po: i.po_number || '—', supplier: i.supplier || '—', when: i.ordered_at ? shortWhen(i.ordered_at, tz, lang, t, { timeToday: true }) : '—',
       })

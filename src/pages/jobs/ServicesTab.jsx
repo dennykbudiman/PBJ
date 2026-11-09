@@ -9,7 +9,7 @@ import { APPROVAL_COLOR, LINE_TYPES, WORK_STATUS, autoFeesFor, linesFromCatalogI
 import { discountState } from '../catalog/DiscountsTab'
 import { useShop } from '../../context/ShopContext'
 import { shopToday } from '../../lib/customers'
-import { LINE_COLOR, lineState } from '../../lib/inventory'
+import { LINE_COLOR, isNonPkp, jobToPoCost, lineState, poToJobCost } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, discountText, parseDiscount } from './common'
 import { worksOnJobs } from './useJobData'
 import { useAuth } from '../../context/AuthContext'
@@ -396,11 +396,13 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
                     {editable ? <BlurInput className="input cell num narrow" value={discountText(l.discount_pct, l.discount_amount)} placeholder="—" aria-label={t('job.col.discount')} onCommit={commitDiscount(l.id)} />
                       : disc ? `-${rp(disc)}${Number(l.discount_pct) > 0 ? ` (${num(l.discount_pct, 2)}%)` : ''}` : '—'}
                   </td>
-                  <td className="num"><b>{l.price == null ? '—' : rp(lineNet(l))}</b></td>
+                  <td className="num"><b>{l.price == null ? '—' : rp(lineNet(l))}</b>
+                    {/* labour of a company that isn't charged for it (142) */}
+                    {l.item_type === 'labor' && Number(ro.labor_waived) > 0 && Number(lineNet(l)) > 0 && <div className="small muted nowrap">{t('u142.notCharged')}</div>}</td>
                   <td>
                     <input type="checkbox" checked={l.taxable} disabled={!editable} aria-label={t('cat.tax')} onChange={(e) => updLine(l.id, { taxable: e.target.checked })} />
                   </td>
-                  <td><LineStatus l={l} item={item} cat={cat} job={job} workEditable={workEditable} commitHours={commitHours(l.id)} /></td>
+                  <td><LineStatus l={l} item={item} cat={cat} job={job} workEditable={workEditable} commitHours={commitHours(l.id)} showCost={showCost} /></td>
                   {editable && (
                     <td><button type="button" className="btn ghost sm" onClick={() => run(() => supabase.from('ro_service_items').delete().eq('id', l.id))} aria-label={t('job.removeLine', { name: l.name })}><Icon name="x" size={14} /></button></td>
                   )}
@@ -457,7 +459,8 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
 }
 
 // Stock or purchase-order badge for parts, hours worked for labor.
-function LineStatus({ l, item, cat, job, workEditable, commitHours }) {
+function LineStatus({ l, item, cat, job, workEditable, commitHours, showCost }) {
+  const { settings } = useShop()
   const { t } = useT()
   if (l.item_type === 'labor') {
     return (
@@ -468,17 +471,29 @@ function LineStatus({ l, item, cat, job, workEditable, commitHours }) {
       </span>
     )
   }
-  if (l.item_type !== 'part') return null
-  if (l.stock_deducted) return <Badge color="gray">{t('job.stock.taken')}</Badge>
+  if (l.item_type !== 'part' && l.item_type !== 'sublet') return null
+  if (l.item_type === 'part' && l.stock_deducted) return <Badge color="gray">{t('job.stock.taken')}</Badge>
   // Ordered on a purchase order for this job: On order → Part delivered → Delivered.
   const pl = l.po_item_id && (job?.poLines || []).find((x) => x.id === l.po_item_id)
   const po = pl && job.pos.find((x) => x.id === pl.po_id)
   if (pl && po && lineState(pl) !== 'cancelled') {
     const st = lineState(pl)
     const label = st === 'waiting' ? (po.status === 'draft' ? t('job.po.draft') : t('job.po.onOrder')) : st === 'partial' ? t('job.po.partial', { n: num(pl.qty_delivered, 2), of: num(Number(pl.qty_ordered) - Number(pl.qty_cancelled), 2) }) : t('job.po.delivered')
-    return <Link to={`/inventory/purchase-orders/${po.id}`} className="plainlink" title={t('job.po.title', { no: po.po_number })}><Badge color={st === 'waiting' ? (po.status === 'draft' ? 'gray' : 'blue') : LINE_COLOR[st]}>{label}</Badge></Link>
+    // The PO line is connected (141): say when its price or (once ordered) its quantity differs from the job line.
+    const ordered = Number(pl.qty_ordered) - Number(pl.qty_cancelled)
+    // (compared in PO terms, before the supplier's PPN while the shop is non-PKP; shown as the job would count it, 142)
+    const nonPkp = isNonPkp(settings)
+    const costDiff = showCost && pl.cost != null && Number(pl.cost) !== jobToPoCost(l.cost, pl.taxable, po.tax_rate, nonPkp)
+    const qtyDiff = po.status !== 'draft' && ordered !== Number(l.qty)
+    return (
+      <span>
+        <Link to={`/inventory/purchase-orders/${po.id}`} className="plainlink" title={t('job.po.title', { no: po.po_number })}><Badge color={st === 'waiting' ? (po.status === 'draft' ? 'gray' : 'blue') : LINE_COLOR[st]}>{label}</Badge></Link>
+        {costDiff && <span className="small" style={{ display: 'block', color: 'var(--amber-ink, #9A5B10)' }} title={t('u141.poCostTitle')}>{t('u141.poCost', { po: po.po_number, amount: rp(poToJobCost(pl.cost, pl.taxable, po.tax_rate, nonPkp)) })}</span>}
+        {qtyDiff && <span className="small" style={{ display: 'block', color: 'var(--amber-ink, #9A5B10)' }} title={t('u141.poQtyTitle')}>{t('u141.poQty', { po: po.po_number, ordered: num(ordered, 2), need: num(l.qty, 2) })}</span>}
+      </span>
+    )
   }
-  if (!item?.track_inventory) return null
+  if (l.item_type === 'sublet' || !item?.track_inventory) return null
   const onHand = Number(cat.stockById[item.id]?.qty_on_hand ?? item.qty_on_hand ?? 0)
   if (onHand >= Number(l.qty)) return <Badge color="green">{t('job.stock.in')}</Badge>
   if (onHand > 0) return <Badge color="amber">{t('job.stock.only', { n: num(onHand, 2) })}</Badge>

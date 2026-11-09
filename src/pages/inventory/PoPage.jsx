@@ -8,11 +8,12 @@ import { useT } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
 import { fmtDate, fmtDateTime, jobNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
-import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poTotals, sparePoParts, stockState } from '../../lib/inventory'
+import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poLinesNotOnJob, poPaidByPt, poPayer, poTotals, sparePoParts, stockState } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, TotalRow, useRun } from '../jobs/common'
 import { JobRef, PayBadge, PoBadge, Tick } from './bits'
 import { CorrectReceivedModal, LineModal, PayModal, PoReturnModal, ReceiveModal } from './PoModals'
 import { returnValue } from './ReturnsTab'
+import AddToJobModal from './AddToJobModal'
 import { useAuth } from '../../context/AuthContext'
 
 // One purchase order: its parts, deliveries, supplier invoice, payments and returns.
@@ -20,7 +21,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const { t, lang } = useT()
   const navigate = useNavigate()
   const toast = useToast()
-  const { timezone } = useShop()
+  const { timezone, settings } = useShop()
   const today = shopToday(timezone)
   const { run, busy } = useRun(reload)
   const { can } = useAuth()
@@ -47,9 +48,9 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
     setJobUse(null)
     if (!roId) return
     ;(async () => {
-      const svcs = await supabase.from('ro_services').select('id, approval_status').eq('ro_id', roId)
+      const svcs = await supabase.from('ro_services').select('id, name, position, approval_status').eq('ro_id', roId)
       const ids = (svcs.data || []).map((s) => s.id)
-      const items = ids.length ? await supabase.from('ro_service_items').select('id, service_id, item_type, catalog_item_id, name, qty').in('service_id', ids) : { data: [] }
+      const items = ids.length ? await supabase.from('ro_service_items').select('id, service_id, item_type, catalog_item_id, name, qty, po_item_id, stock_deducted').in('service_id', ids) : { data: [] }
       if (live && !svcs.error && !items.error) setJobUse({ services: svcs.data || [], items: items.data || [] })
     })()
     return () => { live = false }
@@ -66,10 +67,24 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const openLines = lines.filter((l) => openQty(l) > 0)
   const owedLines = lines.filter((l) => owedQty(l) > 0)
   const returnedOf = (l) => data.returns.filter((r) => r.po_item_id === l.id).reduce((a, r) => a + Number(r.qty), 0)
-  // Received parts that can still go back to the supplier (returns are made for the whole PO at once).
-  const returnable = lines.filter((l) => Number(l.qty_delivered) - returnedOf(l) > 0)
+  // Received parts that can still go back to the supplier (returns are made for the whole PO at once); outside work can't.
+  const returnable = lines.filter((l) => l.line_type !== 'sublet' && Number(l.qty_delivered) - returnedOf(l) > 0)
   const spare = jobUse ? sparePoParts(lines, jobUse.items, jobUse.services, returnedOf, linkOf) : new Map()
   const jobNoOf = po.ro_id ? data.jobById[po.ro_id]?.job_number : null
+  // Lines not on the job yet, while the job is open (141): put them on its work order, or link them to a matching line.
+  const jobRow = po.ro_id ? data.jobById[po.ro_id] : null
+  const jobOpen = !!jobRow && jobRow.order_status !== 'invoice' && !jobRow.closed_at
+  const notOnJob = jobUse && jobOpen ? poLinesNotOnJob([po], lines, jobUse.items, jobUse.services, linkOf) : []
+  const notOnJobIds = new Set(notOnJob.map((e) => e.line.id))
+  const canAddToJob = canEdit && can('edit_jobs') && jobOpen && notOnJob.length > 0
+  const subletShop = sup?.type === 'sublet'
+  // who pays the supplier (142): the PT directly, or the shop
+  const ptPaid = poPaidByPt(po)
+  const payer = poPayer(po, data)
+  const shopPaidSome = lines.some((l) => Number(l.qty_paid) > 0)
+  const payerNames = [...new Set(data.customers.map((c) => c.payer_name || c.display_name).filter(Boolean))].sort()
+  const canPayHere = canPay && !ptPaid
+  const hasParts = lines.some((l) => l.line_type !== 'sublet')
   const lineIds = new Set(lines.map((l) => l.id))
   const returns = data.returns.filter((r) => lineIds.has(r.po_item_id))
   const payments = data.payments.filter((p) => (p.po_item_ids || []).some((x) => lineIds.has(x)))
@@ -80,6 +95,14 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const close = () => setModal(null)
   const done = (text) => { close(); setSel(new Set()); reload(); if (text) toast(text) }
   const upd = (patch) => run(() => supabase.from('purchase_orders').update(patch).eq('id', po.id))
+  // the supplier's PPN on this PO (142): on = the shop's rate (its unpaid lines get PPN), off = 0%
+  const setTax = (on) => run(async () => {
+    if (on) {
+      const a = await supabase.from('purchase_order_items').update({ taxable: true }).eq('po_id', po.id).eq('qty_paid', 0).eq('taxable', false)
+      if (a.error) return a
+    }
+    return supabase.from('purchase_orders').update({ tax_rate: on ? Number(settings?.tax_rate ?? 11) : 0 }).eq('id', po.id)
+  })
 
   async function markOrdered() {
     if (!lines.length) return toast(t('inv.po.addFirst'), 'err')
@@ -131,15 +154,16 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
               <h1 className="jobtitle">{t('inv.po.titleNo', { no: po.po_number })} <span className="muted">— {sup?.name || '—'}</span></h1>
               <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
                 <PoBadge status={po.status} />
-                {showCost && anyDelivered && <PayBadge status={po.payment_status} />}
+                {showCost && (anyDelivered || ptPaid) && <PayBadge status={po.payment_status} payer={payer} />}
                 <span className="small muted"><JobRef data={data} roId={po.ro_id} /></span>
               </div>
             </div>
             <div className="row wrap" style={{ gap: 8 }}>
               {canEdit && po.status === 'draft' && <Button variant="primary" icon="check" loading={busy} onClick={markOrdered}>{t('inv.po.markOrdered')}</Button>}
               {receivable && openLines.length > 0 && <Button variant="primary" icon="packages" onClick={() => setModal({ kind: 'receive', lines: openLines })}>{t('inv.po.receive')}</Button>}
-              {canPay && showCost && owedLines.length > 0 && <Button icon="wallet" onClick={() => setModal({ kind: 'pay', lines: owedLines })}>{t('inv.po.payDelivered')}</Button>}
+              {canPayHere && showCost && owedLines.length > 0 && <Button icon="wallet" onClick={() => setModal({ kind: 'pay', lines: owedLines })}>{t('inv.po.payDelivered')}</Button>}
               {canEdit && returnable.length > 0 && <Button icon="undo" onClick={() => setModal({ kind: 'return' })}>{t('inv.po.returnToSupplier')}</Button>}
+              {canAddToJob && <Button icon="plus" onClick={() => setModal({ kind: 'toJob' })}>{t('u141.addToJobN', { n: notOnJob.length })}</Button>}
               <MoreMenu label={t('inv.more')} items={menu} />
             </div>
           </div>
@@ -157,7 +181,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                 <span className="small muted">{t('inv.nSelected', { n: picked.length })}</span>
                 {receivable && picked.some((l) => openQty(l) > 0) && <Button size="sm" onClick={() => setModal({ kind: 'receive', lines: picked.filter((l) => openQty(l) > 0) })}>{t('inv.po.receive')}</Button>}
                 {picked.some((l) => openQty(l) > 0) && <Button size="sm" onClick={() => cancelLines(picked.filter((l) => openQty(l) > 0))}>{t('inv.line.cancel')}</Button>}
-                {canPay && showCost && picked.some((l) => owedQty(l) > 0) && <Button size="sm" onClick={() => setModal({ kind: 'pay', lines: picked.filter((l) => owedQty(l) > 0) })}>{t('inv.line.pay')}</Button>}
+                {canPayHere && showCost && picked.some((l) => owedQty(l) > 0) && <Button size="sm" onClick={() => setModal({ kind: 'pay', lines: picked.filter((l) => owedQty(l) > 0) })}>{t('inv.line.pay')}</Button>}
               </div>
             )}
           </div>
@@ -184,8 +208,9 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                         <td>
                           <b>{item ? <Link className="plainlink" to={`/catalog/parts/${item.id}`}>{l.name}</Link> : l.name}</b>
                           <div className="muted small">
-                            {[l.part_number, l.ro_service_item_id ? t('inv.line.forJob') : null, st ? t('inv.line.onHand', { n: num(st.onHand, 2) }) : null].filter(Boolean).join(' · ')}
+                            {[l.line_type === 'sublet' ? t('u141.subletNote') : null, l.part_number, l.ro_service_item_id ? t('inv.line.forJob') : null, st ? t('inv.line.onHand', { n: num(st.onHand, 2) }) : null].filter(Boolean).join(' · ')}
                           </div>
+                          {notOnJobIds.has(l.id) && <div className="small" style={{ color: 'var(--amber-ink, #9A5B10)' }}>{t('u141.notOnJobRow', { no: jobNoOf != null ? `#${jobNo(jobNoOf)}` : '' })}</div>}
                           {Number(l.qty_cancelled) > 0 && <div className="small muted">{t('inv.line.nCancelled', { n: num(l.qty_cancelled, 2) })}</div>}
                           {ret > 0 && <div className="small" style={{ color: 'var(--amber-ink, #9A5B10)' }}>{t('inv.line.nReturned', { n: num(ret, 2) })}</div>}
                           {spare.has(l.id) && (
@@ -194,7 +219,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                             </div>
                           )}
                           {/* A part typed by hand: add it to the catalog (item 9, Nov 4). */}
-                          {!item && !linkOf[l.id] && can('edit_catalog') && <Link className="small" to={`/catalog/parts?typed=${encodeURIComponent(l.name)}`}>{t('tp.addLink')}</Link>}
+                          {!item && !linkOf[l.id] && l.line_type !== 'sublet' && can('edit_catalog') && <Link className="small" to={`/catalog/parts?typed=${encodeURIComponent(l.name)}`}>{t('tp.addLink')}</Link>}
                         </td>
                         <td className="num">{num(q, 2)}</td>
                         <td className="num">{num(l.qty_delivered, 2)}</td>
@@ -202,7 +227,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                           <Badge color={LINE_COLOR[state]}>{t(`inv.line.st.${state}`)}</Badge>
                           {showCost && Number(l.qty_delivered) > 0 && (
                             <div className="small" style={{ marginTop: 2, color: owedQty(l) > 0 ? (due && due < today ? 'var(--red)' : 'var(--muted)') : 'var(--green)' }}>
-                              {owedQty(l) > 0 ? (due && due < today ? t('inv.line.overdue') : t('inv.line.unpaid')) : t('inv.line.paid')}
+                              {ptPaid ? t('u142.paidByPt') : owedQty(l) > 0 ? (due && due < today ? t('inv.line.overdue') : t('inv.line.unpaid')) : t('inv.line.paid')}
                             </div>
                           )}
                         </td>
@@ -218,7 +243,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                             editable && { label: t('common.edit'), icon: 'edit', onClick: () => setModal({ kind: 'line', line: l }) },
                             receivable && openQty(l) > 0 && { label: t('inv.po.receive'), icon: 'packages', onClick: () => setModal({ kind: 'receive', lines: [l] }) },
                             canEdit && openQty(l) > 0 && { label: t('inv.line.cancelRest'), icon: 'x', onClick: () => cancelLines([l]) },
-                            canPay && showCost && owedQty(l) > 0 && { label: t('inv.line.pay'), icon: 'wallet', onClick: () => setModal({ kind: 'pay', lines: [l] }) },
+                            canPayHere && showCost && owedQty(l) > 0 && { label: t('inv.line.pay'), icon: 'wallet', onClick: () => setModal({ kind: 'pay', lines: [l] }) },
                             canEdit && Number(l.qty_delivered) - Number(l.qty_paid) - ret > 0 && { label: t('inv.line.correct'), icon: 'edit', onClick: () => setModal({ kind: 'correct', line: l }) },
                             canEdit && Number(l.qty_delivered) === 0 && { label: t('common.delete'), icon: 'trash', danger: true, onClick: () => deleteLine(l) },
                           ]} />
@@ -232,7 +257,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
           )}
           {editable && (
             <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
-              <div style={{ flex: '1 1 260px' }}>
+              {!subletShop && <div style={{ flex: '1 1 260px' }}>
                 <Picker options={partOptions} placeholder={t('inv.po.addPart')}
                   onPick={(o) => setModal({ kind: 'line', preset: { catalog_item_id: o.item.id, name: o.item.name, part_number: o.item.code, cost: o.item.cost, core_cost: o.item.has_core ? o.item.core_cost : 0, taxable: o.item.taxable, qty: 1 } })}
                   render={(o) => {
@@ -241,8 +266,8 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                       {st && <span className="small muted">{t('inv.line.onHand', { n: num(st.onHand, 2) })}</span>}
                       {showCost && <span className="small" style={{ fontWeight: 700 }}>{rp(o.item.cost)}</span>}</>
                   }} />
-              </div>
-              <Button icon="plus" onClick={() => setModal({ kind: 'line', preset: null })}>{t('inv.po.freeText')}</Button>
+              </div>}
+              <Button icon="plus" onClick={() => setModal({ kind: 'line', preset: null })}>{subletShop ? t('u141.typeSublet') : t('inv.po.freeText')}</Button>
             </div>
           )}
         </section>
@@ -270,12 +295,29 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
           <label className="mini" style={{ display: 'block' }}>{t('inv.col.supplier')}
             {editable && !anyDelivered ? (
               <select className="select" value={po.supplier_id} onChange={(e) => upd({ supplier_id: e.target.value })} aria-label={t('inv.col.supplier')}>
-                {data.suppliers.filter((s) => (s.active !== false && s.type !== 'sublet') || s.id === po.supplier_id).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {/* a sublet shop only for a job's PO with no parts on it (141) */}
+                {data.suppliers.filter((s) => (s.active !== false && (s.type !== 'sublet' || (po.ro_id && !hasParts))) || s.id === po.supplier_id).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             ) : <div><b>{sup?.name || '—'}</b></div>}
           </label>
           {sup && (sup.contact_name || sup.phone || sup.email) && <div className="small muted" style={{ marginTop: 4 }}>{[sup.contact_name, sup.phone, sup.email].filter(Boolean).join(' · ')}</div>}
           {sup?.account_number && <div className="small muted">{t('inv.po.account', { no: sup.account_number })}</div>}
+          {/* who pays this supplier (142) */}
+          <div className="sectionlabel">{t('u142.whoPays')}</div>
+          {po.ro_id ? (
+            <label className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
+              <input type="checkbox" checked={!!po.paid_by_pt} disabled={!editable || shopPaidSome} onChange={(e) => upd({ paid_by_pt: e.target.checked })} />
+              <span className="small">{t('u142.paidDirectPo', { payer: poPayer({ ...po, paid_by_pt: true }, data) })}</span>
+            </label>
+          ) : (
+            <>
+              <BlurInput className="input" disabled={!editable || shopPaidSome} value={po.paid_by_name || ''} placeholder={t('u142.shopPays')} list="po-payers"
+                aria-label={t('u142.whoPays')} maxLength={120} onCommit={(v) => upd({ paid_by_name: v.trim() || null })} />
+              <datalist id="po-payers">{payerNames.map((n) => <option key={n} value={n} />)}</datalist>
+              <div className="hint">{t('u142.stockPoPayerHint')}</div>
+            </>
+          )}
+          {shopPaidSome && <div className="hint">{t('u142.shopPaidSome')}</div>}
           <div className="row" style={{ gap: 8, marginTop: 10 }}>
             <label className="mini">{t('inv.po.terms')}
               <BlurInput className="input cell num" style={{ width: 80 }} disabled={!editable} value={po.payment_terms_days == null ? '' : String(po.payment_terms_days)} placeholder={String(sup?.payment_terms_days ?? '—')}
@@ -287,6 +329,12 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
             </label>
             <span className="small muted" style={{ alignSelf: 'flex-end', paddingBottom: 6 }}>{t('common.days')}</span>
           </div>
+          {showCost && (
+            <label className="row" style={{ gap: 6, alignItems: 'flex-start', marginTop: 10 }}>
+              <input type="checkbox" checked={Number(po.tax_rate) > 0} disabled={!editable || shopPaidSome} onChange={(e) => setTax(e.target.checked)} />
+              <span className="small">{t('u142.poTaxSwitch', { rate: num(Number(po.tax_rate) > 0 ? po.tax_rate : settings?.tax_rate ?? 11, 2) })}</span>
+            </label>
+          )}
           <div className="sectionlabel">{t('inv.po.notes')}</div>
           <BlurInput multiline rows={2} disabled={!editable} value={po.notes || ''} placeholder={t('inv.po.notesHint')} aria-label={t('inv.po.notes')} maxLength={2000}
             onCommit={(v) => upd({ notes: v.trim() || null })} />
@@ -328,7 +376,11 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
       </aside>
 
       {confirmEl}
+      <AddToJobModal open={modal?.kind === 'toJob'} onClose={close} jobNoText={jobNoOf != null ? jobNo(jobNoOf) : ''} showCost={showCost}
+        entries={modal?.kind === 'toJob' ? notOnJob : []} services={jobUse?.services || []} items={jobUse?.items || []} poNoOf={() => po.po_number}
+        onDone={(n, partial) => { close(); reload(); if (partial) toast(partial, 'err'); else toast(t('u141.done', { n })) }} />
       <LineModal open={modal?.kind === 'line'} onClose={close} po={po} line={modal?.line} preset={modal?.preset} showCost={showCost}
+        subletShop={subletShop} jobNoText={jobNoOf != null ? `#${jobNo(jobNoOf)}` : ''}
         onSaved={(row) => done(modal?.line ? t('inv.line.saved') : t('inv.line.added', { name: row.name }))} />
       <ReceiveModal open={modal?.kind === 'receive'} onClose={close} po={po} supplier={sup} lines={modal?.lines || []}
         onDone={(n, partial) => { if (partial) { close(); reload(); toast(partial, 'err') } else done(t('inv.receive.done', { n })) }} />
