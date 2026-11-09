@@ -82,6 +82,12 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const ptPaid = poPaidByPt(po)
   const payer = poPayer(po, data)
   const shopPaidSome = lines.some((l) => Number(l.qty_paid) > 0)
+  // 142c: only a company that pays its suppliers directly has its job POs paid by the PT, and an invoiced job's PO
+  // keeps its payer (void the invoice to change it)
+  const poJob = po.ro_id ? data.jobById[po.ro_id] : null
+  const poCompany = poJob ? data.customerById[poJob.customer_id] : null
+  const jobInvoiced = poJob?.order_status === 'invoice'
+  const ptNotAllowed = !po.paid_by_pt && !poCompany?.paid_direct
   const payerNames = [...new Set(data.customers.map((c) => c.payer_name || c.display_name).filter(Boolean))].sort()
   const canPayHere = canPay && !ptPaid
   const hasParts = lines.some((l) => l.line_type !== 'sublet')
@@ -96,12 +102,12 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const done = (text) => { close(); setSel(new Set()); reload(); if (text) toast(text) }
   const upd = (patch) => run(() => supabase.from('purchase_orders').update(patch).eq('id', po.id))
   // the supplier's PPN on this PO (142): on = the shop's rate (its unpaid lines get PPN), off = 0%
+  // (the PO's rate first: the database refuses it once a payment or a return is recorded, and then nothing has changed;
+  // lines get PPN only when none of them has it yet, so a line kept without PPN on purpose stays so; 142c)
   const setTax = (on) => run(async () => {
-    if (on) {
-      const a = await supabase.from('purchase_order_items').update({ taxable: true }).eq('po_id', po.id).eq('qty_paid', 0).eq('taxable', false)
-      if (a.error) return a
-    }
-    return supabase.from('purchase_orders').update({ tax_rate: on ? Number(settings?.tax_rate ?? 11) : 0 }).eq('id', po.id)
+    const a = await supabase.from('purchase_orders').update({ tax_rate: on ? Number(settings?.tax_rate ?? 11) : 0 }).eq('id', po.id)
+    if (a.error || !on || lines.some((l) => l.taxable)) return a
+    return supabase.from('purchase_order_items').update({ taxable: true }).eq('po_id', po.id).eq('qty_paid', 0).eq('taxable', false)
   })
 
   async function markOrdered() {
@@ -306,7 +312,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
           <div className="sectionlabel">{t('u142.whoPays')}</div>
           {po.ro_id ? (
             <label className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
-              <input type="checkbox" checked={!!po.paid_by_pt} disabled={!editable || shopPaidSome} onChange={(e) => upd({ paid_by_pt: e.target.checked })} />
+              <input type="checkbox" checked={!!po.paid_by_pt} disabled={!editable || shopPaidSome || jobInvoiced || ptNotAllowed} onChange={(e) => upd({ paid_by_pt: e.target.checked })} />
               <span className="small">{t('u142.paidDirectPo', { payer: poPayer({ ...po, paid_by_pt: true }, data) })}</span>
             </label>
           ) : (
@@ -318,6 +324,8 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
             </>
           )}
           {shopPaidSome && <div className="hint">{t('u142.shopPaidSome')}</div>}
+          {po.ro_id && !shopPaidSome && jobInvoiced && <div className="hint">{t('u142.payerInvoiced')}</div>}
+          {po.ro_id && !shopPaidSome && !jobInvoiced && ptNotAllowed && <div className="hint">{t('u142.payerShopCompany')}</div>}
           <div className="row" style={{ gap: 8, marginTop: 10 }}>
             <label className="mini">{t('inv.po.terms')}
               <BlurInput className="input cell num" style={{ width: 80 }} disabled={!editable} value={po.payment_terms_days == null ? '' : String(po.payment_terms_days)} placeholder={String(sup?.payment_terms_days ?? '—')}
@@ -331,7 +339,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
           </div>
           {showCost && (
             <label className="row" style={{ gap: 6, alignItems: 'flex-start', marginTop: 10 }}>
-              <input type="checkbox" checked={Number(po.tax_rate) > 0} disabled={!editable || shopPaidSome} onChange={(e) => setTax(e.target.checked)} />
+              <input type="checkbox" checked={Number(po.tax_rate) > 0} disabled={!editable || shopPaidSome || returns.length > 0} onChange={(e) => setTax(e.target.checked)} />
               <span className="small">{t('u142.poTaxSwitch', { rate: num(Number(po.tax_rate) > 0 ? po.tax_rate : settings?.tax_rate ?? 11, 2) })}</span>
             </label>
           )}

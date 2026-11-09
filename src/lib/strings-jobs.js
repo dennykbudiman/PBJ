@@ -379,7 +379,7 @@ export const jobsId = {
   "db:Enter a reason for the adjustment": "Masukkan alasan penyesuaian.",
   "db:This part already has stock entries; use Adjust stock to correct the count": "Part ini sudah punya catatan stok; pakai Sesuaikan stok untuk mengoreksi.",
   "db:That is more than the balance due on this invoice": "Itu lebih dari sisa tagihan invoice ini.",
-  "db:Payments received (Rp": "Pembayaran yang diterima lebih dari total invoice. Kembalikan selisihnya dulu.",
+  "db:Payments received (Rp": "Pembayaran yang diterima lebih dari yang harus dibayar ke bengkel di invoice ini. Kembalikan selisihnya dulu.",
   "db:This credit (Rp": "Kredit ini lebih dari sisa tagihan. Terapkan sebagian saja.",
   "db:A credit can only be applied to a job of the same company": "Kredit hanya bisa diterapkan ke pekerjaan perusahaan yang sama.",
   "db:Only an unused, manually issued credit can be deleted": "Hanya kredit manual yang belum dipakai yang bisa dihapus.",

@@ -90,7 +90,11 @@ begin
     if not v_job_open or v_taken then
       raise exception 'This job is invoiced or closed; its lines can''t be linked to a PO';
     end if;
-    -- a PO line is what its job line is: a part, or outside work
+    -- a PO line is what its job line is: a part, or outside work (a delivered line can't become the other kind by
+    -- being linked, 142c)
+    if tg_op = 'UPDATE' and old.qty_delivered > 0 and v_job_type is distinct from old.line_type then
+      raise exception 'This line has deliveries; it can''t change between part and sublet';
+    end if;
     new.line_type := v_job_type;
     -- a typed-in line added to the catalog after it arrived (138) may or may not have been counted into stock, so it
     -- can't be tied to a job line now: put the catalog part on the job instead (it comes off the shelf at invoicing)

@@ -60,13 +60,27 @@ export default function Dashboard() {
             <>
               <h2 className="dash-h">{t('dash.money')}</h2>
               <div className="dashgrid money">
-                <Tile to="/reports/sales" icon="receipt" label={t('dash.invoicedMtd')} value={rp(m.invoiced_mtd)}
+                <Tile to="/reports/sales" icon="receipt" label={Number(m.settled_mtd) > 0 ? t('u142.dashInvoicedShop') : t('dash.invoicedMtd')} value={rp(m.invoiced_mtd)}
                   note={change == null ? t('dash.nInvoices', { n: m.invoices_mtd }) : t('dash.vsLast', { pct: `${change > 0 ? '+' : ''}${change}%`, amount: rp(m.invoiced_prev) })} />
                 <Tile to="/reports/payments" icon="dollar" label={t('dash.receivedMtd')} value={rp(m.received_mtd)} note={t('dash.receivedNote')} />
                 <Tile to="/reports/aging" icon="users" label={t('dash.owed')} value={rp(m.outstanding)} note={t('dash.openInvoices', { n: m.open_invoices })} />
                 <Tile to="/reports/aging" icon="clock" label={t('dash.overdue')} value={rp(m.overdue)} danger={Number(m.overdue) > 0}
                   note={Number(m.overdue) ? t('dash.overdueNote', { n: m.overdue_invoices, amount: rp(m.overdue_90) }) : t('dash.noneOverdue')} />
               </div>
+              {/* what the PTs paid their suppliers directly this month (142c): not the shop's money, shown per PT */}
+              {(m.settled_by_pt || []).length > 0 && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div className="row" style={{ alignItems: 'baseline', marginBottom: 6 }}>
+                    <b>{t('u142.dashSettled')}</b><div className="spacer" />
+                    {(can('view_costs') || can('pay_supplier_bills')) && <Link className="small" to="/inventory/pt-bills">{t('u142.dashSettledLink')} →</Link>}
+                  </div>
+                  <div className="small muted" style={{ marginBottom: 8 }}>{t('u142.dashSettledSub')}</div>
+                  {m.settled_by_pt.map((x) => (
+                    <div key={x.payer} className="trow"><span>{x.payer} <span className="muted small">· {t('dash.nInvoices', { n: x.invoices })}</span></span><span className="trow-val">{rp(x.amount)}</span></div>
+                  ))}
+                  {m.settled_by_pt.length > 1 && <div className="trow strong"><span>{t('u142.dashSettledTotal')}</span><span className="trow-val">{rp(m.settled_mtd)}</span></div>}
+                </div>
+              )}
               {d.series && <MonthChart series={d.series} />}
             </>
           )}

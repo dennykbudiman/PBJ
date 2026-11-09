@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Badge, Button, Modal, Select, useConfirm, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
@@ -228,9 +228,21 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
   )
 }
 
-// What the job earns the shop: revenue minus cost on approved (and still pending) work.
+// What the job earns the shop: revenue minus cost on approved (and still pending) work. Parts and sublet the PT paid
+// its supplier for directly earn the shop nothing, so their share is left out (142c).
 export function ProfitCard({ job }) {
   const { t } = useT()
+  const [paid, setPaid] = useState({})
+  const roId = job.ro.id
+  const settled = Number(job.ro.settled_direct) || 0
+  const itemsKey = job.items.map((l) => `${l.id}:${l.qty}:${l.po_item_id || ''}`).join(',')
+  useEffect(() => {
+    let live = true
+    if (!settled) { setPaid({}); return undefined }
+    supabase.rpc('job_paid_shares', { p_ro: roId }).then(({ data }) => { if (live) setPaid(data || {}) })
+    return () => { live = false }
+  }, [roId, settled, itemsKey])
+  const own = (l) => 1 - (Number(paid[l.id]) || 0)
   const liveSvcs = job.services.filter((s) => s.approval_status === 'approved' || s.approval_status === 'pending')
   const live = new Set(liveSvcs.map((s) => s.id))
   // A flat-rate service earns its flat price, not the sum of its lines: scale its lines to it.
@@ -241,14 +253,14 @@ export function ProfitCard({ job }) {
   }
   const lines = job.items.filter((l) => live.has(l.service_id))
   const sum = (type, f) => lines.filter((l) => l.item_type === type).reduce((a, l) => a + f(l), 0)
-  const rev = (l) => lineNet(l) * scale[l.service_id]
+  const rev = (l) => lineNet(l) * scale[l.service_id] * (l.item_type === 'labor' ? 1 : own(l))
   const partsRev = Math.round(sum('part', rev))
-  const partsCost = sum('part', (l) => Math.round(Number(l.cost) * Number(l.qty)))
+  const partsCost = sum('part', (l) => Math.round(Number(l.cost) * Number(l.qty) * own(l)))
   // labour "tidak ditagih" (142) earns nothing
   const laborRev = Number(job.ro.labor_waived) > 0 ? 0 : Math.round(sum('labor', rev))
   const laborCost = sum('labor', (l) => Math.round(Number(l.cost) * Number(l.qty)))
   const subRev = Math.round(sum('sublet', rev))
-  const subCost = sum('sublet', (l) => Math.round(Number(l.cost) * Number(l.qty)))
+  const subCost = sum('sublet', (l) => Math.round(Number(l.cost) * Number(l.qty) * own(l)))
   const pct = (rev, cost) => (rev > 0 ? Math.round(((rev - cost) / rev) * 100) : 0)
   const billed = sum('labor', (l) => Number(l.qty))
   const worked = sum('labor', (l) => Number(l.hours_worked) || 0)

@@ -69,10 +69,25 @@ WITH p AS (
 revoke all on public.customers_read from public, anon;
 grant select on public.customers_read to authenticated;
 
+-- A paying PT's name, spelt one way (142c): " pt  Pulau Indah" and "PT PULAU INDAH" are the same PT. The spelling
+-- used is the company of that name, else the first company that names it as its paying PT; any other name (a drum's
+-- or a stock PO's payer) just has its spaces tidied.
+create or replace function public.payer_key(p text) returns text
+language sql immutable as $$ select nullif(lower(regexp_replace(btrim(coalesce(p, '')), '\s+', ' ', 'g')), '') $$;
+create or replace function public.canon_payer(p text) returns text
+language sql stable security definer set search_path = public as $$
+  select case when payer_key(p) is null then null else coalesce(
+    (select coalesce(nullif(btrim(c.payer_name), ''), c.display_name) from customers c
+      where payer_key(coalesce(nullif(btrim(c.payer_name), ''), c.display_name)) = payer_key(p)
+      order by payer_key(c.display_name) = payer_key(p) desc, c.created_at, c.id limit 1),
+    regexp_replace(btrim(p), '\s+', ' ', 'g')) end
+$$;
+revoke execute on function public.canon_payer(text) from public, anon, authenticated;
+
 -- the paying PT a company belongs to: its "PT pembayar", else its own name
 create or replace function public.payer_of(p_customer uuid) returns text
 language sql stable security definer set search_path = public as $$
-  select coalesce(nullif(btrim(payer_name), ''), display_name) from customers
+  select canon_payer(coalesce(nullif(btrim(payer_name), ''), display_name)) from customers
    where id = p_customer and (auth.uid() is null or (select is_staff()) or id in (select fleet_customer_ids()))
 $$;
 revoke execute on function public.payer_of(uuid) from public, anon;
@@ -81,7 +96,8 @@ grant execute on function public.payer_of(uuid) to authenticated;
 -- ===== 2. Job figures: labour not charged, settled outside the shop ==============================================
 alter table public.repair_orders add column if not exists labor_waived numeric(14,0) not null default 0;
 alter table public.repair_orders add column if not exists settled_direct numeric(14,0) not null default 0;
-grant select (labor_waived, settled_direct) on public.repair_orders to authenticated;
+-- money, like the other totals: read through repair_orders_read only (an earlier copy of 142 granted them; 142c)
+revoke select (labor_waived, settled_direct) on public.repair_orders from authenticated;
 
 -- repair orders view (from 136) with the two figures at the end (money, like the other totals)
 create or replace view public.repair_orders_read with (security_barrier = true) as
@@ -139,7 +155,7 @@ declare
   v_subtotal numeric; v_tax numeric; v_paid numeric; v_total numeric; v_taxable_fees numeric := 0; v_rate numeric;
   line_sum numeric; line_taxable numeric; svc_total numeric; svc_disc numeric; svc_taxable numeric;
   c_p numeric; c_l numeric; c_o numeric; c_f numeric; c_disc numeric; k numeric; rem numeric; any_taxable boolean;
-  c_lt numeric; c_ld numeric; c_pst numeric; c_set numeric; v_waived numeric := 0; v_set_pre numeric := 0; v_set_tax numeric := 0;
+  c_lt numeric; c_ld numeric; c_pst numeric; c_set numeric; c_po numeric; v_waived numeric := 0; v_set_pre numeric := 0; v_set_tax numeric := 0;
   v_settled numeric := 0; v_due numeric; v_taxable_raw numeric; v_share numeric;
   f record; d record;
 begin
@@ -177,21 +193,26 @@ begin
            coalesce(sum(discount),0), bool_or(taxable),
            coalesce(sum(net) filter (where item_type = 'labor' and taxable),0),
            coalesce(sum(discount) filter (where item_type = 'labor'),0),
-           -- parts and sublet the PT pays for itself (142): not bought by the shop (see line_paid_outside)
-           coalesce(sum(net + round(core_charge * qty)) filter (where cu.paid_direct and item_type in ('part', 'sublet') and taxable
-                                                                  and line_paid_outside(id, catalog_item_id)),0),
-           coalesce(sum(net + round(core_charge * qty)) filter (where cu.paid_direct and item_type in ('part', 'sublet')
-                                                                  and line_paid_outside(id, catalog_item_id)),0)
+           -- parts and sublet the PT pays for itself (142): not bought by the shop; the share of each line the PT's
+           -- POs (or drums) cover (142c: by quantity, see line_paid_share)
+           coalesce(sum((net + round(core_charge * qty)) * line_paid_share(id, catalog_item_id, qty))
+                      filter (where cu.paid_direct and item_type in ('part', 'sublet') and taxable),0),
+           coalesce(sum((net + round(core_charge * qty)) * line_paid_share(id, catalog_item_id, qty))
+                      filter (where cu.paid_direct and item_type in ('part', 'sublet')),0)
       into line_sum, line_taxable, c_p, c_l, c_o, c_f, c_disc, any_taxable, c_lt, c_ld, c_pst, c_set
       from ro_service_items where service_id = s.id;
     if s.flat_price is not null then
       if line_sum > 0 then
         k := s.flat_price / line_sum;
+        c_po := c_p + c_o;
         c_p := round(c_p * k); c_l := round(c_l * k); c_o := round(c_o * k); c_f := round(c_f * k);
         rem := s.flat_price - (c_p + c_l + c_o + c_f);
         if c_p >= greatest(c_l, c_o, c_f) then c_p := c_p + rem; elsif c_l >= greatest(c_o, c_f) then c_l := c_l + rem;
         elsif c_o >= c_f then c_o := c_o + rem; else c_f := c_f + rem; end if;
-        line_taxable := line_taxable * k; c_lt := c_lt * k; c_pst := c_pst * k; c_set := c_set * k;
+        line_taxable := line_taxable * k; c_lt := c_lt * k; c_pst := c_pst * k;
+        -- what the PT settled: its share of the parts and sublet as rounded above, so a package the PT settles in full
+        -- leaves exactly Rp 0 (142c)
+        c_set := case when c_po > 0 then c_set * (c_p + c_o) / c_po else 0 end;
       else
         -- no priced lines: taxed like its lines (any taxable one), or with no lines, like new items (Settings)
         c_p := 0; c_l := s.flat_price; c_o := 0; c_f := 0;
@@ -281,8 +302,9 @@ begin
     subtotal = v_subtotal, taxable_base = v_taxable, tax_total = v_tax, total = v_total,
     labor_waived = round(v_waived), settled_direct = v_settled,
     paid_total = v_paid, balance = v_total - v_settled - v_paid,
-    -- nothing left for the shop to collect counts as paid (with no settlement: paid once payments cover the total)
-    payment_status = case when v_total > 0 and v_paid >= v_total - v_settled then 'paid'
+    -- paid once payments cover what the shop is owed; a job the PT settles in full counts as paid only once it is
+    -- invoiced (that path is above), so an estimate doesn't show "Lunas" (142c)
+    payment_status = case when v_total - v_settled > 0 and v_paid >= v_total - v_settled then 'paid'
                           when v_paid > 0 then 'partial' else 'unpaid' end
   where id = p_ro;
 end $function$;
@@ -312,9 +334,19 @@ begin
   if tg_op = 'INSERT' then
     new.paid_by_pt := new.ro_id is not null
       and coalesce((select c.paid_direct from repair_orders r join customers c on c.id = r.customer_id where r.id = new.ro_id), false);
-  elsif (new.paid_by_pt is distinct from old.paid_by_pt or new.paid_by_name is distinct from old.paid_by_name)
-        and exists (select 1 from purchase_order_items where po_id = new.id and qty_paid > 0) then
-    raise exception 'The shop has paid lines on this PO; undo those payments before changing who pays it';
+  elsif new.paid_by_pt is distinct from old.paid_by_pt or new.paid_by_name is distinct from old.paid_by_name then
+    if exists (select 1 from purchase_order_items where po_id = new.id and qty_paid > 0) then
+      raise exception 'The shop has paid lines on this PO; undo those payments before changing who pays it';
+    end if;
+    -- the job's invoice was made with this payer (142c); the one-off clean-up (no one signed in) may still set it
+    if auth.uid() is not null and exists (select 1 from repair_orders where id = new.ro_id and order_status = 'invoice') then
+      raise exception 'This PO''s job is invoiced; void the invoice to change who pays the PO';
+    end if;
+    -- only a company with "Part dibayar langsung" has its job POs paid by the PT (142c, Denny Nov 9)
+    if new.paid_by_pt and new.ro_id is not null
+       and not coalesce((select c.paid_direct from repair_orders r join customers c on c.id = r.customer_id where r.id = new.ro_id), false) then
+      raise exception 'This company pays the shop, so its PO can''t be paid by the PT';
+    end if;
   end if;
   if new.ro_id is null then new.paid_by_pt := false; else new.paid_by_name := null; end if;
   new.paid_by_name := nullif(btrim(new.paid_by_name), '');
@@ -364,7 +396,7 @@ begin
   if auth.uid() is not null and not (has_permission('view_costs') or has_permission('pay_supplier_bills')) then raise exception 'Not allowed'; end if;
   m1 := (m0 + interval '1 month')::date;
   return jsonb_build_object('month', m0, 'lines', coalesce((select jsonb_agg(x order by x.payer, x.supplier, x.delivered_at, x.po_number) from (
-    select coalesce(case when po.ro_id is not null then payer_of(r.customer_id) end, po.paid_by_name) as payer,
+    select coalesce(case when po.ro_id is not null then payer_of(r.customer_id) end, canon_payer(po.paid_by_name)) as payer,
            s.name as supplier, po.id as po_id, po.po_number, r.id as ro_id, r.job_number, c.display_name as company, v.plate,
            pi.id as line_id, pi.name, pi.line_type, pi.delivered_at, pi.supplier_invoice_no,
            pi.qty_delivered - po_qty_returned(pi.id) as qty, pi.cost,
@@ -378,7 +410,8 @@ end $$;
 revoke execute on function public.pt_supplier_bills(date) from public, anon;
 grant execute on function public.pt_supplier_bills(date) to authenticated;
 
--- ===== 4. The dashboard's supplier bills leave out POs the PT pays (139's dashboard_summary, one line changed) ======
+-- ===== 4. Dashboard (139's dashboard_summary): the shop's supplier bills leave out POs the PT pays; invoiced = the
+-- shop's own share, with what each PT settled directly listed (142c) ==================================================
 create or replace function public.dashboard_summary()
  returns jsonb language plpgsql stable security definer set search_path = public as $function$
 declare
@@ -415,7 +448,9 @@ begin
     'returns_open', (select count(distinct coalesce(batch_id, id)) from returns where status <> 'refunded')
   );
   if v_money then
-    with inv as (select total, invoiced_at from repair_orders where order_status = 'invoice' and invoiced_at >= shop_start(p0) and invoiced_at < t_tomorrow),
+    -- invoiced = the shop's own share; what the PTs settled with their suppliers is listed per PT (142c, Denny Nov 9)
+    with inv as (select total - settled_direct as total, settled_direct, customer_id, invoiced_at from repair_orders
+                  where order_status = 'invoice' and invoiced_at >= shop_start(p0) and invoiced_at < t_tomorrow),
          open_inv as (select balance, coalesce(due_date, shop_day(invoiced_at)) as due from repair_orders where order_status = 'invoice' and balance > 0)
     select jsonb_build_object(
       'invoiced_mtd', (select coalesce(sum(total), 0) from inv where invoiced_at >= shop_start(m0)),
@@ -427,11 +462,15 @@ begin
       'open_invoices', (select count(*) from open_inv),
       'overdue', (select coalesce(sum(balance), 0) from open_inv where due < d),
       'overdue_invoices', (select count(*) from open_inv where due < d),
-      'overdue_90', (select coalesce(sum(balance), 0) from open_inv where due < d - 90))
+      'overdue_90', (select coalesce(sum(balance), 0) from open_inv where due < d - 90),
+      'settled_mtd', (select coalesce(sum(settled_direct), 0) from inv where invoiced_at >= shop_start(m0)),
+      'settled_by_pt', (select coalesce(jsonb_agg(jsonb_build_object('payer', x.payer, 'amount', x.amount, 'invoices', x.n) order by x.amount desc, x.payer), '[]')
+                          from (select payer_of(customer_id) as payer, sum(settled_direct) as amount, count(*) as n from inv
+                                 where invoiced_at >= shop_start(m0) and settled_direct > 0 group by 1) x))
     into money;
     -- six months in one pass per table
     with months as (select g::date as ms from generate_series(s0::timestamp, m0::timestamp, interval '1 month') g),
-         inv as (select date_trunc('month', invoiced_at at time zone tz)::date as ms, sum(total) as v from repair_orders
+         inv as (select date_trunc('month', invoiced_at at time zone tz)::date as ms, sum(total - settled_direct) as v from repair_orders
                  where order_status = 'invoice' and invoiced_at >= shop_start(s0) and invoiced_at < t_tomorrow group by 1),
          pay as (select date_trunc('month', paid_at at time zone tz)::date as ms, sum(case when kind = 'payment' then amount else -amount end) as v from payments
                  where source = 'manual' and paid_at >= shop_start(s0) and paid_at < t_tomorrow group by 1),
@@ -451,6 +490,25 @@ begin
   end if;
   return out || jsonb_build_object('money', money, 'series', series, 'bills', bills);
 end $function$;
+
+-- Hari ini (139's day_summary): invoiced = the shop's own share too (142c; patched in place, like convert_to_invoice)
+do $$
+declare src text; changed text;
+begin
+  src := pg_get_functiondef('public.day_summary(date)'::regprocedure);
+  changed := replace(replace(src,
+    $a$'total', case when v_money then r.total end)$a$,
+    $a$'total', case when v_money then r.total - r.settled_direct end)$a$),
+    $a$(select coalesce(sum(total), 0) from repair_orders$a$,
+    $a$(select coalesce(sum(total - settled_direct), 0) from repair_orders$a$);
+  if changed = src then
+    if position('r.total - r.settled_direct' in src) = 0 then raise exception 'day_summary: totals not found as expected'; end if;
+  elsif position('r.total - r.settled_direct' in changed) = 0 or position('sum(total - settled_direct)' in changed) = 0 then
+    raise exception 'day_summary: totals not found as expected';
+  else
+    execute changed;
+  end if;
+end $$;
 
 -- ===== 5. Sales report: labour not charged and what the PT settled directly, at the end ==========================
 drop function if exists public.report_sales(date, date);
@@ -492,7 +550,8 @@ create table if not exists public.oil_drums (
 create index if not exists oil_drums_item_idx on public.oil_drums (catalog_item_id, opened_on);
 alter table public.oil_drums enable row level security;
 revoke all on public.oil_drums from anon, authenticated;
-grant select, delete on public.oil_drums to authenticated;
+-- the price per litre isn't readable from the table: drum_report shows it to people who see costs (142c)
+grant select (id, catalog_item_id, litres, paid_by_name, opened_on, po_item_id, note, created_by, created_at), delete on public.oil_drums to authenticated;
 grant insert (catalog_item_id, litres, cost_per_l, paid_by_name, opened_on, po_item_id, note),
       update (catalog_item_id, litres, cost_per_l, paid_by_name, opened_on, po_item_id, note) on public.oil_drums to authenticated;
 drop policy if exists "staff read oil_drums" on public.oil_drums;
@@ -548,6 +607,27 @@ end $function$;
 drop trigger if exists log_oil_drums on public.oil_drums;
 create trigger log_oil_drums after insert or update or delete on public.oil_drums for each row execute function public.log_activity();
 
+-- a drum added, changed or removed: open jobs of "dibayar langsung" companies with that oil follow (drum oil is paid
+-- by the PTs, 142c)
+create or replace function public.drum_to_jobs() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  for r in select distinct ro.id from ro_service_items i join ro_services s on s.id = i.service_id
+             join repair_orders ro on ro.id = s.ro_id join customers c on c.id = ro.customer_id
+            where i.catalog_item_id in (case when tg_op <> 'INSERT' then old.catalog_item_id end,
+                                        case when tg_op <> 'DELETE' then new.catalog_item_id end)
+              and ro.order_status = 'estimate' and ro.closed_at is null and c.paid_direct
+            order by ro.id loop
+    perform recalc_repair_order(r.id);
+  end loop;
+  return null;
+end $$;
+revoke execute on function public.drum_to_jobs() from public, anon, authenticated;
+drop trigger if exists oil_drums_to_jobs on public.oil_drums;
+create trigger oil_drums_to_jobs after insert or update of catalog_item_id or delete on public.oil_drums
+  for each row execute function public.drum_to_jobs();
+
 -- Where each drum's oil went: invoiced job lines of that oil, oldest invoice first, fill the drums in the order they
 -- were opened (first in, first out); anything beyond the last drum counts on the last one (it shows below zero). Only
 -- invoices from the first drum's opening day on count (oil sold before that came from somewhere else).
@@ -587,7 +667,7 @@ begin
       from alloc a where a.litres > 0 group by a.drum_id, a.customer_id),
   drums as (
     select dr.catalog_item_id, jsonb_build_object(
-             'id', dr.id, 'litres', dr.litres, 'cost_per_l', case when v_money then dr.cost_per_l end, 'paid_by', dr.paid_by_name, 'opened_on', dr.opened_on,
+             'id', dr.id, 'litres', dr.litres, 'cost_per_l', case when v_money then dr.cost_per_l end, 'paid_by', canon_payer(dr.paid_by_name), 'opened_on', dr.opened_on,
              'po_item_id', dr.po_item_id, 'note', dr.note, 'last', dr.last,
              'used', coalesce((select sum(litres) from per_co where drum_id = dr.id), 0),
              'left', dr.litres - coalesce((select sum(litres) from per_co where drum_id = dr.id), 0),
@@ -600,7 +680,7 @@ begin
                                                                   'amount', case when v_money then round(x.litres * dr.cost_per_l) end)
                                                 order by x.payer nulls last)
                                  from (select pc.payer, sum(pc.litres) as litres from per_co pc
-                                        where pc.drum_id = dr.id and (pc.payer is null or lower(btrim(pc.payer)) <> lower(btrim(dr.paid_by_name)))
+                                        where pc.drum_id = dr.id and (pc.payer is null or payer_key(pc.payer) <> payer_key(dr.paid_by_name))
                                         group by pc.payer) x), '[]')
            ) as j, dr.opened_on, dr.created_at, dr.id
       from dr)
@@ -699,7 +779,7 @@ revoke execute on function public.stamp_purchase_order() from public, anon, auth
 create or replace function public.sync_po_line_to_job(p_line uuid, p_prev numeric) returns void
 language plpgsql security definer set search_path = public as $$
 declare p purchase_order_items%rowtype; l ro_service_items%rowtype; v_rate numeric; v_m numeric; v_jc numeric; v_new numeric;
-        v_cost numeric; v_price numeric; v_sug boolean;
+        v_cost numeric; v_price numeric; v_sug boolean; v_flag text;
 begin
   select * into p from purchase_order_items where id = p_line;
   if not found or p.ro_service_item_id is null or coalesce(p.cost, 0) <= 0 or p.qty_cancelled >= p.qty_ordered then return; end if;
@@ -712,6 +792,9 @@ begin
   end if;
   v_m := coalesce((select default_markup_pct from shop_settings limit 1), 0);
   v_jc := po_to_job_cost(p.cost, p.taxable, v_rate);
+  -- the job's cost already is this PO cost (e.g. typed on the job, then sent to the PO without the PPN): it stays as
+  -- typed, not 1 rupiah off from going there and back (142c)
+  if coalesce(l.cost, 0) > 0 and job_to_po_cost(l.cost, p.taxable, v_rate) = p.cost then v_jc := l.cost; end if;
   v_new := round(v_jc * (1 + v_m / 100));
   -- the price was a suggestion from the cost (the job's own cost, the PO line's before this change, or another PO line's)
   v_sug := l.price = round(coalesce(l.cost, 0) * (1 + v_m / 100))
@@ -722,7 +805,11 @@ begin
   v_cost := v_jc;
   v_price := case when coalesce(l.price, 0) = 0 or coalesce(v_sug, false) then v_new else l.price end;
   if v_cost is distinct from l.cost or v_price is distinct from l.price then
+    -- this change came from this PO line: the job line doesn't send it on to its other PO lines (142c)
+    v_flag := current_setting('axle.po_to_job', true);
+    perform set_config('axle.po_to_job', 'on', true);
     update ro_service_items set cost = v_cost, price = v_price where id = l.id;
+    perform set_config('axle.po_to_job', coalesce(nullif(v_flag, ''), 'off'), true);
     -- the totals trigger skips writes made inside other triggers, so the job's totals are worked out here
     perform recalc_repair_order((select ro_id from ro_services where id = l.service_id));
   end if;
@@ -781,7 +868,8 @@ begin
   end if;
   -- the cost, on its current PO line, while that line is unpaid and not cancelled: the two share one cost, the last
   -- one changed wins (Denny, Nov 9)
-  if new.cost is distinct from old.cost and coalesce(new.cost, 0) > 0 then
+  -- (not when the change came from one of its PO lines: another supplier's line keeps its own cost, 142c)
+  if new.cost is distinct from old.cost and coalesce(new.cost, 0) > 0 and coalesce(current_setting('axle.po_to_job', true), '') <> 'on' then
     perform set_config('axle.job_to_po', 'on', true);
     -- (in PO terms: before the supplier's PPN while the shop is non-PKP, 142)
     update purchase_order_items p set cost = job_to_po_cost(new.cost, p.taxable, po.tax_rate)
@@ -860,22 +948,38 @@ revoke execute on function public.add_po_lines_to_job(uuid[], uuid, text) from p
 grant execute on function public.add_po_lines_to_job(uuid[], uuid, text) to authenticated;
 
 -- ===== 8. Jobs and their POs kept in step (review of 142) ===========================================================
--- A part or sublet line the PT paid for itself, not the shop: one ordered on the job's PO when every PO line for it is
--- on a PO the PT pays; a stocked part only when it is drum oil (the PTs settle drums between them); anything else
--- (typed, not from the shop's stock or a shop PO) wasn't bought by the shop either.
-create or replace function public.line_paid_outside(p_item uuid, p_cat uuid) returns boolean
+-- How much of a part or sublet line the PT paid for itself, not the shop (0 to 1, 142c: by quantity):
+--  * ordered on POs: the quantity on POs the PT pays (ordered, less cancelled and returned), out of the job's quantity;
+--    the rest came from the shop (its stock, or a PO the shop pays);
+--  * a stocked part with no PO: all of it when it is drum oil (the PTs settle drums between them), else none (shop stock);
+--  * anything else (typed, not from the shop's stock or a shop PO): all of it, the shop didn't buy it.
+drop function if exists public.line_paid_outside(uuid, uuid);
+create or replace function public.line_paid_share(p_item uuid, p_cat uuid, p_qty numeric) returns numeric
 language sql stable security definer set search_path = public as $$
   select case
+    when coalesce(p_qty, 0) <= 0 then 0
     when exists (select 1 from purchase_order_items o where o.ro_service_item_id = p_item and o.qty_cancelled < o.qty_ordered)
-      then not exists (select 1 from purchase_order_items o join purchase_orders po on po.id = o.po_id
-                        where o.ro_service_item_id = p_item and o.qty_cancelled < o.qty_ordered
-                          and not (po.paid_by_pt or po.paid_by_name is not null))
+      then least(coalesce((select sum(greatest(o.qty_ordered - o.qty_cancelled - po_qty_returned(o.id), 0))
+                             from purchase_order_items o join purchase_orders po on po.id = o.po_id
+                            where o.ro_service_item_id = p_item and (po.paid_by_pt or po.paid_by_name is not null)), 0) / p_qty, 1)
     when p_cat is not null and exists (select 1 from catalog_items ci where ci.id = p_cat and ci.track_inventory)
-      then exists (select 1 from oil_drums d where d.catalog_item_id = p_cat)
-    else true
+      then case when exists (select 1 from oil_drums d where d.catalog_item_id = p_cat) then 1 else 0 end
+    else 1
   end
 $$;
-revoke execute on function public.line_paid_outside(uuid, uuid) from public, anon, authenticated;
+revoke execute on function public.line_paid_share(uuid, uuid, numeric) from public, anon, authenticated;
+
+-- the job page's profit card: the share of each line the PT paid for (the shop earns nothing on it)
+create or replace function public.job_paid_shares(p_ro uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_object_agg(i.id, line_paid_share(i.id, i.catalog_item_id, i.qty)), '{}')
+    from repair_orders r join customers c on c.id = r.customer_id
+    join ro_services s on s.ro_id = r.id join ro_service_items i on i.service_id = s.id
+   where r.id = p_ro and c.paid_direct and i.item_type in ('part', 'sublet') and has_permission('view_costs') and is_staff()
+     and line_paid_share(i.id, i.catalog_item_id, i.qty) > 0
+$$;
+revoke execute on function public.job_paid_shares(uuid) from public, anon;
+grant execute on function public.job_paid_shares(uuid) to authenticated;
 
 -- a company's "dibayar langsung" / "jasa tidak ditagih" switched: its open jobs follow, and their POs (while the shop
 -- hasn't paid anything on them)
@@ -901,12 +1005,16 @@ drop trigger if exists customers_pay_follows on public.customers;
 create trigger customers_pay_follows after update of paid_direct, labour_not_charged on public.customers
   for each row execute function public.customer_pay_follows();
 
--- a job moved to another company: its POs follow that company (while the shop hasn't paid anything on them)
+-- a job moved to another company, or its invoice voided (142c: the company's settings may have changed since): its
+-- POs follow the company (while the shop hasn't paid anything on them)
 create or replace function public.job_po_payer_follows() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v boolean;
 begin
-  if new.customer_id is not distinct from old.customer_id or new.order_status <> 'estimate' then return null; end if;
+  if new.order_status <> 'estimate'
+     or (new.customer_id is not distinct from old.customer_id and old.order_status is not distinct from new.order_status) then
+    return null;
+  end if;
   v := coalesce((select paid_direct from customers where id = new.customer_id), false);
   update purchase_orders po set paid_by_pt = v
    where po.ro_id = new.id and po.paid_by_pt is distinct from v and po.status <> 'cancelled'
@@ -916,10 +1024,11 @@ begin
 end $$;
 revoke execute on function public.job_po_payer_follows() from public, anon, authenticated;
 drop trigger if exists repair_orders_po_payer on public.repair_orders;
-create trigger repair_orders_po_payer after update of customer_id on public.repair_orders
+create trigger repair_orders_po_payer after update of customer_id, order_status on public.repair_orders
   for each row execute function public.job_po_payer_follows();
 
--- who pays a PO changed, or a PO line was linked, unlinked or cancelled: the job's settlement follows
+-- who pays a PO changed, or a PO line was linked, unlinked, re-counted or cancelled, or parts on it went back to the
+-- supplier: the job's settlement follows
 create or replace function public.po_payer_to_job() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare v_ro uuid;
@@ -927,8 +1036,12 @@ begin
   if tg_table_name = 'purchase_orders' then
     if new.paid_by_pt is not distinct from old.paid_by_pt and new.paid_by_name is not distinct from old.paid_by_name then return null; end if;
     v_ro := new.ro_id;
+  elsif tg_table_name = 'returns' then
+    -- parts sent back to the supplier: the PT's PO covers less of the job line (142c)
+    v_ro := (select po.ro_id from purchase_order_items pi join purchase_orders po on po.id = pi.po_id
+              where pi.id = case when tg_op = 'DELETE' then old.po_item_id else new.po_item_id end);
   else
-    v_ro := (select ro_id from purchase_orders where id = coalesce(new.po_id, old.po_id));
+    v_ro := (select ro_id from purchase_orders where id = case when tg_op = 'DELETE' then old.po_id else new.po_id end);
   end if;
   if v_ro is not null and exists (select 1 from repair_orders r join customers c on c.id = r.customer_id
                                    where r.id = v_ro and r.order_status = 'estimate' and c.paid_direct) then
@@ -942,7 +1055,10 @@ create trigger purchase_orders_payer_to_job after update on public.purchase_orde
   for each row when (new.paid_by_pt is distinct from old.paid_by_pt or new.paid_by_name is distinct from old.paid_by_name)
   execute function public.po_payer_to_job();
 drop trigger if exists po_items_payer_to_job on public.purchase_order_items;
-create trigger po_items_payer_to_job after insert or update of ro_service_item_id, qty_cancelled on public.purchase_order_items
+create trigger po_items_payer_to_job after insert or update of ro_service_item_id, qty_cancelled, qty_ordered or delete on public.purchase_order_items
+  for each row execute function public.po_payer_to_job();
+drop trigger if exists returns_payer_to_job on public.returns;
+create trigger returns_payer_to_job after insert or update of qty, po_item_id or delete on public.returns
   for each row execute function public.po_payer_to_job();
 
 -- invoicing: payments are checked against what the shop is owed, not the whole total (139's way of patching)
@@ -952,6 +1068,8 @@ begin
   src := pg_get_functiondef('public.convert_to_invoice(uuid)'::regprocedure);
   changed := replace(src, '  select total into v_total from repair_orders where id = p_ro;',
                           '  select total - settled_direct into v_total from repair_orders where id = p_ro;   -- what the shop is owed (142)');
+  -- (and the message says so, 142c)
+  changed := replace(changed, 'are more than the invoice total (Rp %)', 'are more than the shop is owed on this invoice (Rp %)');
   if changed = src then
     if position('select total - settled_direct into v_total' in src) = 0 then raise exception 'convert_to_invoice: total check not found as expected'; end if;
   else

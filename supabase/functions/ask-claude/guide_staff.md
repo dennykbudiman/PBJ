@@ -89,7 +89,7 @@ Status kerja per servis: Belum, Dikerjakan, Selesai (diubah advisor di kepala se
 
 Dua jenis PO: PO pekerjaan (nomor seperti 100005-101, dibuat dari pekerjaan) dan PO stok (nomor 900001 dst., untuk mengisi rak).
 
-Memesan untuk pekerjaan: kotak Pesanan part → Pesan part. Part yang stoknya kurang sudah dicentang. Pilih supplier, jumlah, harga beli → Buat dan tandai dipesan (atau Simpan sebagai draf). Status pekerjaan jadi Menunggu part.
+Memesan untuk pekerjaan: kotak Pesanan part → Pesan part / sublet. Part yang stoknya kurang sudah dicentang. Pilih supplier, jumlah, harga beli → Buat dan tandai dipesan (atau Simpan sebagai draf). Status pekerjaan jadi Menunggu part.
 
 Untuk stok: Inventaris → Stok → centang → Pesan yang dipilih, atau + → Purchase order baru → Buat draf → tambah part → Tandai dipesan.
 
@@ -112,7 +112,7 @@ Lainnya di PO:
 - Pekerjaan luar (sublet), mis. bubut, pasang/balancing ban oleh toko ban:
   - Tambahkan baris jenis Sublet di servis, lalu **Pesan part / sublet**.
   - Pekerjaan luar boleh ke supplier mana pun, jadi toko ban yang menjual ban sekaligus memasangnya cukup satu PO (ban = part, pasang = sublet). Part hanya ke pemasok part; bengkel sublet hanya menerima pekerjaan luar dan hanya untuk PO pekerjaan.
-  - Di PO dan cetakannya tertulis "pekerjaan luar". Saat selesai, **Terima** dengan no. invoice mereka: stok tidak berubah, harganya masuk ke baris sublet, tagihannya masuk Tagihan supplier.
+  - Di PO dan cetakannya tertulis "pekerjaan luar". Saat selesai, **Terima** dengan no. invoice mereka: stok tidak berubah, harganya masuk ke baris sublet, tagihannya masuk Tagihan supplier (atau Tagihan PT bila PO-nya dibayar PT).
   - Pekerjaan luar tidak bisa diretur. Di invoice tetap tertulis sebagai Sublet.
   - Selama belum selesai, "Menunggu apa" menulis "Sublet: … · PO … · supplier", status pekerjaan Menunggu part.
 - Cetak PO pekerjaan memuat kotak Kendaraan (plat, Supir, "Pemilik: <PT pemilik truk>") agar supplier tahu PT mana yang membayar.
@@ -177,10 +177,14 @@ Lainnya di PO:
 Saat ini bengkel belum punya rekening dan kasir, jadi setiap PT membayar suppliernya sendiri dan jasa belum ditagih.
 - Pelanggan → perusahaan → Ubah → "Cara perusahaan ini membayar":
   - **Part dibayar langsung oleh PT ke supplier**: PO pekerjaan untuk perusahaan ini otomatis bertanda "Dibayar PT". Tidak masuk Tagihan supplier dan tidak bisa dibayar dari bengkel. Cetakan PO menulis "Tagihan atas nama: <PT>".
-  - **Jasa tidak ditagih**: harga jasa tetap terlihat di pekerjaan dan invoice dengan tulisan "tidak ditagih" (Rp 0), tetapi tidak masuk total. Di bawah total tertulis "Nilai jasa tidak ditagih".
+  - **Jasa tidak ditagih**: di halaman pekerjaan, baris jasa tetap menunjukkan harganya dengan tulisan "tidak ditagih" di bawahnya; di cetakan invoice tertulis "tidak ditagih" (Rp 0). Jasa tidak masuk total. Di bawah total tertulis "Nilai jasa tidak ditagih".
   - **PT pembayar**: isi bila beberapa perusahaan dibayar oleh satu PT. Kosong berarti perusahaan itu sendiri.
 - Di invoice perusahaan yang membayar langsung, part dan pekerjaan luar tetap tertulis dengan harganya. Di bawahnya ada baris "Dibayar langsung ke supplier oleh <PT>" (minus), jadi sisa tagihan ke bengkel hanya yang lain (mis. jasa yang ditagih).
-- Di PO: bagian "Yang membayar supplier". PO pekerjaan: centang Dibayar langsung oleh PT. PO stok (mis. drum oli): ketik nama PT yang membayar, kosong berarti bengkel. Tidak bisa diganti bila bengkel sudah mencatat pembayaran di PO itu.
+- Di PO: bagian "Yang membayar supplier". PO pekerjaan: centang Dibayar langsung oleh PT (hanya untuk perusahaan yang "Part dibayar langsung"; perusahaan yang membayar ke bengkel tidak bisa). PO stok (mis. drum oli): ketik nama PT yang membayar, kosong berarti bengkel. Tidak bisa diganti bila bengkel sudah mencatat pembayaran di PO itu, atau bila pekerjaannya sudah di-invoice (void invoice-nya dulu; saat di-void, PO ikut pengaturan perusahaan yang sekarang).
+- Dihitung per jumlah: bila PO yang dibayar PT hanya menutup sebagian baris (mis. pekerjaan butuh 3, PO PT 2; atau sebagian dibatalkan atau diretur ke supplier), sisanya dianggap dari bengkel (stok atau PO bengkel) dan ditagih ke perusahaan.
+- Estimasi yang seluruhnya dibayar PT tidak ditandai Lunas sebelum dibuatkan invoice. Setelah di-invoice: sisa Rp 0, Lunas.
+- Dasbor: "Tagihan bengkel bulan ini" hanya bagian bengkel. Kotak "Dibayar langsung oleh PT bulan ini" menunjukkan berapa yang dibayar setiap PT ke supplier di invoice bulan ini.
+- Nama PT yang sama dengan huruf besar/kecil atau spasi berbeda (mis. "pt pulau indah jaya" dan "PT Pulau Indah Jaya") dihitung sebagai satu PT.
 - Inventaris → **Tagihan PT**: daftar per bulan, per PT dan per supplier, berisi part dan pekerjaan luar yang diterima bulan itu di PO yang dibayar PT. Dipakai untuk mencocokkan tagihan akhir bulan dari supplier. Bengkel tidak mencatat pembayaran di sini. Hanya untuk yang boleh melihat harga modal atau membayar tagihan supplier.
 - Inventaris → **Drum**: setiap drum oli bulk (oli, liter, harga per liter, PT yang membayar, tanggal dibuka). Oli yang terpakai di pekerjaan yang sudah di-invoice mengisi drum dari yang paling lama. Setiap drum menunjukkan sisa, terpakai, per perusahaan, dan "<PT> membayar ke <PT>: … L = Rp …" untuk oli yang dipakai truk PT lain. Saat drum habis, PT yang membeli menagih PT lain sebesar itu. Oli di pekerjaan yang belum di-invoice belum dihitung. Tambah, ubah, hapus drum: yang boleh mengelola inventaris.
 - Laporan → Penjualan menampilkan "Jasa tidak ditagih (tidak masuk total)" dan "Dibayar PT ke supplier (masuk total)" bila ada.
@@ -235,7 +239,7 @@ Dasbor: Hari ini (janji, Di bengkel = truk yang benar-benar ada, Menunggu part, 
   - Belum datang (km masuk kosong) / Belum datang · janji …: isi km masuk saat truk tiba.
   - Persetujuan: N servis menunggu: catat persetujuan.
   - Part: … · PO … · supplier · dipesan …: tunggu part, lalu Terima part di PO (klik tulisannya).
-  - Menunggu part (belum ada PO): buat PO lewat Pesan part, atau ubah status bila tidak perlu.
+  - Menunggu part (belum ada PO): buat PO lewat Pesan part / sublet, atau ubah status bila tidak perlu.
   - PO … belum dikirim ke supplier: buka PO → Tandai dipesan.
   - Belum ada pekerjaan: isi servis dari paket atau tambah part/jasa.
   - Mekanik belum dipasang (N servis): pasang mekanik.
