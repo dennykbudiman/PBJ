@@ -692,14 +692,17 @@ begin
 end $$;
 revoke execute on function public.stamp_purchase_order() from public, anon, authenticated;
 
--- PO line → job line cost (replaces 141's): in job terms, and also when the line's or the PO's PPN changes
+-- PO line → job line cost (replaces 141's): in job terms, and also when the line's or the PO's PPN changes.
+-- The PO line and its job line share one cost (Denny, Nov 9): the last one changed wins, on an open job, while the PO
+-- line isn't cancelled (a paid line can't change its cost). The job's price follows only while it was never set by
+-- hand: Rp 0, or the cost × the default markup (before or after this change). A typed price is never touched.
 create or replace function public.sync_po_line_to_job(p_line uuid, p_prev numeric) returns void
 language plpgsql security definer set search_path = public as $$
 declare p purchase_order_items%rowtype; l ro_service_items%rowtype; v_rate numeric; v_m numeric; v_jc numeric; v_new numeric;
-        v_cost numeric; v_price numeric; v_from_po boolean; v_sug boolean;
+        v_cost numeric; v_price numeric; v_sug boolean;
 begin
   select * into p from purchase_order_items where id = p_line;
-  if not found or p.ro_service_item_id is null or coalesce(p.cost, 0) <= 0 then return; end if;
+  if not found or p.ro_service_item_id is null or coalesce(p.cost, 0) <= 0 or p.qty_cancelled >= p.qty_ordered then return; end if;
   select tax_rate into v_rate from purchase_orders where id = p.po_id;
   select i.* into l from ro_service_items i where i.id = p.ro_service_item_id for update;
   if not found or l.item_type not in ('part', 'sublet') then return; end if;
@@ -710,15 +713,13 @@ begin
   v_m := coalesce((select default_markup_pct from shop_settings limit 1), 0);
   v_jc := po_to_job_cost(p.cost, p.taxable, v_rate);
   v_new := round(v_jc * (1 + v_m / 100));
-  -- the job line's cost / price still came from a PO line for it (this one before the change, or another one)
-  v_from_po := l.cost = p_prev
-               or exists (select 1 from purchase_order_items o join purchase_orders op on op.id = o.po_id
-                           where o.ro_service_item_id = l.id and o.id <> p.id and po_to_job_cost(o.cost, o.taxable, op.tax_rate) = l.cost);
-  v_sug := l.price = round(p_prev * (1 + v_m / 100))
+  -- the price was a suggestion from the cost (the job's own cost, the PO line's before this change, or another PO line's)
+  v_sug := l.price = round(coalesce(l.cost, 0) * (1 + v_m / 100))
+           or l.price = round(p_prev * (1 + v_m / 100))
            or exists (select 1 from purchase_order_items o join purchase_orders op on op.id = o.po_id
                        where o.ro_service_item_id = l.id and o.id <> p.id
                          and round(po_to_job_cost(o.cost, o.taxable, op.tax_rate) * (1 + v_m / 100)) = l.price);
-  v_cost := case when coalesce(l.cost, 0) = 0 or coalesce(v_from_po, false) then v_jc else l.cost end;
+  v_cost := v_jc;
   v_price := case when coalesce(l.price, 0) = 0 or coalesce(v_sug, false) then v_new else l.price end;
   if v_cost is distinct from l.cost or v_price is distinct from l.price then
     update ro_service_items set cost = v_cost, price = v_price where id = l.id;
@@ -778,8 +779,9 @@ begin
     update purchase_order_items set name = v_name
      where ro_service_item_id = new.id and qty_cancelled < qty_ordered and name is distinct from v_name;
   end if;
-  -- the cost, on its current PO line, while that line is still at Rp 0 or at the job's old cost, unpaid and not cancelled
-  if new.cost is distinct from old.cost then
+  -- the cost, on its current PO line, while that line is unpaid and not cancelled: the two share one cost, the last
+  -- one changed wins (Denny, Nov 9)
+  if new.cost is distinct from old.cost and coalesce(new.cost, 0) > 0 then
     perform set_config('axle.job_to_po', 'on', true);
     -- (in PO terms: before the supplier's PPN while the shop is non-PKP, 142)
     update purchase_order_items p set cost = job_to_po_cost(new.cost, p.taxable, po.tax_rate)
@@ -787,8 +789,7 @@ begin
      where po.id = p.po_id and po.status <> 'cancelled'
        and p.id = new.po_item_id and p.ro_service_item_id = new.id
        and p.qty_paid = 0 and p.qty_cancelled < p.qty_ordered
-       and p.cost is distinct from job_to_po_cost(new.cost, p.taxable, po.tax_rate)
-       and (p.cost = 0 or p.cost = job_to_po_cost(old.cost, p.taxable, po.tax_rate));
+       and p.cost is distinct from job_to_po_cost(new.cost, p.taxable, po.tax_rate);
     perform set_config('axle.job_to_po', 'off', true);
   end if;
   -- the quantity, only while the PO is still a draft (once ordered, the supplier has the number)
