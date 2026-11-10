@@ -487,21 +487,49 @@ span.seg-btn { cursor: default; }
 .doc-totals tr.rule th, .doc-totals tr.rule td { border-top: 1px solid #bbb; padding-top: 5px; }
 .doc-totals tr.grand th, .doc-totals tr.grand td { font-weight: 800; font-size: 13px; border-top: 1.5px solid #111; padding-top: 5px; }
 .doc-terms { margin-top: 14px; font-size: 10px; color: #444; border-top: 1px solid #ddd; padding-top: 8px; }
-.doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 26px; text-align: center; break-inside: avoid; }
-.sign-line { border-bottom: 1px solid #111; height: 48px; margin-bottom: 4px; }
+.doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 16px; text-align: center; break-inside: avoid; }
+.sign-line { border-bottom: 1px solid #111; height: 40px; margin-bottom: 4px; }
 .doc-sign.four { grid-template-columns: repeat(4, 1fr); gap: 22px; }
 .doc-sign .sign-name { min-height: 1.3em; }
 .doc-foot { margin-top: 16px; font-size: 9.5px; color: #666; text-align: center; }
 .doc-printedby { margin-top: 10px; font-size: 9px; color: #888; text-align: right; }
+/* Pages (144): every sheet is one A4 page with its own margins; the signatures stay on page 1. */
+.doc.sheet { width: 210mm; height: 297mm; min-height: 0; padding: 12mm 14mm; box-sizing: border-box; margin: 24px auto 0; }
+.sheet-in { height: 273mm; display: flex; flex-direction: column; }
+.sheet-in.compact { zoom: 0.92; height: calc(273mm / 0.92); }
+.sheet-fill { flex: 1 1 auto; }
+.doc-measure { position: absolute; left: -10000px; top: 0; width: 182mm; padding: 0; margin: 0; min-height: 0; box-shadow: none; visibility: hidden; }
+.m-blk { display: flow-root; }
+.doc-lines.fixed { table-layout: fixed; }
+.doc-cont { margin-top: 6px; font-style: italic; color: #555; }
+.doc-summary { display: flex; gap: 20px; justify-content: space-between; align-items: flex-start; border: 1.5px solid #111; border-radius: 6px; padding: 8px 12px; margin-top: 12px; }
+.doc-sumtotals { border-collapse: collapse; min-width: 270px; }
+.doc-sumtotals th { text-align: left; font-weight: 500; padding: 2px 16px 2px 0; }
+.doc-sumtotals td { text-align: right; white-space: nowrap; padding: 2px 0; }
+.doc-sumtotals tr.grand th, .doc-sumtotals tr.grand td { font-weight: 800; font-size: 13px; border-top: 1.5px solid #111; padding-top: 5px; }
+.doc-minihead { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 4px; }
+.doc-minihead .small-name { font-size: 13px; }
+.doc-minititle { text-align: right; }
+.doc-paraf { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 16px; text-align: center; margin-top: 12px; }
+.paraf-box { width: 130px; height: 34px; border: 1px solid #111; border-radius: 4px; margin-bottom: 3px; }
+.doc-paraf .paraf-note { flex-basis: 100%; text-align: right; }
+.doc-pagefoot { display: flex; justify-content: space-between; gap: 16px; margin-top: 12px; padding-top: 6px; border-top: 1px solid #ddd; font-size: 9.5px; color: #666; }
+.doc-pagefoot .doc-foot { margin: 0; text-align: left; }
+.doc-pageno { white-space: nowrap; }
 @page { size: A4; margin: 0; }
 @media print {
   .no-print { display: none !important; }
   html, body, #root { background: #fff !important; height: auto; }
   .print-wrap { background: #fff; padding: 0; min-height: 0; }
   .doc { margin: 0; box-shadow: none; width: auto; min-height: 0; }
+  .doc.sheet { margin: 0; width: 210mm; height: 297mm; break-after: page; }
+  .doc.sheet:last-of-type { break-after: auto; }
+  .doc-measure { display: none; }
 }
 @media screen and (max-width: 860px) {
   .doc { width: auto; margin: 12px; padding: 16px; min-height: 0; }
+  .doc.sheet { height: auto; }
+  .sheet-in, .sheet-in.compact { height: auto; zoom: 1; }
 }
 
 /* ---------- Stage 6: work board & calendar ---------- */
