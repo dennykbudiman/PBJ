@@ -10,6 +10,7 @@ import { shopToday } from '../../lib/customers'
 import { APPT_COLOR, clock, dayLabel, isActiveAppt, shopParts } from '../../lib/calendar'
 import { APPROVALS, APPROVAL_COLOR, PAYMENT_COLOR, PRIORITIES, WORKFLOW_COLOR, WORKFLOW_MANUAL, jobState, STATE_COLOR, lineNet, sysText } from '../../lib/jobs'
 import { BlurInput, TotalRow } from './common'
+import { payerBookLabel } from '../../lib/books'
 import { runsJobs } from './useJobData'
 
 export function ApprovalsCard({ job, editable, onRecord, fleetCanDecide, onFleetDecide }) {
@@ -197,6 +198,14 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
       <TotalRow label={t('job.paidToDate')} value={ro.paid_total} muted />
       {credits > 0 && <div className="trow muted small"><span>{t('job.ofWhichCredit')}</span><span className="trow-val">{rp(credits)}</span></div>}
       <TotalRow label={t('job.balance')} value={ro.balance} strong />
+      {/* drum oil on the invoice (143): whom to pay for it */}
+      {job.drumBox && (job.drumBox.lines || []).length > 0 && (
+        <div className="small" style={{ marginTop: 8 }}>
+          {(job.drumBox.to_pay || []).length > 0
+            ? job.drumBox.to_pay.map((x) => <div key={`${x.payer}|${x.book || ''}`}>{t('u143.sideDrum', { amount: rp(x.amount), who: payerBookLabel(x.payer, x.book) })}{x.estimated && <span className="muted"> {t('u143.estimatePrint')}</span>}</div>)
+            : <div className="muted">{t('u143.sideDrumOwn')}</div>}
+        </div>
+      )}
       <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
         {canPay && !ro.closed_at && (Number(ro.balance) > 0 || ro.order_status !== 'invoice' || (canRefund && cashIn > 0)) && <Button icon="plus" onClick={onPayment}>{t('job.payment')}</Button>}
         {canCredit && <Button icon="plus" onClick={onCredit}>{t('job.credit')}</Button>}

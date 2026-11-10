@@ -27,7 +27,14 @@ export function km(n) {
 
 // Display formats decided Oct 5: job 100001, invoice INV-000001, stock PO 900001.
 export const jobNo = (n) => (n == null ? '—' : String(n).padStart(6, '0'))
-export const invoiceNo = (n) => (n == null ? '—' : `INV-${String(n).padStart(6, '0')}`)
+// From Nov 10 (143) an invoice is numbered by its job and version: job 100001's first invoice is stored as 100001001 and
+// shown as INV-100001-1 (after a void, INV-100001-2). Older invoices keep INV-000001 … (stored below 100 000 000).
+export const invoiceNo = (n) => {
+  if (n == null || n === '') return '—'
+  const v = Number(n)
+  if (v >= 100000000) return `INV-${Math.floor(v / 1000)}-${v % 1000}`
+  return `INV-${String(n).padStart(6, '0')}`
+}
 export const stockPoNo = (n) => (n == null ? '—' : `9${String(n).padStart(5, '0')}`)
 
 const SHOP_TZ_DEFAULT = 'Asia/Jakarta'

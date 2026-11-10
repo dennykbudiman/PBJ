@@ -152,6 +152,16 @@ export function poPayer(po, data) {
   return c ? (c.payer_name || c.display_name) : 'PT'
 }
 
+// the book a PO is billed to inside its PT (143): a job's PO → the book of the job's company; a stock PO → its own
+export function poBook(po, data) {
+  if (!po) return null
+  if (!po.ro_id) return po.paid_by_name ? po.paid_by_book || null : null
+  if (!po.paid_by_pt) return null
+  const job = data?.jobById?.[po.ro_id]
+  const c = job ? data?.customerById?.[job.customer_id] : null
+  return c ? (c.book_name?.trim() || c.display_name) : null
+}
+
 // PPN while the shop is non-PKP (142): the shop can't claim the supplier's PPN back, so on the job a PO line's cost
 // (before PPN) counts with the PO's PPN added; a job cost goes to the PO with it taken out. A PKP shop: the same number.
 // Whole rupiah, rounded like the database (the rate in hundredths, so the sums are exact).

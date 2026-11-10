@@ -35,7 +35,7 @@ export function useInventoryData() {
     const vIds = [...new Set((jobs.data || []).map((j) => j.vehicle_id).filter(Boolean))]
     const vehicles = await selectIn('vehicles', 'id, plate, make, model, year', 'id', vIds)
     // the companies' paying PTs (142): who pays a job's PO
-    const customers = await selectAll(() => supabase.from('customers').select('id, display_name, payer_name, paid_direct').order('display_name').order('id'))
+    const customers = await selectAll(() => supabase.from('customers').select('id, display_name, payer_name, paid_direct, book_name').order('display_name').order('id'))
     if (n !== loads.current) return
     const all = { items, stock, suppliers, pos, lines, returns, cores, payments, jobs, vehicles, customers }
     setError(Object.values(all).find((r) => r.error)?.error || null)

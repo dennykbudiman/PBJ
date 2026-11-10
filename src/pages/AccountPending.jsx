@@ -14,8 +14,10 @@ export default function AccountPending() {
   let key = 'pending.missing'
   if (profile?.status === 'invited') key = 'pending.invited'
   else if (profile?.status === 'disabled') key = 'pending.disabled'
-  // Active but not allowed in: a Fleet manager (their role name isn't readable to them).
-  else if (profile?.status === 'active' || roleName === 'Fleet manager') key = 'pending.fleet'
+  // Active but not allowed in: a Fleet manager (their role name isn't readable to them). A staff role the database
+  // refused gets a neutral message instead of the fleet manager's (143; a lost connection has its own page).
+  else if (roleName === 'Fleet manager' || (profile?.status === 'active' && !roleName)) key = 'pending.fleet'
+  else if (profile?.status === 'active') key = 'pending.denied'
 
   return (
     <AuthShell>

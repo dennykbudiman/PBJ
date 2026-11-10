@@ -317,7 +317,7 @@ export default function Settings() {
           <Card title={t('settings.nav.numbering')} id="set-numbering">
             <div className="grid3">
               <div className="field"><span className="fieldlabel">{t('settings.nextJob')}</span><div className="readonly">{seq ? jobNo(seq.job) : '…'}</div></div>
-              <div className="field"><span className="fieldlabel">{t('settings.nextInvoice')}</span><div className="readonly">{seq ? invoiceNo(seq.invoice) : '…'}</div></div>
+              <div className="field"><span className="fieldlabel">{t('settings.nextInvoice')}</span><div className="readonly">{seq ? t('u143.nextInvoice', { no: invoiceNo(Number(seq.job) * 1000 + 1) }) : '…'}</div></div>
               <div className="field"><span className="fieldlabel">{t('settings.nextStockPo')}</span><div className="readonly">{seq ? stockPoNo(seq.stock_po) : '…'}</div></div>
             </div>
             <div className="hint">{t('settings.numberingHint')}</div>

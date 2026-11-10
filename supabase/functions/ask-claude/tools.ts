@@ -36,7 +36,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_job', fn: 'tc_job',
     description: 'One job (work order / estimate / invoice) with everything on its page: statuses, km, driver, complaints, services with technician and work status, part and labour lines (with PO status), approvals, purchase orders, bookings, money and payments (when this login may see money), and what the job is waiting for.',
-    input_schema: ref('Job number like #100005 or 100005, invoice number like INV-000021, or the job id'),
+    input_schema: ref('Job number like #100005 or 100005, invoice number like INV-100005-1 or INV-000021, or the job id'),
     args: (i) => ({ p_ref: s(i.ref, 60) }),
     label: (_i, r) => r?.job_number ? `pekerjaan #${r.job_number}` : 'pekerjaan',
   },

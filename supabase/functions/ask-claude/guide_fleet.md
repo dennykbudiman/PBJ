@@ -39,7 +39,7 @@ Armada saya, dengan tab: Pelanggan, Kendaraan, Jadwal servis, Repair order, Invo
 
 ## Pekerjaan dan invoice
 
-- Setiap kunjungan adalah satu pekerjaan (nomor seperti #100004). Selama belum ditagih disebut estimasi (tab Repair order). Setelah ditagih menjadi invoice (nomor seperti INV-000002, tab Invoice).
+- Setiap kunjungan adalah satu pekerjaan (nomor seperti #100004). Selama belum ditagih disebut estimasi (tab Repair order). Setelah ditagih menjadi invoice (nomor seperti INV-100045-1: nomor pekerjaan dan versinya; invoice sebelum 10 Nov 2026 seperti INV-000002; tab Invoice).
 - Halaman pekerjaan: atas (kendaraan, km masuk, keluhan, alur kerja); tab Servis (part, jasa, harga, status persetujuan); tab Keluhan dan Inspeksi (hijau Baik, kuning Segera, merah Sekarang); kanan (Persetujuan, janji, status order, pembayaran, total).
 - Alur kerja: Estimasi → Dijadwalkan → Sudah datang → Dikerjakan → Menunggu part → Selesai → Di-invoice → Lunas.
 - Invoice menampilkan nomor, jatuh tempo, no. faktur pajak (bila ada), pembayaran yang masuk dan sisa tagihan.

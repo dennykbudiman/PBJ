@@ -153,7 +153,9 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const cash = job.payments.reduce((a, p) => a + (p.kind === 'refund' ? -1 : 1) * Number(p.amount), 0)
   // (what the shop is owed: the total less what the PT paid its suppliers directly, 142)
   const overpaid = Math.max(0, cash - (Number(ro.total) - Number(ro.settled_direct || 0)))
-  const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0
+  // km in before invoicing, unless marked "km tidak terbaca" (143)
+  const noKm = ro.odometer_in == null && !ro.km_unreadable
+  const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0 || noKm
   // Warnings only (the invoice can still be made): parts that would go below zero on the shelf, the company's credit
   // limit, and companies that aren't on account (pay at pickup).
   const [check, setCheck] = useState({ short: [], owed: null })
@@ -203,12 +205,14 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
       {empty.length > 0 && <Notice kind="info" style={{ marginBottom: 10 }}>{t('u139.emptyRemoved', { names: empty.map((s) => s.name).join(', ') })}</Notice>}
       {zeroParts.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('u139.zeroParts', { names: zeroParts.map((l) => l.name).join(', ') })}</Notice>}
       {noTech.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needTech', { names: noTech.map((s) => s.name).join(', ') })}</Notice>}
+      {noKm && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('u143.needKmIn')}</Notice>}
       {overpaid > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overpaidFirst', { amount: rp(overpaid) })}</Notice>}
       {check.short.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.stockShortIntro')} {check.short.join('; ')}</Notice>}
       {overLimit && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overCreditLimit', { owed: rp(afterThis), limit: rp(limit) })}</Notice>}
       {notOnAccount && <Notice kind="info" style={{ marginBottom: 10 }}>{t('job.notOnAccount')}</Notice>}
       <div className="kvlist">
         <div><span>{t('job.billTo')}</span><b>{job.customer?.legal_name || job.customer?.display_name}</b></div>
+        {job.customer?.paid_direct && <div><span>{t('u143.book')}</span><b>{job.customer?.book_name?.trim() || job.customer?.display_name}</b></div>}
         <div><span>{t('job.approvedServices')}</span><b>{approved.length}</b></div>
         <div><span>{t('job.total')}</span><b>{rp(ro.total)}</b></div>
         {Number(ro.settled_direct) > 0 && <div><span>{t('u142.settledRow', { payer: job.customer?.payer_name || job.customer?.display_name || 'PT' })}</span><b>-{rp(ro.settled_direct)}</b></div>}

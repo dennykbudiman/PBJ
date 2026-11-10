@@ -50,7 +50,7 @@ export function AuthProvider({ children }) {
       setLoaded({ userId: null, profile: null, permissions: [], staff: false, fleet: false, fleetCompanies: [], tempPassword: false })
       return
     }
-    const [{ data: p, error }, { data: staff }, { data: fleet }, { data: temp }, { data: hours }] = await Promise.all([
+    const [{ data: p, error }, { data: staff, error: staffErr }, { data: fleet, error: fleetErr }, { data: temp }, { data: hours, error: hoursErr }] = await Promise.all([
       supabase.from('profiles').select('id, name, username, phone, status, language, role_id, roles(name)').eq('id', userId).maybeSingle(),
       // The database's own answer to "may this person use the app?" (active and not a Fleet manager).
       supabase.rpc('is_staff'),
@@ -62,7 +62,14 @@ export function AuthProvider({ children }) {
       supabase.rpc('staff_hours_check'),
     ])
     if (error) console.error('profile load failed', error)
-    if (refresh && (error || !p || typeof staff !== 'boolean')) return // a failed background refresh keeps what we had
+    if (refresh && (error || !p || typeof staff !== 'boolean' || staffErr || fleetErr || hoursErr)) return // a failed background refresh keeps what we had
+    // The server didn't answer "may this person use the app?" (no connection, or only part of the requests got through,
+    // Nov 10): say so, instead of treating the person as having no access (143).
+    if (error || staffErr || fleetErr || hoursErr || typeof staff !== 'boolean') {
+      setLoaded((old) => (old.userId === userId && old.connError ? old
+        : { userId, profile: p ?? old.profile ?? null, permissions: [], staff: false, fleet: false, fleetCompanies: [], tempPassword: false, connError: true }))
+      return
+    }
     let fleetCompanies = []
     if (fleet === true && !staff) {
       const { data: links, error: linkErr } = await supabase.from('fleet_manager_companies').select('customer_id').eq('user_id', userId)
@@ -133,6 +140,8 @@ export function AuthProvider({ children }) {
       fleetCompanies: isFleet ? loaded.fleetCompanies : [],
       // Outside the staff app hours (migration 138): { nextOpen } — the app shows a closed page instead.
       offHours: loaded.userId === userId ? loaded.offHours || null : null,
+      // The server couldn't be reached while checking access (143): the app shows "Koneksi bermasalah" and retries.
+      connError: loaded.userId === userId && Boolean(loaded.connError),
       overtimeUntil: loaded.userId === userId ? loaded.overtimeUntil || null : null,
       can: (key) => isStaff && permissions.includes(key),
       // Still loading until the profile we hold belongs to the person signed in.

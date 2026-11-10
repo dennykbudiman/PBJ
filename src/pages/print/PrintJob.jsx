@@ -9,6 +9,7 @@ import { fmtDate, invoiceNo, jobNo, km, num, rp } from '../../lib/format'
 import { vehicleName } from '../../lib/customers'
 import { lineAmount, lineDiscount, lineNet } from '../../lib/jobs'
 import { useJobData, useStaff } from '../jobs/useJobData'
+import { payerBookLabel } from '../../lib/books'
 import { nextDue } from '../../lib/schedules'
 
 // /print/jobs/<id>?doc=estimate|invoice&lang=id|en : a printable A4 estimate or invoice.
@@ -48,6 +49,11 @@ export default function PrintJob() {
     contact: (job.contacts.find((c) => c.is_primary) || job.contacts[0])?.name,
   }
   const veh = snap?.vehicle || job.vehicle || {}
+  // the paying PT and the book (143): kept with the invoice; an older invoice or an estimate uses the company's now
+  const groupCo = snap?.paid_direct ?? job.customer?.paid_direct
+  const payerName = snap?.payer || job.customer?.payer_name?.trim() || job.customer?.display_name || ''
+  const bookName = snap?.book || job.customer?.book_name?.trim() || job.customer?.display_name || ''
+  const box = doc === 'invoice' ? job.drumBox : null
   const taxRate = shop.pkp_status === 'non_pkp' ? 0 : Number(shop.tax_rate ?? 11)
   const taxName = shop.tax_name || 'PPN'
   const billed = job.services.filter((s) => (doc === 'invoice' ? s.approval_status === 'approved' : s.approval_status === 'approved' || s.approval_status === 'pending'))
@@ -118,12 +124,14 @@ export default function PrintJob() {
             {bill.npwp && <div>NPWP {bill.npwp}</div>}
             {bill.contact && <div>{t('pr.attn', { name: bill.contact })}</div>}
             {(bill.phone || bill.email) && <div>{[bill.phone, bill.email].filter(Boolean).join(' · ')}</div>}
+            {groupCo && payerName && payerName !== (bill.display_name || bill.legal_name) && <div>{t('u143.payerLine', { payer: payerName })}</div>}
+            {groupCo && bookName && <div>{t('u143.book')}: <b>{bookName}</b></div>}
           </div>
           <div>
             <div className="doc-label">{t('pr.vehicle')}</div>
             <b>{veh.plate}</b> · {vehicleName(veh) || '—'}
             {veh.vin && <div>VIN {veh.vin}</div>}
-            <div>{t('pr.odometer')}: {(ro.odometer_in ?? ro.odometer_out) != null ? km(ro.odometer_in ?? ro.odometer_out) : '—'}</div>
+            <div>{t('pr.odometer')}: {(ro.odometer_in ?? ro.odometer_out) != null ? km(ro.odometer_in ?? ro.odometer_out) : ro.km_unreadable ? t('u143.kmUnreadablePrint') : '—'}</div>
             {(ro.driver_name || ro.driver_phone) && <div>{t('pr.driver')}: {[ro.driver_name, ro.driver_phone].filter(Boolean).join(' · ')}</div>}
           </div>
         </section>
@@ -225,13 +233,38 @@ export default function PrintJob() {
               {Number(ro.tax_total) !== 0 && <tr><th>{taxRate > 0 ? t('pr.tax', { tax: taxName, rate: num(taxRate, 2), base: rp(ro.taxable_base) }) : taxName}</th><td>{rp(ro.tax_total)}</td></tr>}
               <tr className="grand"><th>{t('pr.total')}</th><td>{rp(ro.total)}</td></tr>
               {/* parts and outside work the PT pays its suppliers for directly (142) */}
-              {Number(ro.settled_direct) > 0 && <tr><th>{t('u142.settledRow', { payer: job.customer?.payer_name || job.customer?.display_name || 'PT' })}</th><td>-{rp(ro.settled_direct)}</td></tr>}
+              {Number(ro.settled_direct) > 0 && <tr><th>{t('u142.settledRow', { payer: payerName || 'PT' })}</th><td>-{rp(ro.settled_direct)}</td></tr>}
               {Number(ro.paid_total) > 0 && <tr><th>{doc === 'invoice' ? t('pr.paid') : t('pr.deposit')}</th><td>-{rp(ro.paid_total)}</td></tr>}
               {doc === 'invoice' && <tr className="grand"><th>{t('pr.balance')}</th><td>{rp(ro.balance)}</td></tr>}
               {Number(ro.labor_waived) > 0 && <tr className="small"><th>{t('u142.labourWaivedPrint')}</th><td>{rp(ro.labor_waived)}</td></tr>}
             </tbody>
           </table>
         </section>
+
+        {/* drum oil (143): which drum it came from and whom to pay for it */}
+        {box && (box.lines || []).length > 0 && (
+          <section className="doc-block doc-drums">
+            <div className="doc-label">{t('u143.drumBoxTitle')}</div>
+            <table className="doc-lines compact">
+              <thead><tr><th>{t('pr.description')}</th><th>{t('u143.drumCol')}</th><th className="num">{t('pr.qty')}</th><th className="num">{t('u143.perLCol')}</th><th className="num">{t('pr.amount')}</th><th>{t('u143.payCol')}</th></tr></thead>
+              <tbody>
+                {box.lines.map((l, i) => (
+                  <tr key={`${l.line_id}-${l.drum_id}-${i}`}>
+                    <td>{l.name}</td>
+                    <td>{payerBookLabel(l.drum_payer, l.drum_book)}<div className="small muted">{t('u143.openedOn', { date: fmtDate(l.opened_on, lang) })}</div></td>
+                    <td className="num">{num(l.litres, 2)} {l.unit || 'L'}</td>
+                    <td className="num">{rp(l.cost_per_l)}{l.estimated && <div className="small muted">{t('u143.estimatePrint')}</div>}</td>
+                    <td className="num">{rp(l.amount)}</td>
+                    <td>{l.pay ? <b>{t('u143.payTo', { who: payerBookLabel(l.drum_payer, l.drum_book) })}</b> : <span className="muted">{t('u143.ownDrum')}</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(box.to_pay || []).length > 0 ? (box.to_pay || []).map((x) => (
+              <div key={`${x.payer}|${x.book || ''}`}><b>{t('u143.drumPayLine', { amount: rp(x.amount), who: payerBookLabel(x.payer, x.book) })}</b>{x.estimated && <span className="small muted"> {t('u143.estimatePrint')}</span>}</div>
+            )) : <div className="small muted">{t('u143.drumNothingToPay')}</div>}
+          </section>
+        )}
 
         {terms && <section className="doc-terms pre">{terms}</section>}
 

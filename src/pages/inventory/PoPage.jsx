@@ -8,7 +8,8 @@ import { useT } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
 import { fmtDate, fmtDateTime, jobNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
-import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poLinesNotOnJob, poPaidByPt, poPayer, poTotals, sparePoParts, stockState } from '../../lib/inventory'
+import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poLinesNotOnJob, poBook, poPaidByPt, poPayer, poTotals, sparePoParts, stockState } from '../../lib/inventory'
+import { booksOfPayer } from '../../lib/books'
 import { BlurInput, MoreMenu, Picker, TotalRow, useRun } from '../jobs/common'
 import { JobRef, PayBadge, PoBadge, Tick } from './bits'
 import { CorrectReceivedModal, LineModal, PayModal, PoReturnModal, ReceiveModal } from './PoModals'
@@ -315,12 +316,25 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
               <input type="checkbox" checked={!!po.paid_by_pt} disabled={!editable || shopPaidSome || jobInvoiced || ptNotAllowed} onChange={(e) => upd({ paid_by_pt: e.target.checked })} />
               <span className="small">{t('u142.paidDirectPo', { payer: poPayer({ ...po, paid_by_pt: true }, data) })}</span>
             </label>
-          ) : (
+          ) : null}
+          {po.ro_id && po.paid_by_pt && poBook(po, data) && <div className="small" style={{ marginTop: 4 }}>{t('u143.bookLine', { book: poBook(po, data) })}</div>}
+          {!po.ro_id && (
             <>
               <BlurInput className="input" disabled={!editable || shopPaidSome} value={po.paid_by_name || ''} placeholder={t('u142.shopPays')} list="po-payers"
-                aria-label={t('u142.whoPays')} maxLength={120} onCommit={(v) => upd({ paid_by_name: v.trim() || null })} />
+                aria-label={t('u142.whoPays')} maxLength={120} onCommit={(v) => upd({ paid_by_name: v.trim() || null,
+                  // a book of another PT goes (143)
+                  ...(po.paid_by_book && !booksOfPayer(data.customers, v.trim()).some((b) => b.toLowerCase() === po.paid_by_book.toLowerCase()) ? { paid_by_book: null } : {}) })} />
               <datalist id="po-payers">{payerNames.map((n) => <option key={n} value={n} />)}</datalist>
               <div className="hint">{t('u142.stockPoPayerHint')}</div>
+              {po.paid_by_name && (
+                <label className="mini" style={{ display: 'block', marginTop: 8 }}>{t('u143.book')}
+                  <select className="select" disabled={!editable || shopPaidSome} value={po.paid_by_book || ''} onChange={(e) => upd({ paid_by_book: e.target.value || null })} aria-label={t('u143.book')}>
+                    <option value="">{t('u143.wholePt')}</option>
+                    {booksOfPayer(data.customers, po.paid_by_name).map((b) => <option key={b} value={b}>{b}</option>)}
+                    {po.paid_by_book && !booksOfPayer(data.customers, po.paid_by_name).some((b) => b.toLowerCase() === po.paid_by_book.toLowerCase()) && <option value={po.paid_by_book}>{po.paid_by_book}</option>}
+                  </select>
+                </label>
+              )}
             </>
           )}
           {shopPaidSome && <div className="hint">{t('u142.shopPaidSome')}</div>}

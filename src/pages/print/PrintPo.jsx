@@ -38,7 +38,7 @@ export default function PrintPo() {
         job.data ? supabase.from('vehicles').select('plate, year, make, model, driver_name').eq('id', job.data.vehicle_id).maybeSingle() : { data: null },
         job.data ? supabase.from('ro_services').select('technician_id, position').eq('ro_id', job.data.id).order('position') : { data: [] },
         // The company the job is for: it stamps and pays for this PO (Denny, item 16, Nov 5).
-        job.data?.customer_id ? supabase.from('customers').select('display_name, payer_name').eq('id', job.data.customer_id).maybeSingle() : { data: null },
+        job.data?.customer_id ? supabase.from('customers').select('display_name, payer_name, book_name').eq('id', job.data.customer_id).maybeSingle() : { data: null },
       ])
       // Names for the signature boxes: the job's advisor (a stock PO: whoever made it) and the job's mechanics.
       const advisorId = job.data ? job.data.service_advisor_id : po.data.created_by
@@ -51,6 +51,8 @@ export default function PrintPo() {
       setD({ po: po.data, lines: (lines.data || []).filter((l) => Number(l.qty_ordered) > Number(l.qty_cancelled)), sup: sup.data, job: job.data, veh: veh.data, owner: owner.data?.display_name || '',
         // who the supplier bills (142): the paying PT of the job's company, or the PT named on a stock PO
         billTo: po.data.paid_by_name || (po.data.paid_by_pt ? owner.data?.payer_name || owner.data?.display_name || '' : ''),
+        // the book inside that PT (143): the job's company's, or the one named on a stock PO
+        book: po.data.paid_by_name ? po.data.paid_by_book || '' : (po.data.paid_by_pt ? owner.data?.book_name?.trim() || owner.data?.display_name || '' : ''),
         advisor: nameOf(advisorId), mechanics: techIds.map(nameOf).filter(Boolean).join(', ') })
     })()
     return () => { live = false }
@@ -60,7 +62,7 @@ export default function PrintPo() {
   if (error === 'missing') return <div className="print-msg">{tUi('inv.po.notFound')} · <Link to="/inventory/purchase-orders">{tUi('inv.po.back')}</Link></div>
   if (!d || !settings) return <div className="print-msg">{error ? errorText(error, tUi) : tUi('common.loading')}</div>
 
-  const { po, lines, sup, job, veh, owner, advisor, mechanics, billTo } = d
+  const { po, lines, sup, job, veh, owner, advisor, mechanics, billTo, book } = d
   const lang = params.get('lang') || settings.default_print_language || 'id'
   const t = (key, vars) => translate(lang, key, vars)
   const setLang = (v) => { const p = new URLSearchParams(location.search); p.set('lang', v); navigate(`${location.pathname}?${p.toString()}`, { replace: true }) }
@@ -121,6 +123,7 @@ export default function PrintPo() {
             {shop.address && <div className="pre">{shop.address}</div>}
             {shop.phone && <div>{shop.phone}</div>}
             {!veh && billTo && <div style={{ marginTop: 6 }}>{t('u142.billTo')}: <b>{billTo}</b></div>}
+            {!veh && billTo && book && <div>{t('u143.book')}: <b>{book}</b></div>}
           </div>
           {veh && (
             <div>
@@ -130,6 +133,7 @@ export default function PrintPo() {
               {driver && <div>{t('pr.driver')}: {driver}</div>}
               {owner && <div>{t('pr.owner')}: <b>{owner}</b></div>}
               {billTo && <div>{t('u142.billTo')}: <b>{billTo}</b></div>}
+              {billTo && book && <div>{t('u143.book')}: <b>{book}</b></div>}
             </div>
           )}
         </section>

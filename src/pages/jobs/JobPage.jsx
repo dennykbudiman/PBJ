@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Page } from '../../components/Layout'
-import { Badge, Button, Card, Empty, Modal, Notice, SubTabs, useConfirm, usePopover, useToast } from '../../components/ui'
+import { Badge, Button, Card, Empty, Input, Modal, Notice, SubTabs, useConfirm, usePopover, useToast } from '../../components/ui'
 import { confirmKm } from '../../lib/mileage'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
@@ -75,6 +75,7 @@ export default function JobPage({ id }) {
     run(() => addBundleService({ job, cat, tp, name: x.name, scheduleId: x.id }), t('job.serviceAdded', { name: tp ? tp.name : x.name }))
   }, [addSched, job, cat]) // eslint-disable-line react-hooks/exhaustive-deps
   const [confirm, confirmEl] = useConfirm()
+  const [kmAsk, setKmAsk] = useState(null) // "km tidak terbaca": asking why (143)
   const toast = useToast()
 
   // Tab title: "DA 8130 BN · #100001" (Nov 3, Denny: tell many open job tabs apart).
@@ -113,6 +114,18 @@ export default function JobPage({ id }) {
     !invoiced && can('delete_jobs') && !job.payments.length && !job.voids.length && !job.appliedCredits.length
       && { label: t('job.deleteEstimate'), icon: 'trash', danger: true, onClick: () => open('delete') },
   ]
+
+  // "Km tidak terbaca" (143): ticking it asks why (the database needs a reason); unticking clears it.
+  async function setKmUnreadable(on) {
+    if (!on) return run(() => supabase.from('repair_orders').update({ km_unreadable: false, km_unreadable_note: null }).eq('id', ro.id))
+    setKmAsk({ why: '' })
+  }
+  async function saveKmUnreadable() {
+    const why = (kmAsk?.why || '').trim()
+    if (!why) return setKmAsk((x) => ({ ...x, err: t('u143.kmUnreadableNeedWhy') }))
+    const ok = await run(() => supabase.from('repair_orders').update({ km_unreadable: true, km_unreadable_note: why }).eq('id', ro.id))
+    if (ok) setKmAsk(null)
+  }
 
   // Odometer readings: a reading lower than anything known for this vehicle (or out below in) is checked first.
   async function saveOdo(field, val, reset) {
@@ -162,7 +175,22 @@ export default function JobPage({ id }) {
                       onCommit={(val, reset) => saveOdo('odometer_in', val, reset)} />
                   </label>
                   {/* Km out was dropped (Denny, Nov 5, migration 139): only the km in is recorded. */}
+                  {/* No km to read (towed in, broken odometer): "km tidak terbaca" with a reason lets it be invoiced (143) */}
+                  {ro.odometer_in == null && (editable || ro.km_unreadable) && (
+                    <label className="row small" style={{ gap: 6, alignSelf: 'flex-end', marginBottom: 6 }}>
+                      <input type="checkbox" checked={!!ro.km_unreadable} disabled={!editable} onChange={(e) => setKmUnreadable(e.target.checked)} />
+                      {t('u143.kmUnreadable')}
+                    </label>
+                  )}
                 </div>
+                {ro.odometer_in == null && ro.km_unreadable && (
+                  editable ? (
+                    <label className="mini" style={{ marginTop: 6 }}>{t('u143.kmUnreadableWhy')}
+                      <BlurInput className="input cell" style={{ width: 260 }} value={ro.km_unreadable_note || ''} maxLength={200} placeholder={t('u143.kmUnreadableEx')} aria-label={t('u143.kmUnreadableWhy')}
+                        onCommit={(val, reset) => { if (!val.trim()) { toast(t('u143.kmUnreadableNeedWhy'), 'err'); reset(); return false } return run(() => supabase.from('repair_orders').update({ km_unreadable_note: val.trim() }).eq('id', ro.id)) }} />
+                    </label>
+                  ) : ro.km_unreadable_note && <div className="small muted" style={{ marginTop: 4 }}>{t('u143.kmUnreadableShown', { why: ro.km_unreadable_note })}</div>
+                )}
                 {v?.id && <LastService vehicleId={v.id} excludeRo={ro.id} />}
                 {/* Who brought it in (migration 136): printed on the estimate and invoice; locked once invoiced. */}
                 {editable ? (
@@ -244,6 +272,12 @@ export default function JobPage({ id }) {
       </div>
 
       {confirmEl}
+      <Modal open={!!kmAsk} title={t('u143.kmUnreadableTitle')} onClose={() => setKmAsk(null)}
+        footer={<><Button onClick={() => setKmAsk(null)}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={saveKmUnreadable}>{t('common.save')}</Button></>}>
+        <Input label={t('u143.kmUnreadableWhy')} value={kmAsk?.why || ''} maxLength={200} placeholder={t('u143.kmUnreadableEx')} error={kmAsk?.err}
+          onChange={(e) => setKmAsk((x) => ({ ...x, why: e.target.value, err: null }))} autoFocus />
+        <div className="hint">{t('u143.kmUnreadableHint')}</div>
+      </Modal>
       <AppointmentModal open={modal?.kind === 'appt'} onClose={close} appointment={modal?.appointment}
         defaults={{ ro_id: ro.id, customer_id: ro.customer_id, vehicle_id: ro.vehicle_id }}
         onSaved={() => { close(); reload() }} onDeleted={() => { close(); reload() }} />

@@ -16,6 +16,12 @@ const MAX = 25
 
 // Global search: companies (by name, NPWP or a contact's name, phone or email) and
 // vehicles (by plate, VIN, make or model) and jobs (by job or invoice number, or the vehicles found).
+// "INV-100045-1" / "inv 100045/1" (143): the job number and version, stored as 100045001
+function newInvoice(q) {
+  const m = String(q).match(/^\s*inv[\s.#-]*(\d{4,12})\s*[-/]\s*(\d{1,3})\s*$/i)
+  return m ? Number(m[1]) * 1000 + Number(m[2]) : null
+}
+
 export default function SearchPage() {
   const { t, lang } = useT()
   const navigate = useNavigate()
@@ -75,11 +81,11 @@ export default function SearchPage() {
     const vehIds = results.vehicles.slice(0, 5).map((v) => v.id)
     const cols = 'id, job_number, invoice_number, customer_id, vehicle_id, order_status, payment_status, balance, due_date, total, closed_at, workflow_status, created_at'
     Promise.all([
-      digits.length >= 3 ? supabase.from('repair_orders').select(cols).or(`job_no.ilike.*${digits}*,invoice_no.ilike.*${digits}*`).limit(MAX) : { data: [] },
+      digits.length >= 3 ? supabase.from('repair_orders').select(cols).or(`job_no.ilike.*${digits}*,invoice_no.ilike.*${digits}*${newInvoice(q) ? `,invoice_number.eq.${newInvoice(q)}` : ''}`).limit(MAX) : { data: [] },
       vehIds.length ? supabase.from('repair_orders').select(cols).in('vehicle_id', vehIds).order('created_at', { ascending: false }).limit(10) : { data: [] },
     ]).then(([a, b]) => {
       if (!live) return
-      const byNo = (a.data || []).filter((j) => jobNo(j.job_number).includes(digits) || (j.invoice_number && String(invoiceNo(j.invoice_number)).includes(digits)))
+      const byNo = (a.data || []).filter((j) => jobNo(j.job_number).includes(digits) || (j.invoice_number && String(invoiceNo(j.invoice_number)).replace(/\D/g, '').includes(digits)))
       const seen = new Set()
       setJobs([...byNo, ...(b.data || [])].filter((j) => (seen.has(j.id) ? false : seen.add(j.id))))
     })

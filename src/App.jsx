@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import SetPassword from './pages/SetPassword'
 import OffHours from './pages/OffHours'
 import AccountPending from './pages/AccountPending'
+import ConnectionProblem from './pages/ConnectionProblem'
 import { NotFound } from './pages/ComingSoon'
 import Dashboard from './pages/Dashboard'
 import ReportsArea from './pages/reports/ReportsArea'
@@ -31,10 +32,11 @@ function VehiclesRedirect() {
 }
 
 export default function App() {
-  const { session, loading, needsPasswordSetup, isStaff, isFleet, offHours } = useAuth()
+  const { session, loading, needsPasswordSetup, isStaff, isFleet, offHours, connError } = useAuth()
 
   if (loading) return <FullPageSpinner />
   if (!session) return <Login />
+  if (connError) return <ConnectionProblem />
   if (needsPasswordSetup) return <SetPassword />
   if (offHours) return <OffHours />
   if (isFleet) return <FleetRoutes />

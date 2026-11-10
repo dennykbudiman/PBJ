@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge, Button, Empty, Input, Modal, Notice, PageHead, Select, Textarea, useConfirm, useToast } from '../../components/ui'
+import { Badge, Button, Empty, Input, Modal, Notice, PageHead, Select, Textarea, Toggle, useConfirm, useToast } from '../../components/ui'
+import { booksOfPayer, payerBookLabel } from '../../lib/books'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
@@ -53,8 +54,9 @@ export default function DrumsTab({ data, canEdit }) {
               <div key={key} className="drum" style={{ borderTop: i ? '1px solid var(--line)' : undefined, paddingTop: i ? 10 : 0, marginTop: i ? 10 : 0 }}>
                 <div className="row wrap" style={{ gap: 8 }}>
                   <b>{t('u142.drumN', { n: i + 1 })}</b>
-                  <span className="small">{t('u142.drumLine', { litres: num(d.litres, 2), unit: oil.unit || 'L', date: fmtDate(d.opened_on, lang), payer: d.paid_by })}</span>
+                  <span className="small">{t('u142.drumLine', { litres: num(d.litres, 2), unit: oil.unit || 'L', date: fmtDate(d.opened_on, lang), payer: payerBookLabel(d.paid_by, d.paid_by_book) })}</span>
                   {d.cost_per_l > 0 && <span className="small muted">{t('u142.perL', { amount: rp(d.cost_per_l), unit: oil.unit || 'L' })}</span>}
+                  {d.cost_estimated && <Badge color="amber">{t('u143.estimate')}</Badge>}
                   <div className="spacer" />
                   <Badge color={neg ? 'red' : Number(d.left) === 0 ? 'gray' : 'green'}>{t('u142.drumLeft', { n: num(d.left, 2), unit: oil.unit || 'L' })}</Badge>
                   <span className="small">{t('u142.drumUsed', { n: num(d.used, 2), unit: oil.unit || 'L' })}</span>
@@ -67,7 +69,7 @@ export default function DrumsTab({ data, canEdit }) {
                 {(d.owed || []).length > 0 && (
                   <div className="small" style={{ marginTop: 4 }}>
                     {d.owed.map((o) => (
-                      <div key={o.payer || '-shop'}>{t(o.amount == null ? 'u142.owedLineNoAmount' : 'u142.owedLine', { from: o.payer || t('u142.theShop'), to: d.paid_by, litres: num(o.litres, 2), unit: oil.unit || 'L', amount: rp(o.amount) })}</div>
+                      <div key={(o.payer || '-shop') + '|' + (o.book || '')}>{t(o.amount == null ? 'u142.owedLineNoAmount' : 'u142.owedLine', { from: o.payer ? payerBookLabel(o.payer, o.book) : t('u142.theShop'), to: payerBookLabel(d.paid_by, d.paid_by_book), litres: num(o.litres, 2), unit: oil.unit || 'L', amount: rp(o.amount) })}</div>
                     ))}
                   </div>
                 )}
@@ -78,7 +80,7 @@ export default function DrumsTab({ data, canEdit }) {
                       <tbody>
                         {(d.companies || []).map((c) => (
                           <tr key={c.customer_id}>
-                            <td>{c.company}</td><td className="small">{c.payer || <span className="muted">{t('u142.theShopPaid')}</span>}</td>
+                            <td>{c.company}</td><td className="small">{c.payer ? payerBookLabel(c.payer, c.book) : <span className="muted">{t('u142.theShopPaid')}</span>}</td>
                             <td className="num">{num(c.litres, 2)}</td><td className="num nowrap">{c.value == null ? '—' : rp(c.value)}</td>
                             <td className="wide-only small">{(c.jobs || []).map((j, k) => <Link key={k} to={`/jobs/${j.ro_id}`} style={{ marginRight: 8 }}>{invoiceNo(j.invoice_number)} ({num(j.litres, 2)})</Link>)}</td>
                           </tr>
@@ -95,13 +97,13 @@ export default function DrumsTab({ data, canEdit }) {
       ))}
       <div className="hint">{t('u142.drumsHint')}</div>
       {confirmEl}
-      <DrumModal open={!!modal} onClose={() => setModal(null)} drum={modal?.drum} itemId={modal?.item} oils={oils} payers={payerNames}
+      <DrumModal open={!!modal} onClose={() => setModal(null)} drum={modal?.drum} itemId={modal?.item} oils={oils} payers={payerNames} customers={data.customers}
         onSaved={() => { setModal(null); reload(); toast(t('u142.drumSaved')) }} />
     </>
   )
 }
 
-function DrumModal({ open, onClose, drum, itemId, oils, payers, onSaved }) {
+function DrumModal({ open, onClose, drum, itemId, oils, payers, customers, onSaved }) {
   const { t } = useT()
   const { timezone } = useShop()
   const [f, setF] = useState({})
@@ -111,8 +113,8 @@ function DrumModal({ open, onClose, drum, itemId, oils, payers, onSaved }) {
   const running = useRef(false)
   useEffect(() => {
     if (!open) return
-    setF(drum ? { item: itemId, litres: num(drum.litres, 2), cost: drum.cost_per_l ? num(drum.cost_per_l) : '', payer: drum.paid_by || '', opened: drum.opened_on, note: drum.note || '' }
-      : { item: oils.find((o) => o.unit === 'L')?.id || '', litres: '209', cost: '', payer: '', opened: shopToday(timezone), note: '' })
+    setF(drum ? { item: itemId, litres: num(drum.litres, 2), cost: drum.cost_per_l ? num(drum.cost_per_l) : '', payer: drum.paid_by || '', book: drum.paid_by_book || '', estimated: !!drum.cost_estimated, opened: drum.opened_on, note: drum.note || '' }
+      : { item: oils.find((o) => o.unit === 'L')?.id || '', litres: '209', cost: '', payer: '', book: '', estimated: false, opened: shopToday(timezone), note: '' })
     setErr({}); setFail(null)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? e.target.value : e }))
@@ -131,7 +133,7 @@ function DrumModal({ open, onClose, drum, itemId, oils, payers, onSaved }) {
     setErr(e)
     if (Object.keys(e).length) return
     running.current = true; setBusy(true); setFail(null)
-    const row = { catalog_item_id: f.item, litres, paid_by_name: f.payer.trim(), opened_on: f.opened, note: f.note.trim() || null, ...(hideCost ? {} : { cost_per_l: cost }) }
+    const row = { catalog_item_id: f.item, litres, paid_by_name: f.payer.trim(), paid_by_book: f.book || null, opened_on: f.opened, note: f.note.trim() || null, ...(hideCost ? {} : { cost_per_l: cost, cost_estimated: !!f.estimated }) }
     const r = drum ? await supabase.from('oil_drums').update(row).eq('id', drum.id) : await supabase.from('oil_drums').insert(row)
     running.current = false; setBusy(false)
     if (r.error) return setFail(errorText(r.error, t))
@@ -147,8 +149,14 @@ function DrumModal({ open, onClose, drum, itemId, oils, payers, onSaved }) {
         <Input label={t('u142.litres')} value={f.litres || ''} onChange={set('litres')} error={err.litres} inputMode="decimal" />
         {!hideCost && <Input label={t('u142.costPerL')} value={f.cost || ''} onChange={set('cost')} error={err.cost} prefix="Rp" inputMode="numeric" />}
       </div>
-      <Input label={t('u142.paidBy')} value={f.payer || ''} onChange={set('payer')} error={err.payer} list="drum-payers" maxLength={120} hint={t('u142.paidByHint')} />
+      <Input label={t('u142.paidBy')} value={f.payer || ''} error={err.payer} list="drum-payers" maxLength={120} hint={t('u142.paidByHint')}
+        onChange={(e) => { const v = e.target.value; setF((x) => ({ ...x, payer: v, book: booksOfPayer(customers, v).some((b) => b.toLowerCase() === (x.book || '').toLowerCase()) ? x.book : '' })) }} />
       <datalist id="drum-payers">{payers.map((n) => <option key={n} value={n} />)}</datalist>
+      {/* the book inside the PT that bought it (143); none = the whole PT */}
+      <Select label={t('u143.book')} value={f.book || ''} onChange={set('book')} hint={t('u143.drumBookHint')}
+        options={[{ value: '', label: t('u143.wholePt') }, ...booksOfPayer(customers, f.payer).map((b) => ({ value: b, label: b })),
+                  ...(f.book && !booksOfPayer(customers, f.payer).some((b) => b.toLowerCase() === f.book.toLowerCase()) ? [{ value: f.book, label: f.book }] : [])]} />
+      {!hideCost && <Toggle checked={!!f.estimated} onChange={set('estimated')} label={t('u143.estimateToggle')} />}
       <Input label={t('u142.openedOn')} type="date" value={f.opened || ''} onChange={set('opened')} error={err.opened} />
       <Textarea label={t('u142.note')} value={f.note || ''} onChange={set('note')} rows={2} maxLength={500} placeholder={t('u142.noteEx')} />
       <div className="hint">{t('u142.drumFormHint')}</div>

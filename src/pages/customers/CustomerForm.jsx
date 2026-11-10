@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { booksOfPayer } from '../../lib/books'
 import { Button, Input, Modal, Notice, Select, Textarea, Toggle, useToast } from '../../components/ui'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
@@ -10,7 +11,7 @@ const EMPTY = {
   type: 'fleet_internal', display_name: '', legal_name: '', npwp: '', phone: '', email: '', billing_address: '',
   payment_terms_days: '', credit_limit: '', charge_account: true, tax_exempt: false, pinned_notes: '', active: true,
   contact_name: '', contact_phone: '', contact_email: '',
-  paid_direct: false, labour_not_charged: false, payer_name: '',
+  paid_direct: false, labour_not_charged: false, payer_name: '', book_name: '',
 }
 
 function toForm(c) {
@@ -22,7 +23,7 @@ function toForm(c) {
     payment_terms_days: c.payment_terms_days == null ? '' : String(c.payment_terms_days),
     credit_limit: c.credit_limit == null ? '' : num(c.credit_limit),
     charge_account: c.charge_account, tax_exempt: c.tax_exempt, pinned_notes: c.pinned_notes || '', active: c.active,
-    paid_direct: !!c.paid_direct, labour_not_charged: !!c.labour_not_charged, payer_name: c.payer_name || '',
+    paid_direct: !!c.paid_direct, labour_not_charged: !!c.labour_not_charged, payer_name: c.payer_name || '', book_name: c.book_name || '',
   }
 }
 
@@ -68,7 +69,7 @@ export default function CustomerForm({ open, customer, customers, onClose, onSav
       phone: f.phone.trim() || null, email: f.email.trim() || null, billing_address: f.billing_address.trim() || null,
       payment_terms_days: terms, credit_limit: limit, charge_account: f.charge_account, tax_exempt: f.tax_exempt,
       pinned_notes: f.pinned_notes.trim() || null, active: f.active,
-      paid_direct: f.paid_direct, labour_not_charged: f.labour_not_charged, payer_name: f.payer_name.trim() || null,
+      paid_direct: f.paid_direct, labour_not_charged: f.labour_not_charged, payer_name: f.payer_name.trim() || null, book_name: f.book_name.trim() || null,
     }
     setBusy(true)
     setMsg(null)
@@ -127,6 +128,12 @@ export default function CustomerForm({ open, customer, customers, onClose, onSav
         placeholder={f.display_name || 'PT Pulau Baru Jaya'} hint={t('u142.payerHint')} />
       <datalist id="payer-names">
         {[...new Set((customers || []).map((c) => c.payer_name).filter(Boolean))].sort().map((n) => <option key={n} value={n} />)}
+      </datalist>
+      {/* The book (pembukuan) its costs go into, inside the paying PT (143) */}
+      <Input label={t('u143.book')} value={f.book_name} onChange={set('book_name')} maxLength={120} list="book-names"
+        placeholder={f.display_name || 'PIJ 1'} hint={t('u143.bookHint')} />
+      <datalist id="book-names">
+        {booksOfPayer(customers, f.payer_name.trim() || f.display_name.trim()).map((n) => <option key={n} value={n} />)}
       </datalist>
       <Textarea label={t('cust.pinnedNotes')} value={f.pinned_notes} onChange={set('pinned_notes')} rows={2} hint={t('cust.pinnedHint')} />
       {!editing && (
