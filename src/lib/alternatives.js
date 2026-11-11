@@ -25,6 +25,17 @@ export function numberTokens(text) {
   return out
 }
 
+// The brands written on a part's alternate rows (145), for searching.
+export const altBrands = (item) => (item?.alt_parts || []).map((r) => r.brand).filter(Boolean).join(' ')
+
+// Other parts (active or not) that already carry one of the numbers in this text, as their own number or an
+// alternate row (145): "Nomor ini sudah ada di …".
+export function numberOwners(items, text, selfId) {
+  const toks = numberTokens(text)
+  if (!toks.length) return []
+  return (items || []).filter((x) => x.item_type === 'part' && x.id !== selfId && toks.some((tk) => partNumbers(x).has(tk)))
+}
+
 export function partNumbers(item) {
   return new Set([...numberTokens(item?.code), ...numberTokens(item?.alt_numbers)])
 }
@@ -60,4 +71,46 @@ export function fitsVehicle(item, vehicle) {
   if (model.length < 3) return false
   const text = `${item?.fits || ''} ${item?.name || ''}`.toLowerCase().replace(/\s+/g, '')
   return text.includes(model)
+}
+
+// Catalog parts that look like what someone is typing on a PO or job line (145, item 39): the same part number
+// (dashes, dots, spaces and alternate rows count), else the name's words in any order with small typos allowed.
+// Parts that fit the vehicle come first. Returns [{ item, why: 'number' | 'name' }], best first.
+const STOP = new Set(['dan', 'untuk', 'utk', 'the', 'and', 'for', 'set', 'pcs'])
+const words = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
+  .filter((w) => w.length >= 3 && !STOP.has(w))
+function near(a, b) {
+  if (a === b) return true
+  if (a.length >= 4 && (b.startsWith(a) || a.startsWith(b))) return true
+  if (Math.min(a.length, b.length) < 5 || Math.abs(a.length - b.length) > 1) return false
+  // one letter off (added, missing or different): "mitshubishi" ~ "mitsubishi"
+  let i = 0, j = 0, miss = 0
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue }
+    if (++miss > 1) return false
+    if (a.length > b.length) i++
+    else if (b.length > a.length) j++
+    else { i++; j++ }
+  }
+  return miss + (a.length - i) + (b.length - j) <= 1
+}
+export function catalogMatches(items, { name, number, vehicle, selfId, limit = 3 } = {}) {
+  const toks = [...numberTokens(number), ...numberTokens(name)]
+  const want = words(name).filter((w) => !/\d/.test(w) || w.length >= 4)
+  const out = []
+  for (const x of items || []) {
+    if (x.item_type !== 'part' || !x.active || x.id === selfId) continue
+    let score = 0, why = null
+    if (toks.length && toks.some((tk) => partNumbers(x).has(tk))) { score = 100; why = 'number' }
+    else if (want.length) {
+      const have = words(`${x.name} ${x.brand || ''} ${x.code || ''} ${altBrands(x)}`)
+      const hit = want.filter((w) => have.some((h) => near(w, h))).length
+      // most of the typed words, and at least two (or the only one) of them
+      if (hit >= Math.min(2, want.length) && hit / want.length >= 0.6) { score = 50 * hit / want.length; why = 'name' }
+    }
+    if (!why) continue
+    if (fitsVehicle(x, vehicle)) score += 5
+    out.push({ item: x, why, score })
+  }
+  return out.sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name)).slice(0, limit)
 }

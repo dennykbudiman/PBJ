@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { altBrands, catalogMatches, numberOwners } from '../../lib/alternatives'
+import CatalogMatches from '../../components/CatalogMatches'
 import { Button, Empty, Input, Modal, Select, useToast } from '../../components/ui'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
@@ -145,8 +147,11 @@ function AddTyped({ group: g, data, onClose, onDone }) {
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
   const toggle = (setter, id, on) => setter((s) => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n })
   const parts = useMemo(() => data.items.filter((x) => x.item_type === 'part' && x.active).map((x) => ({
-    key: x.id, item: x, search: [x.name, x.code, x.brand, x.alt_numbers].filter(Boolean).join(' ').toLowerCase(),
+    key: x.id, item: x, search: [x.name, x.code, x.brand, x.alt_numbers, altBrands(x)].filter(Boolean).join(' ').toLowerCase(),
   })), [data.items])
+  // "Mungkin sudah ada di katalog": parts that look like this typed one, before a duplicate is made (145, item 39)
+  const maybe = useMemo(() => catalogMatches(data.items, { name: g.name, number: lastPo?.part_number, limit: 3 }), [data.items]) // eslint-disable-line react-hooks/exhaustive-deps
+  const codeOwners = mode === 'new' ? numberOwners(data.items, f.code) : []
 
   async function save() {
     if (!pickedJob.size && !pickedPo.size) return toast(t('tp.pickLines'), 'err')
@@ -176,6 +181,8 @@ function AddTyped({ group: g, data, onClose, onDone }) {
   return (
     <Modal open onClose={onClose} title={t('tp.addTitle', { name: g.name })} wide
       footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{mode === 'new' ? t('tp.saveNew') : t('tp.saveLink')}</Button></>}>
+      {mode === 'new' && <CatalogMatches matches={maybe} title={t('u145.maybeInCatalog')} useLabel={t('u145.linkThis')}
+        onUse={(x) => { setExisting(x); setMode('existing') }} />}
       <div className="seg" style={{ marginBottom: 12 }}>
         <button type="button" className={`seg-btn ${mode === 'new' ? 'on' : ''}`} onClick={() => setMode('new')}>{t('tp.modeNew')}</button>
         <button type="button" className={`seg-btn ${mode === 'existing' ? 'on' : ''}`} onClick={() => setMode('existing')}>{t('tp.modeExisting')}</button>
@@ -183,7 +190,8 @@ function AddTyped({ group: g, data, onClose, onDone }) {
       {mode === 'new' ? (
         <div className="grid3">
           <Input fieldClass="span2" label={t('cat.name')} value={f.name} onChange={set('name')} maxLength={200} hint={t('tp.nameHint')} />
-          <Input label={t('cat.partNo')} value={f.code} onChange={set('code')} />
+          <Input label={t('cat.partNo')} value={f.code} onChange={set('code')}
+            hint={codeOwners.length ? `${t('u145.numberTaken')} ${codeOwners.slice(0, 3).map((o) => o.name).join(', ')}` : null} />
           <Input label={t('cat.brand')} value={f.brand} onChange={set('brand')} />
           <Select label={t('cat.supplier')} value={f.supplier_id} onChange={set('supplier_id')}
             options={[{ value: '', label: '—' }, ...data.suppliers.filter((s) => s.active !== false).map((s) => ({ value: s.id, label: s.name }))]} />

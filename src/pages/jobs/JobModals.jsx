@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import { Button, Input, Modal, Notice, Select, Textarea } from '../../components/ui'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
@@ -155,7 +157,16 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const overpaid = Math.max(0, cash - (Number(ro.total) - Number(ro.settled_direct || 0)))
   // km in before invoicing, unless marked "km tidak terbaca" (143)
   const noKm = ro.odometer_in == null && !ro.km_unreadable
-  const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0 || noKm
+  // the job's POs with lines not received yet (145, item 37): ordered − received − cancelled > 0, drafts and outside
+  // work too, cancelled POs left out. Blocks the invoice; Pemilik or Admin can go ahead with a written reason.
+  const { roleName } = useAuth()
+  const ownerAdmin = roleName === 'Owner' || roleName === 'Admin'
+  const openPos = (job.pos || []).filter((p) => p.status !== 'cancelled').map((p) => ({
+    po: p, n: (job.poLines || []).filter((l) => l.po_id === p.id && Number(l.qty_ordered) - Number(l.qty_delivered) - Number(l.qty_cancelled) > 0).length,
+  })).filter((x) => x.n > 0)
+  const [override, setOverride] = useState('')
+  const overrideOk = ownerAdmin && override.trim().length >= 5
+  const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0 || noKm || (openPos.length > 0 && !overrideOk)
   // Warnings only (the invoice can still be made): parts that would go below zero on the shelf, the company's credit
   // limit, and companies that aren't on account (pay at pickup).
   const [check, setCheck] = useState({ short: [], owed: null })
@@ -191,7 +202,9 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
         const d = await supabase.from('ro_services').delete().in('id', empty.map((s) => s.id))
         if (d.error) return d
       }
-      const r = await supabase.rpc('convert_to_invoice', { p_ro: ro.id })
+      const r = openPos.length > 0
+        ? await supabase.rpc('convert_to_invoice_open_po', { p_ro: ro.id, p_reason: override.trim() })
+        : await supabase.rpc('convert_to_invoice', { p_ro: ro.id })
       no = r.data
       return r
     })
@@ -206,6 +219,19 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
       {zeroParts.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('u139.zeroParts', { names: zeroParts.map((l) => l.name).join(', ') })}</Notice>}
       {noTech.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.needTech', { names: noTech.map((s) => s.name).join(', ') })}</Notice>}
       {noKm && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('u143.needKmIn')}</Notice>}
+      {openPos.length > 0 && (
+        <Notice kind="warn" style={{ marginBottom: 10 }}>
+          <div><b>{t('u145.openPoTitle')}</b></div>
+          {openPos.map(({ po, n }) => (
+            <div key={po.id}><Link to={`/inventory/purchase-orders/${po.id}`} onClick={onClose}>PO {po.po_number}</Link>: {t('u145.openPoLines', { n })} — {t('u145.openPoDo')}</div>
+          ))}
+          {ownerAdmin ? (
+            <label className="mini" style={{ display: 'block', marginTop: 8 }}>{t('u145.openPoReason')}
+              <textarea className="textarea" rows={2} maxLength={250} value={override} onChange={(e) => setOverride(e.target.value)} placeholder={t('u145.openPoReasonPh')} />
+            </label>
+          ) : <div className="small" style={{ marginTop: 4 }}>{t('u145.openPoAskOwner')}</div>}
+        </Notice>
+      )}
       {overpaid > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overpaidFirst', { amount: rp(overpaid) })}</Notice>}
       {check.short.length > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.stockShortIntro')} {check.short.join('; ')}</Notice>}
       {overLimit && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overCreditLimit', { owed: rp(afterThis), limit: rp(limit) })}</Notice>}

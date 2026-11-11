@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Avatar, Badge, Button, Empty, Modal, useToast } from '../../components/ui'
+import { Avatar, Badge, Button, Empty, Modal, useToast, Input, Notice, Toggle } from '../../components/ui'
+import CatalogMatches from '../../components/CatalogMatches'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
-import { supabase, writeRow } from '../../lib/supabase'
-import { num, parseDecimal, readAmount, rp } from '../../lib/format'
+import { supabase, errorText, writeRow } from '../../lib/supabase'
+import { num, parseDecimal, readAmount, rp, fmtDate, jobNo, invoiceNo } from '../../lib/format'
 import { APPROVAL_COLOR, LINE_TYPES, WORK_STATUS, autoFeesFor, linesFromCatalogItem, lineAmount, lineDiscount, lineNet } from '../../lib/jobs'
 import { discountState } from '../catalog/DiscountsTab'
 import { useShop } from '../../context/ShopContext'
@@ -13,7 +14,7 @@ import { LINE_COLOR, isNonPkp, jobToPoCost, lineState, poToJobCost } from '../..
 import { BlurInput, MoreMenu, Picker, discountText, parseDiscount } from './common'
 import { worksOnJobs } from './useJobData'
 import { useAuth } from '../../context/AuthContext'
-import { alternativesIndex, fitsVehicle, numberTokens } from '../../lib/alternatives'
+import { alternativesIndex, fitsVehicle, numberTokens, altBrands, catalogMatches } from '../../lib/alternatives'
 
 const nextPos = (rows) => rows.reduce((m, r) => Math.max(m, Number(r.position) || 0), -1) + 1
 
@@ -79,7 +80,7 @@ export async function fillFromBundle({ job, cat, tp, svc }) {
 }
 
 export default function ServicesTab({ job, cat, staff, editable, workEditable, showCost, run, busy, openApproval }) {
-  const { t } = useT()
+  const { t, lang } = useT()
   const ro = job.ro
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
@@ -104,6 +105,17 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
     if (!ids.length) return
     await run(() => supabase.from('ro_services').update({ technician_id: id }).in('id', ids), t('u139.techAllDone', { name, n: ids.length }))
   }
+
+  // "Ulangi pekerjaan sebelumnya" (145, item 33): copy services from an earlier job of this truck
+  const [repeatOpen, setRepeatOpen] = useState(false)
+  const [lastJob, setLastJob] = useState(null)
+  const fresh = editable && ro.order_status === 'estimate' && !job.items.length
+  useEffect(() => {
+    if (!fresh || !ro.vehicle_id) return
+    let live = true
+    previousJobs(ro.vehicle_id, ro.id, 1).then((list) => { if (live) setLastJob(list[0] || null) })
+    return () => { live = false }
+  }, [fresh, ro.vehicle_id, ro.id])
 
   async function addBlank() {
     const name = newName.trim()
@@ -135,6 +147,7 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
               </select>
             </label>
           )}
+          {!isFleet && ro.vehicle_id && <Button icon="undo" onClick={() => setRepeatOpen(true)}>{t('u145.repeat')}</Button>}
           {!adding ? (
             <Button icon="plus" onClick={() => setAdding(true)}>{t('job.addService')}</Button>
           ) : (
@@ -147,6 +160,15 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
           )}
         </div>
       )}
+      {fresh && lastJob && lastJob.services.length > 0 && (
+        <Notice kind="info" style={{ marginBottom: 12 }}>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <span>{t('u145.repeatHint', { date: fmtDate(lastJob.day, lang), names: lastJob.services.map((x) => x.name).slice(0, 3).join(', ') + (lastJob.services.length > 3 ? '…' : '') })}</span>
+            <Button size="sm" onClick={() => setRepeatOpen(true)}>{t('u145.repeatYes')}</Button>
+          </div>
+        </Notice>
+      )}
+      {repeatOpen && <RepeatJobModal job={job} cat={cat} staff={staff} run={run} busy={busy} onClose={() => setRepeatOpen(false)} />}
       {job.services.length === 0 ? (
         <div className="card"><Empty icon="wrench" title={t('job.noServices')}>{editable ? t('job.noServicesText') : null}</Empty></div>
       ) : job.services.map((s, i) => (
@@ -169,6 +191,8 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   const template = s.template_id ? cat.templates.find((x) => x.id === s.template_id) : null
   const schedule = s.service_schedule_id ? (job.schedules || []).find((x) => x.id === s.service_schedule_id) : null
   const { isFleet, can } = useAuth()
+  const canPkg = can('edit_catalog') && !isFleet
+  const [pkgOpen, setPkgOpen] = useState(false)
   const { settings } = useShop()
   const tech = staff.find((p) => p.id === s.technician_id)
   const upd = (patch, okText) => run(() => supabase.from('ro_services').update(patch).eq('id', s.id), okText)
@@ -178,7 +202,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   // vehicle come first (migration 136).
   const itemOptions = useMemo(() => cat.items.filter((x) => x.active).map((x) => ({
     key: x.id, item: x, fits: x.item_type === 'part' && fitsVehicle(x, job.vehicle),
-    search: [x.name, x.code, x.brand, x.tire_size, x.alt_numbers, x.fits, ...numberTokens(x.code), ...numberTokens(x.alt_numbers)].filter(Boolean).join(' ').toLowerCase(),
+    search: [x.name, x.code, x.brand, x.tire_size, x.alt_numbers, altBrands(x), x.fits, ...numberTokens(x.code), ...numberTokens(x.alt_numbers)].filter(Boolean).join(' ').toLowerCase(),
   })).sort((a, b) => Number(b.fits) - Number(a.fits)), [cat.items, job.vehicle])
   const [altFor, setAltFor] = useState(null) // the job line whose alternatives are shown
 
@@ -287,14 +311,16 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
           onChange={(e) => upd({ work_status: e.target.value })}>
           {WORK_STATUS.map((w) => <option key={w} value={w}>{t(`job.work.${w}`)}</option>)}
         </select>
-        {editable && (
+        {(editable || canPkg) && (
           <MoreMenu label={t('job.serviceMenu', { name: s.name })} items={[
-            index > 0 && { label: t('job.moveUp'), icon: 'chevronUp', onClick: () => moveService(-1) },
-            index < job.services.length - 1 && { label: t('job.moveDown'), icon: 'chevronDown', onClick: () => moveService(1) },
-            { label: t('job.serviceDiscount'), icon: 'percent', onClick: () => setDiscOpen(true) },
-            isFlat ? { label: t('job.removeFlat'), icon: 'tag', onClick: () => upd({ flat_price: null }) }
-              : { label: t('job.makeFlat'), icon: 'tag', onClick: () => upd({ flat_price: lineSum }) },
-            { label: t('job.deleteService'), icon: 'trash', danger: true, onClick: () => setConfirmDelete(true) },
+            editable && index > 0 && { label: t('job.moveUp'), icon: 'chevronUp', onClick: () => moveService(-1) },
+            editable && index < job.services.length - 1 && { label: t('job.moveDown'), icon: 'chevronDown', onClick: () => moveService(1) },
+            editable && { label: t('job.serviceDiscount'), icon: 'percent', onClick: () => setDiscOpen(true) },
+            editable && (isFlat ? { label: t('job.removeFlat'), icon: 'tag', onClick: () => upd({ flat_price: null }) }
+              : { label: t('job.makeFlat'), icon: 'tag', onClick: () => upd({ flat_price: lineSum }) }),
+            // the work on this service as a package for next time (145, item 32), also on an invoiced job
+            canPkg && lines.length > 0 && { label: t('u145.savePkg'), icon: 'layers', onClick: () => setPkgOpen(true) },
+            editable && { label: t('job.deleteService'), icon: 'trash', danger: true, onClick: () => setConfirmDelete(true) },
           ]} />
         )}
       </div>
@@ -385,6 +411,12 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
                         <> <Link className="small" to={`/catalog/parts?typed=${encodeURIComponent(l.name)}`}>{t('tp.addLink')}</Link></>
                       )}
                     </div>
+                    {/* A part typed by hand that looks like a catalog part: use the catalog part instead (145, item 39) */}
+                    {!item && l.item_type === 'part' && editable && !isFleet && (
+                      <CatalogMatches matches={catalogMatches(cat.items, { name: l.name, vehicle: job.vehicle, limit: 2 })}
+                        onUse={l.stock_deducted || l.po_item_id ? null : (x) => swapLine(l, x)}
+                        disabledHint={l.po_item_id ? t('u145.cantSwapPo') : null} />
+                    )}
                   </td>
                   {showCost && (
                     <td className="num">{editable ? <BlurInput className="input cell num" value={num(l.cost)} aria-label={t('cat.cost')} onCommit={commitMoney(l.id, 'cost')} /> : (Number(l.cost) ? rp(l.cost) : '—')}</td>
@@ -454,6 +486,7 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
         onClose={() => setAltFor(null)}
         onAdd={(item) => run(() => insertLines(s.id, ro.id, nextPos(lines), buildFor(item, cat), job.fees)).then((ok) => ok && setAltFor(null))}
         onSwap={(item) => swapLine(altFor, item).then(() => setAltFor(null))} />
+      {pkgOpen && <SavePackageModal s={s} lines={lines} cat={cat} onClose={() => setPkgOpen(false)} />}
     </section>
   )
 }
@@ -580,6 +613,162 @@ function AltModal({ line, alts, cat, vehicle, busy, canAdd, canSwap, onClose, on
           )
         })}
       </div>
+    </Modal>
+  )
+}
+
+// ---- 145 · packages from done work (item 32) and repeating an earlier job (item 33) ---------------------------------
+
+// "Simpan sebagai paket": the service's catalog lines (parts with their quantity, bulk oil in litres, labour) become
+// a package (Katalog → Paket servis). Prices aren't copied: a package uses the catalog's prices when it is used; a
+// flat-price service can keep its flat price. Fee lines aren't copied (they come with their parts by themselves);
+// parts typed by hand aren't in the catalog, so they can't be in a package: they are listed, with a link to add them.
+function SavePackageModal({ s, lines, cat, onClose }) {
+  const { t } = useT()
+  const toast = useToast()
+  const flat = s.flat_price != null
+  const [f, setF] = useState({ name: s.name, tags: '', keepFlat: flat })
+  const [busy, setBusy] = useState(false)
+  const [fail, setFail] = useState(null)
+  const take = lines.filter((l) => l.catalog_item_id && cat.itemById[l.catalog_item_id] && cat.itemById[l.catalog_item_id].item_type !== 'fee' && Number(l.qty) > 0)
+  const typed = lines.filter((l) => !l.catalog_item_id && l.item_type !== 'fee')
+  const dup = cat.templates.find((x) => x.active && x.name.trim().toLowerCase() === f.name.trim().toLowerCase())
+  async function save() {
+    if (!f.name.trim()) return setFail(t('settings.required'))
+    if (!take.length) return setFail(t('u145.pkgNothing'))
+    setBusy(true); setFail(null)
+    const tags = f.tags.split(',').map((x) => x.trim()).filter(Boolean)
+    const tp = await writeRow('service_templates', { name: f.name.trim(), tags, flat_price: flat && f.keepFlat ? s.flat_price : null, checklist_id: s.checklist_id || null, active: true })
+    if (tp.error) { setBusy(false); return setFail(errorText(tp.error, t)) }
+    const rows = take.map((l, i) => ({ template_id: tp.data.id, catalog_item_id: l.catalog_item_id, qty: Number(l.qty), position: i }))
+    const r = await supabase.from('service_template_items').insert(rows)
+    setBusy(false)
+    if (r.error) return setFail(errorText(r.error, t))
+    toast(t('u145.pkgSaved', { name: f.name.trim(), n: rows.length }))
+    onClose()
+  }
+  return (
+    <Modal open title={t('u145.savePkgTitle')} onClose={onClose}
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('u145.savePkg')}</Button></>}>
+      {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
+      <Input label={t('u145.pkgName')} value={f.name} onChange={(e) => setF((x) => ({ ...x, name: e.target.value }))} maxLength={200}
+        hint={dup ? t('u145.pkgDup', { name: dup.name }) : null} />
+      <Input label={t('u145.pkgTags')} value={f.tags} onChange={(e) => setF((x) => ({ ...x, tags: e.target.value }))} placeholder={t('u145.pkgTagsPh')} />
+      {flat && <Toggle checked={f.keepFlat} onChange={(v) => setF((x) => ({ ...x, keepFlat: v }))} label={t('u145.pkgKeepFlat', { amount: rp(s.flat_price) })} />}
+      <div className="sectionlabel">{t('u145.pkgLines', { n: take.length })}</div>
+      {take.map((l) => <div key={l.id} className="small">{cat.itemById[l.catalog_item_id].name} × {num(l.qty, 2)}{cat.itemById[l.catalog_item_id].unit ? ` ${cat.itemById[l.catalog_item_id].unit}` : ''}</div>)}
+      {typed.length > 0 && <>
+        <div className="sectionlabel">{t('u145.pkgTyped')}</div>
+        {typed.map((l) => <div key={l.id} className="small">{l.name} · <Link to={`/catalog/parts?typed=${encodeURIComponent(l.name)}`}>{t('tp.addLink')}</Link></div>)}
+      </>}
+      <div className="hint">{t('u145.pkgHint')}</div>
+    </Modal>
+  )
+}
+
+// A truck's earlier jobs (newest first), each with its services and their lines (cancelled/declined ones left out).
+async function previousJobs(vehicleId, exceptId, limit = 8, jobNumber = null) {
+  let q = supabase.from('repair_orders').select('id, job_number, invoice_number, order_status, created_at, invoiced_at, closed_at, vehicle_id')
+  q = jobNumber ? q.eq('job_number', jobNumber) : q.eq('vehicle_id', vehicleId).neq('id', exceptId).order('created_at', { ascending: false }).limit(limit)
+  const jobs = await q
+  const list = jobs.data || []
+  if (!list.length) return []
+  const svc = await supabase.from('ro_services').select('id, ro_id, name, approval_status, flat_price, notes_external, template_id, checklist_id, position')
+    .in('ro_id', list.map((j) => j.id)).order('position')
+  const services = (svc.data || []).filter((x) => x.approval_status !== 'declined')
+  const items = services.length ? await supabase.from('ro_service_items').select('id, service_id, item_type, catalog_item_id, name, description, qty, price, cost, taxable, show_qty_price, position')
+    .in('service_id', services.map((x) => x.id)).order('position') : { data: [] }
+  return list.map((j) => ({
+    ...j, day: (j.invoiced_at || j.created_at || '').slice(0, 10),
+    services: services.filter((x) => x.ro_id === j.id).map((x) => ({ ...x, lines: (items.data || []).filter((l) => l.service_id === x.id) })),
+  })).filter((j) => j.id !== exceptId)
+}
+
+// "Ulangi pekerjaan sebelumnya": tick services of an earlier job; they are added as new services, parts and labour at
+// today's catalog prices with the same quantities (bulk oil at the old litres, to check), status "Belum", a mechanic
+// if chosen. Concerns aren't copied; lines that were on a PO come as plain lines (no PO link).
+function RepeatJobModal({ job, cat, staff, run, busy, onClose }) {
+  const { t, lang } = useT()
+  const [jobs, setJobs] = useState(null)
+  const [pick, setPick] = useState(() => new Set())
+  const [tech, setTech] = useState('')
+  const [no, setNo] = useState('')
+  const [msg, setMsg] = useState(null)
+  useEffect(() => {
+    let live = true
+    previousJobs(job.ro.vehicle_id, job.ro.id).then((list) => { if (live) setJobs(list) })
+    return () => { live = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  async function findByNo() {
+    const n = Number(no.replace(/\D/g, ''))
+    if (!n) return
+    const list = await previousJobs(null, job.ro.id, 1, n)
+    if (!list.length) return setMsg(t('u145.repeatNotFound', { no }))
+    setMsg(null)
+    setJobs((x) => [...list.filter((j) => !(x || []).some((y) => y.id === j.id)), ...(x || [])])
+  }
+  const all = (jobs || []).flatMap((j) => j.services)
+  const chosen = all.filter((x) => pick.has(x.id))
+  async function copy() {
+    const ok = await run(async () => {
+      let pos = nextPos(job.services)
+      for (const old of chosen) {
+        const tp = old.template_id ? cat.templates.find((x) => x.id === old.template_id && x.active) : null
+        const { data: svc, error } = await writeRow('ro_services', {
+          ro_id: job.ro.id, name: old.name, notes_external: old.notes_external || null, template_id: tp?.id || null,
+          checklist_id: old.checklist_id || null, flat_price: tp?.flat_price ?? null, position: pos++, technician_id: tech || null,
+        })
+        if (error) return { error }
+        const built = { lines: [], jobFees: [] }
+        for (const l of old.lines) {
+          const item = l.catalog_item_id ? cat.itemById[l.catalog_item_id] : null
+          if (item && item.item_type === 'fee') continue // fees come with their parts by themselves
+          if (item && item.active) {
+            const r = buildFor(item, cat, { qty: Number(l.qty) }, tp?.flat_price != null)
+            built.lines.push(...r.lines); built.jobFees.push(...r.jobFees)
+          } else if (!item) {
+            built.lines.push({ item_type: l.item_type, name: l.name, description: l.description || null, qty: l.qty, price: l.price ?? 0,
+              ...(l.cost != null ? { cost: l.cost } : {}), taxable: l.taxable, show_qty_price: l.show_qty_price })
+          }
+        }
+        const res = await insertLines(svc.id, job.ro.id, 0, built, job.fees)
+        const bad = res.find((x) => x.error)
+        if (bad) return bad
+      }
+      return { data: true }
+    }, t('u145.repeatDone', { n: chosen.length }))
+    if (ok) onClose()
+  }
+  return (
+    <Modal open wide title={t('u145.repeatTitle')} onClose={onClose}
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} disabled={!chosen.length} onClick={copy}>{t('u145.repeatCopy', { n: chosen.length })}</Button></>}>
+      <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
+        <input className="input" style={{ width: 170 }} value={no} onChange={(e) => setNo(e.target.value)} placeholder={t('u145.repeatByNo')} aria-label={t('u145.repeatByNo')}
+          onKeyDown={(e) => { if (e.key === 'Enter') findByNo() }} />
+        <Button size="sm" onClick={findByNo}>{t('u145.repeatFind')}</Button>
+        <div className="spacer" />
+        <label className="row" style={{ gap: 6 }}><span className="small muted">{t('u145.repeatTech')}</span>
+          <select className="select" value={tech} onChange={(e) => setTech(e.target.value)} aria-label={t('u145.repeatTech')}>
+            <option value="">—</option>
+            {staff.filter(worksOnJobs).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select></label>
+      </div>
+      {msg && <Notice kind="warn" style={{ marginBottom: 8 }}>{msg}</Notice>}
+      {jobs == null ? <div className="muted">{t('common.loading')}</div> : jobs.length === 0 ? <div className="muted">{t('u145.repeatNone')}</div> : jobs.map((j) => (
+        <div key={j.id} className="repeat-job">
+          <div className="row wrap" style={{ gap: 8 }}>
+            <b>#{jobNo(j.job_number)}</b><span className="muted small">{fmtDate(j.day, lang)}{j.invoice_number ? ` · ${invoiceNo(j.invoice_number)}` : ''}</span>
+          </div>
+          {j.services.length === 0 && <div className="muted small">{t('u145.repeatEmpty')}</div>}
+          {j.services.map((x) => (
+            <label key={x.id} className="inlinecheck" style={{ display: 'flex' }}>
+              <input type="checkbox" checked={pick.has(x.id)} onChange={(e) => setPick((p) => { const n = new Set(p); if (e.target.checked) n.add(x.id); else n.delete(x.id); return n })} />
+              <span><b>{x.name}</b> <span className="muted small">{x.lines.filter((l) => l.item_type !== 'fee').map((l) => `${l.name} × ${num(l.qty, 2)}`).join(', ') || t('u145.repeatNoLines')}</span></span>
+            </label>
+          ))}
+        </div>
+      ))}
+      <div className="hint">{t('u145.repeatHintText')}</div>
     </Modal>
   )
 }

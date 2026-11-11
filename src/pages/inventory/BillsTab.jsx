@@ -7,7 +7,9 @@ import { supabase } from '../../lib/supabase'
 import { fmtDate, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { addDays } from '../../lib/calendar'
-import { lineDue, lineOwed, owedQty, poPaidByPt } from '../../lib/inventory'
+import { amountsTotal, lineDue, owedQty, poAmounts, poPaidByPt } from '../../lib/inventory'
+import { useAuth } from '../../context/AuthContext'
+import { TalanganModal } from './PoPage'
 import { useRun } from '../jobs/common'
 import { Tick } from './bits'
 import { PayModal } from './PoModals'
@@ -24,15 +26,20 @@ export default function BillsTab({ data, reload, canPay: canEdit }) {
   const [sel, setSel] = useState(() => new Set())
   const [paying, setPaying] = useState(null) // supplier id
 
+  const { roleName } = useAuth()
+  const ownerAdmin = roleName === 'Owner' || roleName === 'Admin'
+  const [reimb, setReimb] = useState(null) // a talangan PO to mark "Sudah diganti"
   const groups = useMemo(() => {
     const g = {}
-    for (const l of data.lines) {
-      if (owedQty(l) <= 0) continue
+    // the PT pays these itself (142): see "Tagihan PT"; the driver paid a talangan PO (145): see below
+    const owing = data.lines.filter((l) => owedQty(l) > 0 && data.poById[l.po_id] && !poPaidByPt(data.poById[l.po_id]) && !data.poById[l.po_id].talangan_name)
+    // PPN once per PO and supplier invoice (145)
+    const amounts = poAmounts(owing.map((l) => ({ l, po: data.poById[l.po_id] })), 'owed')
+    for (const l of owing) {
       const po = data.poById[l.po_id]
-      if (!po || poPaidByPt(po)) continue // the PT pays these itself (142): see "Tagihan PT"
       const sup = data.supplierById[po.supplier_id]
       const due = lineDue(l, po, sup)
-      const amount = lineOwed(l, po)
+      const amount = amounts.get(l.id)?.amount || 0
       const x = (g[po.supplier_id] ||= { sup, rows: [], total: 0, overdue: 0 })
       x.rows.push({ l, po, due, amount })
       x.total += amount
@@ -47,6 +54,12 @@ export default function BillsTab({ data, reload, canPay: canEdit }) {
     total: a.total + x.total, overdue: a.overdue + x.overdue,
     soon: a.soon + x.rows.filter((r) => r.due && r.due >= today && r.due <= soon).reduce((s, r) => s + r.amount, 0),
   }), { total: 0, overdue: 0, soon: 0 })
+
+  // POs the driver paid first and the shop pays back (a company that pays the shop), 145 item 35
+  const talangan = useMemo(() => Object.values(data.poById).filter((po) => po.talangan_name && !poPaidByPt(po) && po.status !== 'cancelled').map((po) => {
+    const ls = data.lines.filter((l) => l.po_id === po.id)
+    return { po, sup: data.supplierById[po.supplier_id], amount: amountsTotal(poAmounts(ls.map((l) => ({ l, po })), 'delivered')) }
+  }).sort((a, b) => Number(!!a.po.reimbursed_on) - Number(!!b.po.reimbursed_on) || (a.po.po_number || '').localeCompare(b.po.po_number || '')), [data])
 
   const toggle = (id, on) => setSel((s) => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n })
   const recent = data.payments.slice(0, 15)
@@ -105,6 +118,30 @@ export default function BillsTab({ data, reload, canPay: canEdit }) {
         )
       })}
 
+      {talangan.length > 0 && (
+        <section className="card" style={{ marginBottom: 16 }}>
+          <h2>{t('u145.talanganShop')}</h2>
+          <div className="table compact flush">
+            <table>
+              <thead><tr><th>{t('inv.col.po')}</th><th>{t('u145.driver')}</th><th className="wide-only">{t('inv.col.supplier')}</th><th>{t('u145.status')}</th><th className="num">{t('inv.col.amount')}</th><th aria-label={t('inv.more')} /></tr></thead>
+              <tbody>
+                {talangan.map(({ po, sup, amount }) => (
+                  <tr key={po.id}>
+                    <td className="nowrap"><Link to={`/inventory/purchase-orders/${po.id}`}>{po.po_number}</Link></td>
+                    <td>{po.talangan_name}{po.talangan_nota && <div className="small muted">{t('u145.notaNo', { no: po.talangan_nota })}</div>}</td>
+                    <td className="wide-only">{sup?.name || '—'}</td>
+                    <td>{po.reimbursed_on ? <Badge color="green">{t('u145.reimbursedOn', { date: fmtDate(po.reimbursed_on, lang) })}</Badge> : <Badge color="amber">{t('u145.notReimbursed')}</Badge>}</td>
+                    <td className="num nowrap">{rp(amount)}</td>
+                    <td className="num">{ownerAdmin && !po.reimbursed_on && <button type="button" className="linkbtn small" onClick={() => setReimb(po)}>{t('u145.reimburse')}</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="hint">{t('u145.talanganShopHint')}</div>
+        </section>
+      )}
+
       <section className="card">
         <h2>{t('inv.bills.recent')}</h2>
         {recent.length === 0 ? <div className="muted small">{t('inv.bills.noPayments')}</div> : (
@@ -129,6 +166,7 @@ export default function BillsTab({ data, reload, canPay: canEdit }) {
       </section>
       <div className="hint">{t('inv.bills.hint')}</div>
       {confirmEl}
+      {reimb && <TalanganModal po={reimb} onClose={() => setReimb(null)} onDone={() => { setReimb(null); reload(); toast(t('u145.reimbursed')) }} />}
       <PayModal open={!!paying} onClose={() => setPaying(null)} supplier={payGroup?.sup} items={payItems}
         onDone={(amount) => { const name = payGroup?.sup?.name || ''; setPaying(null); setSel(new Set()); reload(); toast(t('inv.pay.done', { amount: rp(amount), name })) }} />
     </>

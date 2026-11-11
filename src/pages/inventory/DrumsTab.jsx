@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import Icon from '../../components/Icon'
+import { nameKey } from '../../lib/books'
 import { Badge, Button, Empty, Input, Modal, Notice, PageHead, Select, Textarea, Toggle, useConfirm, useToast } from '../../components/ui'
 import { booksOfPayer, payerBookLabel } from '../../lib/books'
 import { useShop } from '../../context/ShopContext'
@@ -19,11 +22,27 @@ export default function DrumsTab({ data, canEdit }) {
   const [version, setVersion] = useState(0)
   const [modal, setModal] = useState(null) // { drum? }
   const [open, setOpen] = useState({})
+  // 145: payments per book ("Tandai lunas", Pemilik/Admin) and the print of the statements, for people who see costs
+  const { can, roleName } = useAuth()
+  const money = can('view_costs') || can('pay_supplier_bills')
+  const ownerAdmin = roleName === 'Owner' || roleName === 'Admin'
+  const [stmt, setStmt] = useState(null)
+  const [payFor, setPayFor] = useState(null) // { drum, debtor }
+  const [priceAsk, setPriceAsk] = useState(null) // a new drum price that differs from the catalog (item 31)
   useEffect(() => {
     let live = true
     supabase.rpc('drum_report').then((r) => { if (live) setRep(r) })
+    if (money) supabase.rpc('drum_statement').then((r) => { if (live) setStmt(r.data || null) })
     return () => { live = false }
-  }, [version])
+  }, [version]) // eslint-disable-line react-hooks/exhaustive-deps
+  const debtorOf = (drumId, o) => (stmt?.drums || []).find((x) => x.id === drumId)?.debtors
+    ?.find((x) => nameKey(x.payer) === nameKey(o.payer) && nameKey(x.book) === nameKey(o.book))
+  async function unpay(p) {
+    const ok = await confirm({ title: t('u145.unpayTitle'), text: t('u145.unpayText', { amount: rp(p.amount), date: fmtDate(p.paid_on, lang) }), yes: t('u145.unpayYes'), danger: true })
+    if (ok !== true) return
+    const { error } = await supabase.rpc('drum_unmark_paid', { p_id: p.id })
+    if (error) toast(errorText(error, t), 'err'); else { toast(t('u145.unpaid')); reload() }
+  }
   const reload = () => setVersion((v) => v + 1)
   const oils = data.items.filter((x) => x.item_type === 'part' && x.track_inventory && x.active)
   const payerNames = [...new Set(data.customers.map((c) => c.payer_name || c.display_name).filter(Boolean))].sort()
@@ -37,7 +56,10 @@ export default function DrumsTab({ data, canEdit }) {
   return (
     <>
       <PageHead title={t('u142.drumsTitle')} sub={t('u142.drumsSub')}
-        actions={canEdit && <Button variant="primary" icon="plus" onClick={() => setModal({})}>{t('u142.drumAdd')}</Button>} />
+        actions={<div className="row" style={{ gap: 6 }}>
+          {money && <Link className="btn" to="/print/drums"><Icon name="print" size={15} /> {t('u145.printDrums')}</Link>}
+          {canEdit && <Button variant="primary" icon="plus" onClick={() => setModal({})}>{t('u142.drumAdd')}</Button>}
+        </div>} />
       {rep?.error && <Notice kind="err">{errorText(rep.error, t)}</Notice>}
       {!rep ? <div className="muted">{t('common.loading')}</div> : (rep.data || []).length === 0 ? (
         <div className="card"><Empty icon="layers" title={t('u142.drumsNone')}>{t('u142.drumsNoneText')}</Empty></div>
@@ -68,9 +90,21 @@ export default function DrumsTab({ data, canEdit }) {
                 {neg && d.last && <div className="small text-red">{t('u142.drumOverdrawn')}</div>}
                 {(d.owed || []).length > 0 && (
                   <div className="small" style={{ marginTop: 4 }}>
-                    {d.owed.map((o) => (
-                      <div key={(o.payer || '-shop') + '|' + (o.book || '')}>{t(o.amount == null ? 'u142.owedLineNoAmount' : 'u142.owedLine', { from: o.payer ? payerBookLabel(o.payer, o.book) : t('u142.theShop'), to: payerBookLabel(d.paid_by, d.paid_by_book), litres: num(o.litres, 2), unit: oil.unit || 'L', amount: rp(o.amount) })}</div>
-                    ))}
+                    {d.owed.map((o) => {
+                      const x = debtorOf(d.id, o)
+                      return (
+                        <div key={(o.payer || '-shop') + '|' + (o.book || '')} className="row wrap" style={{ gap: '2px 8px' }}>
+                          <span>{t(o.amount == null ? 'u142.owedLineNoAmount' : 'u142.owedLine', { from: o.payer ? payerBookLabel(o.payer, o.book) : t('u142.theShop'), to: payerBookLabel(d.paid_by, d.paid_by_book), litres: num(o.litres, 2), unit: oil.unit || 'L', amount: rp(o.amount) })}</span>
+                          {x && (Number(x.open) <= 0 && Number(x.owed_all) > 0 ? <Badge color="green">{t('u145.lunas')}</Badge>
+                            : Number(x.paid) > 0 ? <span className="muted">{t('u145.paidOpen', { paid: rp(x.paid), open: rp(x.open) })}</span> : null)}
+                          {x && ownerAdmin && Number(x.open) > 0 && <button type="button" className="linkbtn small" onClick={() => setPayFor({ drum: d, debtor: x, oil })}>{t('u145.markPaid')}</button>}
+                          {x && (x.payments || []).map((p) => (
+                            <span key={p.id} className="muted">· {t('u145.paidChip', { amount: rp(p.amount), date: fmtDate(p.paid_on, lang) })}
+                              {ownerAdmin && <button type="button" className="linkbtn small danger" onClick={() => unpay(p)} aria-label={t('u145.unpayYes')}> ×</button>}</span>
+                          ))}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
                 {open[key] && (
@@ -98,7 +132,14 @@ export default function DrumsTab({ data, canEdit }) {
       <div className="hint">{t('u142.drumsHint')}</div>
       {confirmEl}
       <DrumModal open={!!modal} onClose={() => setModal(null)} drum={modal?.drum} itemId={modal?.item} oils={oils} payers={payerNames} customers={data.customers}
-        onSaved={() => { setModal(null); reload(); toast(t('u142.drumSaved')) }} />
+        onSaved={(row) => {
+          setModal(null); reload(); toast(t('u142.drumSaved'))
+          // a drum at a price other than the oil's catalog price: offer to change the catalog (item 31)
+          const item = data.items.find((x) => x.id === row?.catalog_item_id)
+          if (item && row.cost_per_l > 0 && item.price != null && Number(item.price) !== Number(row.cost_per_l) && can('edit_catalog')) setPriceAsk({ item, price: Number(row.cost_per_l) })
+        }} />
+      {payFor && <MarkPaidModal {...payFor} onClose={() => setPayFor(null)} onDone={() => { setPayFor(null); reload(); toast(t('u145.markedPaid')) }} />}
+      {priceAsk && <CatalogPriceModal {...priceAsk} onClose={() => setPriceAsk(null)} onDone={(msg) => { setPriceAsk(null); toast(msg) }} />}
     </>
   )
 }
@@ -137,7 +178,7 @@ function DrumModal({ open, onClose, drum, itemId, oils, payers, customers, onSav
     const r = drum ? await supabase.from('oil_drums').update(row).eq('id', drum.id) : await supabase.from('oil_drums').insert(row)
     running.current = false; setBusy(false)
     if (r.error) return setFail(errorText(r.error, t))
-    onSaved()
+    onSaved(row)
   }
   return (
     <Modal open={open} title={drum ? t('u142.drumEditTitle') : t('u142.drumAddTitle')} onClose={onClose}
@@ -160,6 +201,101 @@ function DrumModal({ open, onClose, drum, itemId, oils, payers, customers, onSav
       <Input label={t('u142.openedOn')} type="date" value={f.opened || ''} onChange={set('opened')} error={err.opened} />
       <Textarea label={t('u142.note')} value={f.note || ''} onChange={set('note')} rows={2} maxLength={500} placeholder={t('u142.noteEx')} />
       <div className="hint">{t('u142.drumFormHint')}</div>
+    </Modal>
+  )
+}
+
+// "Tandai lunas" (145, item 28): a payment from one book to the drum's owner; default everything still open.
+function MarkPaidModal({ drum, debtor, oil, onClose, onDone }) {
+  const { t } = useT()
+  const { timezone } = useShop()
+  const [f, setF] = useState({ amount: num(debtor.open), date: shopToday(timezone), method: 'transfer', ref: '' })
+  const [fail, setFail] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? e.target.value : e }))
+  async function save() {
+    const amount = readAmount(f.amount)
+    if (!(amount > 0)) return setFail(t('u145.errAmount'))
+    setBusy(true); setFail(null)
+    const { error } = await supabase.rpc('drum_mark_paid', { p_drum: drum.id, p_payer: debtor.payer, p_book: debtor.book, p_amount: amount,
+      p_paid_on: f.date, p_method: f.method || null, p_reference: f.ref.trim() || null })
+    setBusy(false)
+    if (error) return setFail(errorText(error, t))
+    onDone()
+  }
+  return (
+    <Modal open title={t('u145.markPaidTitle', { oil: oil.name })} onClose={onClose}
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('u145.markPaid')}</Button></>}>
+      {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
+      <div className="kvlist" style={{ marginBottom: 10 }}>
+        <div><span>{t('u145.debtor')}</span><b>{debtor.payer ? payerBookLabel(debtor.payer, debtor.book) : t('u142.theShop')}</b></div>
+        <div><span>{t('u145.drumOwner')}</span><b>{payerBookLabel(drum.paid_by, drum.paid_by_book)}</b></div>
+        <div><span>{t('u145.owedAll')}</span><b>{rp(debtor.owed_all)}</b></div>
+        {Number(debtor.paid) > 0 && <div><span>{t('u145.paidAll')}</span><b>{rp(debtor.paid)}</b></div>}
+        <div><span>{t('u145.stillOpen')}</span><b>{rp(debtor.open)}</b></div>
+      </div>
+      <div className="formgrid">
+        <Input label={t('u145.amountPaid')} value={f.amount} onChange={set('amount')} prefix="Rp" inputMode="numeric" />
+        <Input label={t('u145.paidOn')} type="date" value={f.date} onChange={set('date')} />
+      </div>
+      <Select label={t('u145.how')} value={f.method} onChange={set('method')}
+        options={[{ value: '', label: '—' }, ...['transfer', 'cash', 'giro', 'other'].map((m) => ({ value: m, label: t(`inv.pay.m.${m}`) }))]} />
+      <Input label={t('u145.reference')} value={f.ref} onChange={set('ref')} maxLength={200} />
+      <div className="hint">{t('u145.markPaidHint')}</div>
+    </Modal>
+  )
+}
+
+// A drum at a new price (145, item 31): change the oil's catalog price (selling price and cost) to it, and optionally
+// the oil lines on open jobs (not yet invoiced). Invoices are never changed.
+function CatalogPriceModal({ item, price, onClose, onDone }) {
+  const { t } = useT()
+  const [lines, setLines] = useState(null)
+  const [pick, setPick] = useState(() => new Set())
+  const [busy, setBusy] = useState(false)
+  const [fail, setFail] = useState(null)
+  useEffect(() => {
+    let live = true
+    ;(async () => {
+      const r = await supabase.from('ro_service_items').select('id, qty, price, service_id').eq('catalog_item_id', item.id).eq('stock_deducted', false)
+      const svc = (r.data || []).length ? await supabase.from('ro_services').select('id, ro_id').in('id', [...new Set(r.data.map((l) => l.service_id))]) : { data: [] }
+      const jobs = (svc.data || []).length ? await supabase.from('repair_orders').select('id, job_number, order_status, closed_at').in('id', [...new Set(svc.data.map((x) => x.ro_id))]) : { data: [] }
+      if (!live) return
+      const jobOf = (l) => (jobs.data || []).find((j) => j.id === (svc.data || []).find((x) => x.id === l.service_id)?.ro_id)
+      const open = (r.data || []).map((l) => ({ ...l, job: jobOf(l) }))
+        .filter((l) => l.job && l.job.order_status === 'estimate' && !l.job.closed_at && Number(l.price) !== price)
+      setLines(open); setPick(new Set(open.map((l) => l.id)))
+    })()
+    return () => { live = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  async function save() {
+    setBusy(true); setFail(null)
+    const c = await supabase.from('catalog_items').update({ price, cost: price, markup_pct: 0 }).eq('id', item.id)
+    if (c.error) { setBusy(false); return setFail(errorText(c.error, t)) }
+    let n = 0
+    for (const id of pick) {
+      const u = await supabase.from('ro_service_items').update({ price, cost: price }).eq('id', id)
+      if (u.error) { setBusy(false); return setFail(errorText(u.error, t)) }
+      n++
+    }
+    setBusy(false)
+    onDone(t('u145.priceDone', { name: item.name, amount: rp(price), n }))
+  }
+  return (
+    <Modal open title={t('u145.priceTitle')} onClose={onClose}
+      footer={<><Button onClick={onClose}>{t('u145.priceKeep')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('u145.priceYes', { amount: rp(price) })}</Button></>}>
+      {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
+      <p style={{ marginTop: 0 }}>{t('u145.priceText', { name: item.name, now: rp(item.price), amount: rp(price) })}</p>
+      {lines == null ? <div className="muted">{t('common.loading')}</div> : lines.length === 0 ? <div className="muted small">{t('u145.priceNoJobs')}</div> : <>
+        <div className="sectionlabel">{t('u145.priceJobs')}</div>
+        {lines.map((l) => (
+          <label key={l.id} className="inlinecheck" style={{ display: 'flex' }}>
+            <input type="checkbox" checked={pick.has(l.id)} onChange={(e) => setPick((s) => { const x = new Set(s); if (e.target.checked) x.add(l.id); else x.delete(l.id); return x })} />
+            <span>#{l.job.job_number} · {num(l.qty, 2)} L · {rp(l.price)} → {rp(price)}</span>
+          </label>
+        ))}
+      </>}
+      <div className="hint">{t('u145.priceHint')}</div>
     </Modal>
   )
 }

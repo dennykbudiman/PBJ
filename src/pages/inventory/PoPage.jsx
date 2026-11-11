@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { usePageTitle } from '../../lib/branding'
 import { Link, useNavigate } from 'react-router-dom'
-import { Badge, Button, Card, Empty, Notice, useConfirm, useToast } from '../../components/ui'
+import { Badge, Button, Card, Empty, Input, Modal, Notice, Select, useConfirm, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
-import { supabase } from '../../lib/supabase'
+import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, fmtDateTime, jobNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poLinesNotOnJob, poBook, poPaidByPt, poPayer, poTotals, sparePoParts, stockState } from '../../lib/inventory'
@@ -25,7 +25,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const { timezone, settings } = useShop()
   const today = shopToday(timezone)
   const { run, busy } = useRun(reload)
-  const { can } = useAuth()
+  const { can, roleName } = useAuth()
   const [confirm, confirmEl] = useConfirm()
   const [sel, setSel] = useState(() => new Set())
   const [modal, setModal] = useState(null) // { kind: 'line' | 'receive' | 'pay' | 'return', ... }
@@ -90,7 +90,12 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const jobInvoiced = poJob?.order_status === 'invoice'
   const ptNotAllowed = !po.paid_by_pt && !poCompany?.paid_direct
   const payerNames = [...new Set(data.customers.map((c) => c.payer_name || c.display_name).filter(Boolean))].sort()
-  const canPayHere = canPay && !ptPaid
+  // the driver paid the supplier first (talangan, 145 item 35): the shop never pays the supplier; whoever pays the PO
+  // (the PT · book, or the shop) pays the driver back ("Sudah diganti", Pemilik/Admin)
+  const talangan = !!po.talangan_name
+  const ownerAdmin = roleName === 'Owner' || roleName === 'Admin'
+  const reimburser = ptPaid ? [payer, poBook(po, data)].filter(Boolean).join(' · ') : t('u145.theShopPays')
+  const canPayHere = canPay && !ptPaid && !talangan
   const hasParts = lines.some((l) => l.line_type !== 'sublet')
   const lineIds = new Set(lines.map((l) => l.id))
   const returns = data.returns.filter((r) => lineIds.has(r.po_item_id))
@@ -147,6 +152,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const toggle = (lid, on) => setSel((s) => { const n = new Set(s); if (on) n.add(lid); else n.delete(lid); return n })
   const menu = [
     { label: t('inv.po.print'), icon: 'print', onClick: () => navigate(`/print/po/${po.id}`) },
+    talangan && { label: t('u145.printSlip'), icon: 'print', onClick: () => navigate(`/print/talangan/${po.id}`) },
     canEdit && ['draft', 'ordered', 'partially_delivered'].includes(po.status) && openLines.length > 0 && { label: anyDelivered ? t('inv.po.cancelRest') : t('inv.po.cancel'), icon: 'x', danger: true, onClick: cancelPo },
     canEdit && po.status === 'draft' && { label: t('inv.po.delete'), icon: 'trash', danger: true, onClick: deletePo },
   ]
@@ -234,12 +240,13 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                           <Badge color={LINE_COLOR[state]}>{t(`inv.line.st.${state}`)}</Badge>
                           {showCost && Number(l.qty_delivered) > 0 && (
                             <div className="small" style={{ marginTop: 2, color: owedQty(l) > 0 ? (due && due < today ? 'var(--red)' : 'var(--muted)') : 'var(--green)' }}>
-                              {ptPaid ? t('u142.paidByPt') : owedQty(l) > 0 ? (due && due < today ? t('inv.line.overdue') : t('inv.line.unpaid')) : t('inv.line.paid')}
+                              {talangan ? t('u145.paidByDriver') : ptPaid ? t('u142.paidByPt') : owedQty(l) > 0 ? (due && due < today ? t('inv.line.overdue') : t('inv.line.unpaid')) : t('inv.line.paid')}
                             </div>
                           )}
                         </td>
                         {showCost && <td className="num wide-only nowrap">{rp(l.cost)}{Number(l.core_cost) > 0 && <div className="small muted">{t('inv.line.plusCore', { amount: rp(l.core_cost) })}</div>}{l.taxable && <div className="small muted">{t('inv.line.plusTax')}</div>}</td>}
-                        {showCost && <td className="num nowrap">{rp(lineAmount(l.cost, l.core_cost, q, l.taxable, po.tax_rate))}</td>}
+                        {/* before PPN: the PPN is worked out once on the PO's total (145) */}
+                        {showCost && <td className="num nowrap">{rp(lineAmount(l.cost, l.core_cost, q, false, 0))}</td>}
                         <td className="wide-only small">
                           {l.supplier_invoice_no || (l.delivered_at ? <span className="muted">{t('inv.line.noInvoiceNo')}</span> : <span className="muted">—</span>)}
                           {l.delivered_at && <div className="muted">{t('inv.line.receivedOn', { date: fmtDate(l.delivered_at, lang) })}</div>}
@@ -337,6 +344,43 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
               )}
             </>
           )}
+          {/* talangan: the driver paid the supplier first (145) */}
+          <label className="row" style={{ gap: 6, alignItems: 'flex-start', marginTop: 8 }}>
+            <input type="checkbox" checked={talangan} disabled={!editable || shopPaidSome || !!po.reimbursed_on}
+              onChange={(e) => upd(e.target.checked
+                ? { talangan_name: poJob?.driver_name || data.vehicleById[poJob?.vehicle_id]?.driver_name || t('u145.driverDefault'),
+                    talangan_phone: poJob?.driver_phone || data.vehicleById[poJob?.vehicle_id]?.driver_phone || null }
+                : { talangan_name: null })} />
+            <span className="small">{t('u145.paidByDriverFirst')}</span>
+          </label>
+          {talangan && (
+            <div className="talangan-box">
+              <div className="formgrid">
+                <label className="mini">{t('u145.driver')}
+                  <BlurInput className="input" disabled={!editable || !!po.reimbursed_on} value={po.talangan_name || ''} maxLength={120} aria-label={t('u145.driver')}
+                    onCommit={(v, reset) => (v.trim() ? upd({ talangan_name: v.trim() }) : reset())} />
+                </label>
+                <label className="mini">{t('u145.phone')}
+                  <BlurInput className="input" disabled={!editable || !!po.reimbursed_on} value={po.talangan_phone || ''} maxLength={40} aria-label={t('u145.phone')}
+                    onCommit={(v) => upd({ talangan_phone: v.trim() || null })} />
+                </label>
+              </div>
+              <label className="mini" style={{ display: 'block', marginTop: 6 }}>{t('u145.nota')}
+                <BlurInput className="input" disabled={!editable || !!po.reimbursed_on} value={po.talangan_nota || ''} maxLength={80} aria-label={t('u145.nota')}
+                  onCommit={(v) => upd({ talangan_nota: v.trim() || null })} />
+              </label>
+              <div className="small" style={{ marginTop: 6 }}>{t('u145.reimbursedBy', { who: reimburser })}</div>
+              <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+                {po.reimbursed_on
+                  ? <><Badge color="green">{t('u145.reimbursedOn', { date: fmtDate(po.reimbursed_on, lang) })}</Badge>
+                    <span className="small muted">{[po.reimbursed_method && t(`inv.pay.m.${po.reimbursed_method}`), po.reimbursed_reference].filter(Boolean).join(' · ')}</span>
+                    {ownerAdmin && <button type="button" className="linkbtn small" onClick={() => run(() => supabase.rpc('po_reimburse', { p_po: po.id, p_on: null }), t('u145.reimburseUndone'))}>{t('u145.reimburseUndo')}</button>}</>
+                  : <><Badge color="amber">{t('u145.notReimbursed')}</Badge>
+                    {ownerAdmin && <Button size="sm" onClick={() => setModal({ kind: 'reimburse' })}>{t('u145.reimburse')}</Button>}</>}
+                <Link className="small" to={`/print/talangan/${po.id}`}>{t('u145.printSlip')}</Link>
+              </div>
+            </div>
+          )}
           {shopPaidSome && <div className="hint">{t('u142.shopPaidSome')}</div>}
           {po.ro_id && !shopPaidSome && jobInvoiced && <div className="hint">{t('u142.payerInvoiced')}</div>}
           {po.ro_id && !shopPaidSome && !jobInvoiced && ptNotAllowed && <div className="hint">{t('u142.payerShopCompany')}</div>}
@@ -410,8 +454,39 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
         onDone={(amount) => done(t('inv.pay.done', { amount: rp(amount), name: sup?.name || '' }))} />
       <PoReturnModal open={modal?.kind === 'return'} onClose={close} data={data} po={po} lines={lines} showCost={showCost}
         onDone={(n) => done(t('inv.ret.markedN', { n }))} />
+      {modal?.kind === 'reimburse' && <TalanganModal po={po} onClose={close} onDone={() => done(t('u145.reimbursed'))} />}
       <CorrectReceivedModal open={modal?.kind === 'correct'} onClose={close} data={data} line={modal?.line}
         onDone={(n) => done(t('inv.correct.done', { name: modal?.line?.name || '', n: num(n, 2) }))} />
     </div>
+  )
+}
+
+// "Sudah diganti" (145, item 35): the driver who paid the supplier first has been paid back (Pemilik/Admin).
+export function TalanganModal({ po, onClose, onDone }) {
+  const { t } = useT()
+  const { timezone } = useShop()
+  const [f, setF] = useState({ date: shopToday(timezone), method: 'cash', ref: '' })
+  const [fail, setFail] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
+  async function save() {
+    setBusy(true); setFail(null)
+    const { error } = await supabase.rpc('po_reimburse', { p_po: po.id, p_on: f.date, p_method: f.method || null, p_reference: f.ref.trim() || null })
+    setBusy(false)
+    if (error) return setFail(errorText(error, t))
+    onDone()
+  }
+  return (
+    <Modal open title={t('u145.reimburseTitle', { name: po.talangan_name, no: po.po_number })} onClose={onClose}
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={busy} onClick={save}>{t('u145.reimburse')}</Button></>}>
+      {fail && <Notice kind="err" style={{ marginBottom: 10 }}>{fail}</Notice>}
+      <div className="formgrid">
+        <Input label={t('u145.paidOn')} type="date" value={f.date} onChange={set('date')} />
+        <Select label={t('u145.how')} value={f.method} onChange={set('method')}
+          options={[{ value: '', label: '—' }, ...['cash', 'transfer', 'giro', 'other'].map((m) => ({ value: m, label: t(`inv.pay.m.${m}`) }))]} />
+      </div>
+      <Input label={t('u145.reference')} value={f.ref} onChange={set('ref')} maxLength={200} />
+      <div className="hint">{t('u145.reimburseHint')}</div>
+    </Modal>
   )
 }

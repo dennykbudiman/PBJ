@@ -23,6 +23,8 @@ import CalendarPage from './pages/calendar/CalendarPage'
 import InventoryArea from './pages/inventory/InventoryArea'
 import PrintPo from './pages/print/PrintPo'
 import PrintHistory from './pages/print/PrintHistory'
+import PrintDrums from './pages/print/PrintDrums'
+import PrintTalangan from './pages/print/PrintTalangan'
 import FleetDashboard from './pages/FleetDashboard'
 
 // Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
@@ -46,6 +48,8 @@ export default function App() {
     <Routes>
       <Route path="print/po/*" element={<PrintPo />} />
       <Route path="print/history" element={<PrintHistory />} />
+      <Route path="print/drums" element={<PrintDrums />} />
+      <Route path="print/talangan/*" element={<PrintTalangan />} />
       <Route path="print/*" element={<PrintJob />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />

@@ -453,7 +453,7 @@ span.seg-btn { cursor: default; }
 .doc .pre { white-space: pre-wrap; }
 .doc .small { font-size: 10.5px; }
 .doc .muted { color: #555; }
-.doc-head { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 10px; }
+.doc-head { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 7px; }
 .doc-shop { display: flex; gap: 12px; align-items: flex-start; max-width: 60%; }
 .doc-logo { width: 54px; height: 54px; object-fit: contain; }
 .doc-shopname { font-size: 15px; font-weight: 800; margin-bottom: 2px; }
@@ -462,33 +462,33 @@ span.seg-btn { cursor: default; }
 .doc-meta { margin-left: auto; border-collapse: collapse; }
 .doc-meta th { text-align: left; font-weight: 600; color: #555; padding: 1px 10px 1px 0; }
 .doc-meta td { text-align: right; padding: 1px 0; }
-.doc-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+.doc-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
 .doc-parties.three { grid-template-columns: 1fr 1fr 1fr; }
-.doc-parties > div { border: 1px solid #ccc; border-radius: 6px; padding: 8px 10px; }
+.doc-parties > div { border: 1px solid #ccc; border-radius: 6px; padding: 5px 9px; }
 .doc-label { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #555; margin-bottom: 3px; }
-.doc-block { margin: 10px 0; }
+.doc-block { margin: 7px 0; }
 .doc-list { margin: 0; padding-left: 16px; }
 .doc-lines { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .doc-lines th { font-size: 9.5px; text-transform: uppercase; letter-spacing: .05em; color: #555; text-align: left; border-bottom: 1.5px solid #111; padding: 5px 4px; }
-.doc-lines td { padding: 3px 4px; vertical-align: top; }
+.doc-lines td { padding: 1.5px 4px; vertical-align: top; }
 .doc-lines .num { text-align: right; white-space: nowrap; }
-.doc-lines .svc-row td { padding-top: 9px; border-top: 1px solid #ddd; }
+.doc-lines .svc-row td { padding-top: 5px; border-top: 1px solid #ddd; }
 .doc-lines tbody:first-of-type .svc-row td { border-top: none; }
 .doc-lines .ind { padding-left: 14px; }
 .doc-lines .svc-total td { border-top: 1px dashed #bbb; font-weight: 600; text-align: right; }
 .doc-svc { break-inside: avoid; }
 .doc-tag { margin-left: 8px; font-size: 9.5px; font-weight: 700; border: 1px solid #999; border-radius: 4px; padding: 0 5px; color: #555; }
 .doc-empty { padding: 16px 0; color: #555; }
-.doc-bottom { display: flex; gap: 20px; justify-content: space-between; align-items: flex-start; margin-top: 14px; border-top: 1.5px solid #111; padding-top: 8px; break-inside: avoid; }
+.doc-bottom { display: flex; gap: 20px; justify-content: space-between; align-items: flex-start; margin-top: 10px; border-top: 1.5px solid #111; padding-top: 6px; break-inside: avoid; }
 .doc-notes { flex: 1; min-width: 0; }
 .doc-totals { border-collapse: collapse; min-width: 270px; }
 .doc-totals th { text-align: left; font-weight: 500; padding: 2px 16px 2px 0; }
 .doc-totals td { text-align: right; white-space: nowrap; padding: 2px 0; }
 .doc-totals tr.rule th, .doc-totals tr.rule td { border-top: 1px solid #bbb; padding-top: 5px; }
 .doc-totals tr.grand th, .doc-totals tr.grand td { font-weight: 800; font-size: 13px; border-top: 1.5px solid #111; padding-top: 5px; }
-.doc-terms { margin-top: 14px; font-size: 10px; color: #444; border-top: 1px solid #ddd; padding-top: 8px; }
-.doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 16px; text-align: center; break-inside: avoid; }
-.sign-line { border-bottom: 1px solid #111; height: 40px; margin-bottom: 4px; }
+.doc-terms { margin-top: 10px; font-size: 10px; color: #444; border-top: 1px solid #ddd; padding-top: 6px; }
+.doc-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 12px; text-align: center; break-inside: avoid; }
+.sign-line { border-bottom: 1px solid #111; height: 34px; margin-bottom: 4px; }
 .doc-sign.four { grid-template-columns: repeat(4, 1fr); gap: 22px; }
 .doc-sign .sign-name { min-height: 1.3em; }
 .doc-foot { margin-top: 16px; font-size: 9.5px; color: #666; text-align: center; }
@@ -516,13 +516,20 @@ span.seg-btn { cursor: default; }
 .doc-pagefoot { display: flex; justify-content: space-between; gap: 16px; margin-top: 12px; padding-top: 6px; border-top: 1px solid #ddd; font-size: 9.5px; color: #666; }
 .doc-pagefoot .doc-foot { margin: 0; text-align: left; }
 .doc-pageno { white-space: nowrap; }
-@page { size: A4; margin: 0; }
+/* 145 (item 30): every printout gets a 12 mm page margin and page numbers at the bottom; the invoice and estimate
+   sheets (144) draw their own margins on a page with none */
+@page { size: A4; margin: 12mm 12mm 13mm;
+  @bottom-right { content: counter(page) " / " counter(pages); font-size: 8pt; color: #777; font-family: system-ui, sans-serif; } }
+@page sheet { size: A4; margin: 0; @bottom-right { content: none; } }
+@page report { size: A4 landscape; margin: 10mm 10mm 12mm;
+  @bottom-right { content: counter(page) " / " counter(pages); font-size: 8pt; color: #777; font-family: system-ui, sans-serif; } }
+.doc.sheet { page: sheet; }
 @media print {
   .no-print { display: none !important; }
   html, body, #root { background: #fff !important; height: auto; }
   .print-wrap { background: #fff; padding: 0; min-height: 0; }
-  .doc { margin: 0; box-shadow: none; width: auto; min-height: 0; }
-  .doc.sheet { margin: 0; width: 210mm; height: 297mm; break-after: page; }
+  .doc { margin: 0; box-shadow: none; width: auto; min-height: 0; padding: 0; }
+  .doc.sheet { margin: 0; width: 210mm; height: 297mm; break-after: page; padding: 12mm 14mm; }
   .doc.sheet:last-of-type { break-after: auto; }
   .doc-measure { display: none; }
 }
@@ -885,3 +892,68 @@ tr.totalrow td { border-top: 2px solid var(--line); }
 @media (max-width: 900px) { .tcs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tcs-cmp { grid-template-columns: 1fr; } }
 .tcs-form { display: flex; flex-direction: column; gap: 14px; }
 .tcs-log tr.clickable:focus-visible td { background: var(--accent-soft); outline: none; }
+
+/* ===== Update 145 ===== */
+/* catalog: alternate part numbers as rows of brand + number */
+.warn-text { color: var(--amber); }
+.altrows { display: flex; flex-direction: column; gap: 6px; }
+.altedit-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 8px; align-items: end; }
+.altedit-row .field { margin: 0; }
+.altedit .hint { margin-top: 2px; }
+@media (max-width: 560px) { .altedit-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } }
+/* "Sudah ada di katalog" under a typed part (item 39) */
+.catmatch { margin: 6px 0 2px; padding: 6px 9px; border: 1px solid var(--amber-bg); background: #fffaf2; border-radius: 8px; font-size: 12.5px; }
+.catmatch-head { color: var(--amber); font-weight: 700; font-size: 11.5px; margin-bottom: 2px; }
+.catmatch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.catmatch-name { min-width: 0; }
+@media print { .catmatch { display: none !important; } }
+
+/* ---------- 145 · printouts across the app (item 30) ---------- */
+.print-only { display: none; }
+.print-title h1 { font-size: 17px; margin: 0 0 2px; }
+.print-title, .print-sub { margin-bottom: 8px; font-size: 12px; }
+.drum-dochead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-top: 4px; }
+.doc-drumpay { font-size: 11px; }
+@media print {
+  .print-only { display: block !important; }
+  tr.print-only { display: table-row !important; }
+  .print-cap th { text-transform: none !important; letter-spacing: 0 !important; font-size: 10px !important; color: #333 !important; border-bottom: none !important; padding: 0 0 2px !important; }
+  /* documents (PO, service history, vehicle list, drum statements): the page margin is the paper's; a job or vehicle
+     block may split between rows, rows never split, the table head repeats; no lonely "printed by" page */
+  .doc:not(.sheet) .doc-svc { break-inside: auto; }
+  .doc tr, .app tr { break-inside: avoid; }
+  .doc thead, .app thead { display: table-header-group; }
+  .doc .svc-row { break-after: avoid; }
+  .doc-printedby { break-before: avoid; }
+  .doc-lines td b, .doc-lines td.nowrap { white-space: nowrap; }
+  .doc.pdoc { break-after: page; }
+  .doc.pdoc:last-of-type { break-after: auto; }
+  .doc-sign, .doc-bottom, .doc-paraf { break-inside: avoid; }
+  /* app pages (Tagihan PT, Tagihan supplier, Hari ini, Laporan, Drum…): no controls, full tables, smaller text */
+  .app .content input, .app .content select, .app .content textarea, .app .content button, .app .content .seg,
+  .app .content .chipselect, .app .content .filterbar .spacer { display: none !important; }
+  .app .content a { color: inherit; text-decoration: none; }
+  .app .card { break-inside: auto; border: none; padding: 0 0 6px; }
+  .app h2, .app .pt-grouphead { break-after: avoid; }
+  .app .table { overflow: visible !important; max-width: none !important; }
+  .app .table table { width: 100%; min-width: 0 !important; font-size: 10px; }
+  .app .table th, .app .table td { padding: 3px 5px; }
+  .app .wide-only, .app .xwide-only, .app .split.has-panel .wide-only { display: table-cell !important; }
+  .app .table td, .app .table th { white-space: normal; }
+  .app .table td.nowrap, .app .table td.num { white-space: nowrap; }
+  .report-page { page: report; }
+  .app .kpi.card { border: 1px solid #ccc; padding: 6px 8px; }
+  .app .content { max-width: none; }
+}
+/* talangan on the PO page (item 35) */
+.talangan-box { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 6px; background: var(--head-bg); }
+/* the driver's reimbursement slip (item 35) */
+.doc-parties.one { grid-template-columns: 1fr; margin-top: 0; }
+.doc-sign.three { grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.slip-total td { border-top: 1.5px solid #111; padding-top: 4px; font-size: 12.5px; }
+.slip-pay { margin-top: 12px; border: 1.5px solid #111; border-radius: 6px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.slip .chk { display: inline-block; width: 11px; height: 11px; border: 1.2px solid #111; vertical-align: -1px; text-align: center; font-size: 9px; line-height: 10px; }
+.slip .line-fill { display: inline-block; border-bottom: 1px solid #111; width: 150px; }
+.slip .line-fill.short { width: 120px; }
+.repeat-job { border-top: 1px solid var(--line-soft); padding: 8px 0; }
+.repeat-job:first-of-type { border-top: none; }

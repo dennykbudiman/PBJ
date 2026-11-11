@@ -30,6 +30,42 @@ export const openQty = (l) => Math.max(n(l.qty_ordered) - n(l.qty_delivered) - n
 export const owedQty = (l) => Math.max(n(l.qty_delivered) - n(l.qty_returned) - n(l.qty_paid), 0)
 export const lineOwed = (l, po) => lineAmount(l.cost, l.core_cost, owedQty(l), l.taxable, po?.tax_rate)
 
+// What a set of PO lines comes to with the PPN worked out once per PO (and supplier invoice), like the supplier's
+// faktur (145, item 36), the same way as po_amounts() in the database: cost and core rounded per line, the PPN on the
+// taxable total; each line takes its step of the rounded running total (lines in id order), so they add up exactly.
+// rows: [{ l, po }]; kind: 'owed' | 'delivered' (less returns) | 'received' | 'paid' | 'wanted' (ordered − cancelled).
+// Returns Map(line id → { qty, base, tax, amount }).
+const qtyOf = (l, kind) => kind === 'owed' ? owedQty(l)
+  : kind === 'delivered' ? Math.max(n(l.qty_delivered) - n(l.qty_returned), 0)
+  : kind === 'received' ? n(l.qty_delivered)
+  : kind === 'paid' ? n(l.qty_paid)
+  : Math.max(n(l.qty_ordered) - n(l.qty_cancelled), 0)
+export function poAmounts(rows, kind = 'owed') {
+  const groups = new Map()
+  for (const r of rows || []) {
+    const po = r.po
+    const k = `${po?.id || r.l.po_id}|${String(r.l.supplier_invoice_no || '').trim()}`
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k).push(r)
+  }
+  const out = new Map()
+  for (const list of groups.values()) {
+    list.sort((a, b) => (a.l.id < b.l.id ? -1 : a.l.id > b.l.id ? 1 : 0))
+    let cum = 0 // running PPN in 1/10 000 rupiah, so the sums stay exact
+    for (const { l, po } of list) {
+      const q = qtyOf(l, kind)
+      const c = lineAmount(l.cost, 0, q, false, 0)
+      const k = lineAmount(0, l.core_cost, q, false, 0)
+      const ex = l.taxable ? c * Math.round(n(po?.tax_rate) * 100) : 0
+      const tax = Math.round((cum + ex) / 10000) - Math.round(cum / 10000)
+      cum += ex
+      out.set(l.id, { qty: q, base: c + k, tax, amount: c + k + tax })
+    }
+  }
+  return out
+}
+export const amountsTotal = (m) => [...m.values()].reduce((a, x) => a + x.amount, 0)
+
 // "Waiting", "Part delivered", "Delivered" or "Cancelled" for one PO line.
 export function lineState(l) {
   if (n(l.qty_cancelled) >= n(l.qty_ordered)) return 'cancelled'
@@ -40,18 +76,19 @@ export function lineState(l) {
 export const LINE_COLOR = { waiting: 'blue', partial: 'amber', delivered: 'green', cancelled: 'gray' }
 
 // The PO's totals on what is still wanted (ordered minus cancelled), and what was delivered / paid.
+// (145) the PPN once per PO and supplier invoice, as on the supplier's faktur
 export function poTotals(po, lines) {
-  let parts = 0, core = 0, tax = 0, delivered = 0, paid = 0, owed = 0
-  for (const l of lines) {
+  const rows = (lines || []).map((l) => ({ l, po }))
+  const want = poAmounts(rows, 'wanted')
+  let parts = 0, core = 0, tax = 0
+  for (const l of lines || []) {
     const q = Math.max(n(l.qty_ordered) - n(l.qty_cancelled), 0)
     parts += lineAmount(l.cost, 0, q, false, 0)
     core += lineAmount(0, l.core_cost, q, false, 0)
-    if (l.taxable) tax += lineAmount(l.cost, 0, q, true, po?.tax_rate) - lineAmount(l.cost, 0, q, false, 0)
-    delivered += lineAmount(l.cost, l.core_cost, l.qty_delivered, l.taxable, po?.tax_rate)
-    paid += lineAmount(l.cost, l.core_cost, l.qty_paid, l.taxable, po?.tax_rate)
-    owed += lineOwed(l, po)
+    tax += want.get(l.id)?.tax || 0
   }
-  return { parts, core, tax, total: parts + core + tax, delivered, paid, owed }
+  return { parts, core, tax, total: parts + core + tax, delivered: amountsTotal(poAmounts(rows, 'received')),
+    paid: amountsTotal(poAmounts(rows, 'paid')), owed: amountsTotal(poAmounts(rows, 'owed')) }
 }
 
 // When a delivered line must be paid: the due date typed in, else invoice (or delivery) date + the PO's terms.

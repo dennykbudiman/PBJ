@@ -132,6 +132,7 @@ const DB_PATTERNS = [
   [/^Unknown time zone "(.+)"\. Use a name like/, 'db:unknownTz'],
   [/^Only ([\d.,]+) in stock; you can't send back more than you have$/, 'db:returnStock'],
   [/^This part is already on PO (.+)$/, 'db:alreadyOnPo'],
+  [/^Receive or cancel the open PO lines before invoicing: (.+)$/, 'db:openPoLines'],
   [/^"(.+)" is already on the job$/, 'db:onJobAlready'],
   [/^Nothing is left of "(.+)" on its PO to add$/, 'db:nothingLeftOnPo'],
   [/^Only ([\d.,]+) of this line went onto the shelf, so only that much can be taken off$/, 'db:unreceiveLine'],

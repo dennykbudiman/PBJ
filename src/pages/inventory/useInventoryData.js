@@ -31,9 +31,9 @@ export function useInventoryData() {
     ])
     // Jobs named by POs, returns and cores, with their vehicles (for "Job 100042 · B 1234 XY").
     const roIds = [...new Set([...(pos.data || []), ...(returns.data || []), ...(cores.data || [])].map((x) => x.ro_id).filter(Boolean))]
-    const jobs = await selectIn('repair_orders', 'id, job_number, vehicle_id, customer_id, order_status, invoice_number, closed_at', 'id', roIds)
+    const jobs = await selectIn('repair_orders', 'id, job_number, vehicle_id, customer_id, order_status, invoice_number, closed_at, driver_name, driver_phone', 'id', roIds)
     const vIds = [...new Set((jobs.data || []).map((j) => j.vehicle_id).filter(Boolean))]
-    const vehicles = await selectIn('vehicles', 'id, plate, make, model, year', 'id', vIds)
+    const vehicles = await selectIn('vehicles', 'id, plate, make, model, year, driver_name, driver_phone', 'id', vIds)
     // the companies' paying PTs (142): who pays a job's PO
     const customers = await selectAll(() => supabase.from('customers').select('id, display_name, payer_name, paid_direct, book_name').order('display_name').order('id'))
     if (n !== loads.current) return

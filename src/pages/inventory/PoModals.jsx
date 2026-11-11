@@ -5,8 +5,10 @@ import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, num, parseDecimal, readAmount, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
-import { PAY_METHODS, isNonPkp, jobToPoCost, lineAmount, lineDue, openQty, owedQty, poToJobCost, stockState } from '../../lib/inventory'
+import { PAY_METHODS, amountsTotal, isNonPkp, jobToPoCost, lineAmount, lineDue, openQty, owedQty, poAmounts, poToJobCost, stockState } from '../../lib/inventory'
 import { addDays } from '../../lib/calendar'
+import { catalogMatches } from '../../lib/alternatives'
+import CatalogMatches from '../../components/CatalogMatches'
 
 // Tax on a cost × quantity, rounded the same way as everywhere else.
 const taxOf = (cost, qty, rate) => lineAmount(cost, 0, qty, true, rate) - lineAmount(cost, 0, qty, false, 0)
@@ -31,8 +33,27 @@ export function LineModal({ open, onClose, po, line, preset, showCost, onSaved, 
   const [err, setErr] = useState({})
   const [fail, setFail] = useState(null)
   const [busy, setBusy] = useState(false)
+  // A part typed by hand that is already in the catalog: offered while typing (145, item 39). Picking it makes a new
+  // line a catalog part (its name, number and cost); an existing typed line is linked under Katalog → Part di luar katalog.
+  const [parts, setParts] = useState([])
+  const [picked, setPicked] = useState(null)
+  const typedPart = !(line?.catalog_item_id || preset?.catalog_item_id) && (f.line_type || 'part') === 'part'
+  useEffect(() => {
+    if (!open || line?.catalog_item_id || preset?.catalog_item_id) return
+    let gone = false
+    supabase.from('catalog_items_read').select('id, item_type, name, code, brand, alt_numbers, alt_parts, cost, qty_on_hand, track_inventory, active, fits')
+      .eq('item_type', 'part').eq('active', true).then(({ data }) => { if (!gone) setParts(data || []) })
+    return () => { gone = true }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const matches = typedPart && !picked && (f.name || f.part_number) ? catalogMatches(parts, { name: f.name, number: f.part_number, limit: 3 }) : []
+  function usePart(x) {
+    setPicked(x)
+    setF((v) => ({ ...v, name: x.name, part_number: x.code || v.part_number,
+      cost: x.cost == null || readAmount(v.cost || '') > 0 ? v.cost : num(jobToPoCost(x.cost, v.taxable, po.tax_rate, nonPkp)) }))
+  }
   useEffect(() => {
     if (!open) return
+    setPicked(null)
     const src = line || preset || {}
     const taxable = line ? !!line.taxable : poTaxed
     const cost = line ? src.cost : jobToPoCost(src.cost, taxable, po.tax_rate, nonPkp)
@@ -62,7 +83,8 @@ export function LineModal({ open, onClose, po, line, preset, showCost, onSaved, 
     if (!paid) Object.assign(row, { cost, core_cost: sublet ? 0 : core, taxable: f.taxable })
     const res = line
       ? await supabase.from('purchase_order_items').update(row).eq('id', line.id)
-      : await supabase.from('purchase_order_items').insert({ ...row, po_id: po.id, catalog_item_id: preset?.catalog_item_id || null, line_type: preset?.catalog_item_id ? 'part' : f.line_type })
+      : await supabase.from('purchase_order_items').insert({ ...row, po_id: po.id, catalog_item_id: preset?.catalog_item_id || picked?.id || null,
+        line_type: preset?.catalog_item_id || picked ? 'part' : f.line_type })
     setBusy(false)
     if (res.error) return setFail(errorText(res.error, t))
     onSaved(row)
@@ -85,6 +107,8 @@ export function LineModal({ open, onClose, po, line, preset, showCost, onSaved, 
       {line?.ro_service_item_id && <div className="hint" style={{ marginTop: 0 }}>{t('u141.linked', { no: jobNoText || '' })}</div>}
       <Input label={t('inv.line.name')} value={f.name || ''} onChange={set('name')} error={err.name} maxLength={200} autoFocus={!preset} />
       <Input label={t('inv.line.partNo')} value={f.part_number || ''} onChange={set('part_number')} maxLength={100} />
+      {picked && <div className="hint" style={{ marginTop: -4 }}>{t('u145.usedCatalog', { name: picked.name })} · <button type="button" className="linkbtn small" onClick={() => setPicked(null)}>{t('tp.change')}</button></div>}
+      <CatalogMatches matches={matches} onUse={line ? null : usePart} disabledHint={line ? t('u145.cantSwapPo') : null} />
       <div className="formgrid">
         <Input label={t('inv.line.qty')} value={f.qty || ''} onChange={set('qty')} error={err.qty} inputMode="decimal" />
         {showCost && <Input label={t('inv.line.cost')} value={f.cost || ''} onChange={set('cost')} error={err.cost} prefix="Rp" inputMode="numeric" disabled={paid} />}
@@ -212,7 +236,9 @@ export function PayModal({ open, onClose, supplier, items, onDone }) {
   const [busy, setBusy] = useState(false)
   useEffect(() => { if (open) { setF({ paid_at: today, method: 'transfer', reference: '' }); setErr({}); setFail(null) } }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const rows = items.filter(({ line }) => owedQty(line) > 0)
-  const total = rows.reduce((a, { line, po }) => a + lineAmount(line.cost, line.core_cost, owedQty(line), line.taxable, po.tax_rate), 0)
+  // PPN once per PO over the lines paid together (145), as pay_po_items() works it out
+  const amounts = poAmounts(rows.map(({ line, po }) => ({ l: line, po })), 'owed')
+  const total = amountsTotal(amounts)
   const save = () => once(async () => {
     const e = {}
     if (!f.paid_at) e.paid_at = t('inv.err.date')
@@ -241,7 +267,7 @@ export function PayModal({ open, onClose, supplier, items, onDone }) {
                   <td>{line.name}</td>
                   <td className="wide-only small">{line.supplier_invoice_no || <span className="muted">—</span>}{lineDue(line, po, supplier) && <div className="muted">{t('inv.dueOn', { date: fmtDate(lineDue(line, po, supplier), lang) })}</div>}</td>
                   <td className="num">{num(owedQty(line), 2)}</td>
-                  <td className="num nowrap">{rp(lineAmount(line.cost, line.core_cost, owedQty(line), line.taxable, po.tax_rate))}</td>
+                  <td className="num nowrap">{rp(amounts.get(line.id)?.amount ?? 0)}</td>
                 </tr>
               ))}
             </tbody>

@@ -7,6 +7,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { shopToday } from '../../lib/customers'
+import { fmtDate } from '../../lib/format'
 import { PERIODS, periodRange } from '../../lib/reports'
 import { num } from '../../lib/format'
 import SalesReport from './SalesReport'
@@ -40,6 +41,9 @@ export default function ReportsArea() {
   }
   return (
     <Page tabs={tabs}>
+      <div className="report-page">
+      {/* on paper: the report's name (the tabs aren't printed), 145 item 30 */}
+      <div className="print-only print-title"><h1>{t('nav.reports')} · {t(`rep.tab.${tab}`)}</h1></div>
       {tab === 'sales' && <SalesReport />}
       {tab === 'aging' && <AgingReport />}
       {tab === 'payments' && <PaymentsReport />}
@@ -56,6 +60,7 @@ export default function ReportsArea() {
           {tab === 'service' && <ServiceReport />}
         </>
       )}
+      </div>
     </Page>
   )
 }
@@ -106,7 +111,7 @@ export function useCompany(rows) {
 
 // The filter row above a report: period, company and the report's own controls, then CSV.
 export function ReportBar({ period, companies, company, setCompany, children, onCsv, csvDisabled, noPeriod }) {
-  const { t } = useT()
+  const { t, lang } = useT()
   return (
     <>
       <div className="filterbar repbar">
@@ -135,7 +140,13 @@ export function ReportBar({ period, companies, company, setCompany, children, on
         )}
         {children}
         <div className="spacer" />
+        <Button icon="print" onClick={() => window.print()}>{t('u142.print')}</Button>
         <Button icon="upload" onClick={onCsv} disabled={csvDisabled}>{t('rep.csv')}</Button>
+      </div>
+      {/* on paper: the period and company chosen, instead of the controls (145, item 30) */}
+      <div className="print-only print-sub">
+        {[!noPeriod && period ? `${fmtDate(period.from, lang)} – ${fmtDate(period.to, lang)}` : null,
+          companies ? (companies.find(([id]) => id === company)?.[1] || t('rep.allCompanies')) : null].filter(Boolean).join(' · ')}
       </div>
     </>
   )

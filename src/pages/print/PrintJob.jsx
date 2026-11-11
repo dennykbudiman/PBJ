@@ -79,12 +79,15 @@ export default function PrintJob() {
 
   // ---- The pieces of the document; the same markup is measured (hidden) and then laid out in A4 pages (144).
   const docNo = doc === 'invoice' ? invoiceNo(ro.invoice_number) : jobNo(ro.job_number)
-  const cols = (
-    <colgroup><col /><col style={{ width: '9%' }} /><col style={{ width: '15%' }} /><col style={{ width: '11%' }} /><col style={{ width: '16%' }} /></colgroup>
-  )
+  // no Diskon column when nothing on the document has a line discount (145, item 34); its width goes to the others
+  const showDisc = billed.some((s) => job.items.some((l) => l.service_id === s.id && Number(lineDiscount(l)) > 0))
+  const nc = showDisc ? 5 : 4
+  const cols = showDisc
+    ? <colgroup><col /><col style={{ width: '9%' }} /><col style={{ width: '15%' }} /><col style={{ width: '11%' }} /><col style={{ width: '16%' }} /></colgroup>
+    : <colgroup><col /><col style={{ width: '9%' }} /><col style={{ width: '16%' }} /><col style={{ width: '19%' }} /></colgroup>
   const thead = (
     <thead>
-      <tr><th>{t('pr.description')}</th><th className="num">{t('pr.qty')}</th><th className="num">{t('pr.unitPrice')}</th><th className="num">{t('pr.discount')}</th><th className="num">{t('pr.amount')}</th></tr>
+      <tr><th>{t('pr.description')}</th><th className="num">{t('pr.qty')}</th><th className="num">{t('pr.unitPrice')}</th>{showDisc && <th className="num">{t('pr.discount')}</th>}<th className="num">{t('pr.amount')}</th></tr>
     </thead>
   )
   const svcBody = (s) => {
@@ -93,7 +96,7 @@ export default function PrintJob() {
     return (
       <tbody key={s.id} className="doc-svc">
         <tr className="svc-row">
-          <td colSpan={5}>
+          <td colSpan={nc}>
             <b>{s.name}</b>
             {doc === 'estimate' && s.approval_status === 'pending' && <span className="doc-tag">{t('pr.awaiting')}</span>}
             {s.notes_external && <div className="pre small">{s.notes_external}</div>}
@@ -108,20 +111,20 @@ export default function PrintJob() {
                 <td className="ind">{l.name}{l.description && <div className="small muted">{l.description}</div>}</td>
                 <td className="num">{hide && flat ? num(l.qty, 2) : hide ? '' : `${num(l.qty, 2)}${l.item_type === 'labor' ? ` ${t('pr.hrs')}` : ''}`}</td>
                 <td className="num">{hide ? '' : rp(l.price)}</td>
-                <td className="num">{hide || !disc ? '' : `-${rp(disc)}`}</td>
+                {showDisc && <td className="num">{hide || !disc ? '' : `-${rp(disc)}`}</td>}
                 <td className="num">{flat ? '' : l.item_type === 'labor' && Number(ro.labor_waived) > 0 && Number(lineNet(l)) > 0
                   ? <><span className="small">{t('u142.notCharged')}</span><div>{rp(0)}</div></> : rp(lineNet(l))}</td>
               </tr>
               {Number(l.core_charge) > 0 && (
-                <tr><td className="ind small">{t('pr.coreCharge', { name: l.name })}</td><td className="num">{flat ? '' : num(l.qty, 2)}</td><td className="num">{flat ? '' : rp(l.core_charge)}</td><td /><td className="num">{flat ? '' : rp(Math.round(Number(l.core_charge) * Number(l.qty)))}</td></tr>
+                <tr><td className="ind small">{t('pr.coreCharge', { name: l.name })}</td><td className="num">{flat ? '' : num(l.qty, 2)}</td><td className="num">{flat ? '' : rp(l.core_charge)}</td>{showDisc && <td />}<td className="num">{flat ? '' : rp(Math.round(Number(l.core_charge) * Number(l.qty)))}</td></tr>
               )}
             </React.Fragment>
           )
         })}
         {Number(s.service_discount) > 0 && (
-          <tr><td className="ind">{t('pr.serviceDiscount')}{Number(s.discount_pct) > 0 ? ` (${num(s.discount_pct, 2)}%)` : ''}</td><td /><td /><td /><td className="num">-{rp(s.service_discount)}</td></tr>
+          <tr><td className="ind">{t('pr.serviceDiscount')}{Number(s.discount_pct) > 0 ? ` (${num(s.discount_pct, 2)}%)` : ''}</td><td /><td />{showDisc && <td />}<td className="num">-{rp(s.service_discount)}</td></tr>
         )}
-        <tr className="svc-total"><td colSpan={4}>{flat ? t('pr.flatPrice') : t('pr.serviceTotal')}</td><td className="num"><b>{rp(s.service_net)}</b></td></tr>
+        <tr className="svc-total"><td colSpan={nc - 1}>{flat ? t('pr.flatPrice') : t('pr.serviceTotal')}</td><td className="num"><b>{rp(s.service_net)}</b></td></tr>
       </tbody>
     )
   }
@@ -277,6 +280,8 @@ export default function PrintJob() {
     </section>
   )
 
+  // page 1 has the full totals but the drum box went to page 2 (145): whom to pay for drum oil stays on page 1
+  const drumPayP1 = drumPay.length > 0 && <div className="doc-block doc-drumpay">{drumPay}</div>
   const termsBlock = terms && <section className="doc-terms pre">{terms}</section>
 
   const signs = doc === 'invoice' ? (
@@ -334,7 +339,7 @@ export default function PrintJob() {
 
   // What the pages depend on: when any of it changes, the pieces are measured again.
   const pageKey = JSON.stringify([doc, lang, ro.id, ro.updated_at, ro.total, ro.balance, ro.paid_total, ro.settled_direct, job.concerns.map((c) => c.text),
-    billed.map((s) => [s.id, s.name, s.notes_external, s.service_net]), job.items.map((l) => [l.id, l.service_id, l.name, l.description, l.qty, l.price]),
+    billed.map((s) => [s.id, s.name, s.notes_external, s.service_net]), job.items.map((l) => [l.id, l.service_id, l.name, l.description, l.qty, l.price, l.discount_pct, l.discount_amount]),
     notIncluded.length, ro.recommendations, (box?.lines || []).length, drumPay.length, terms, !!logoUrl, advisor, mechanics, nextServices.length])
   const plan = layout?.key === pageKey ? layout : null
 
@@ -368,6 +373,7 @@ export default function PrintJob() {
             <div data-m="lines" className="m-blk" data-svcs={billed.length}>{billed.length > 0 && linesTable(billed)}</div>
             <div data-m="bottom" className="m-blk">{bottom}</div>
             <div data-m="drum" className="m-blk">{drum}</div>
+            <div data-m="dpay" className="m-blk">{drumPayP1}</div>
             <div data-m="terms" className="m-blk">{termsBlock}</div>
             <div data-m="sign" className="m-blk">{signs}</div>
             <div data-m="cont" className="m-blk">{contNote(2, 1)}</div>
@@ -393,15 +399,14 @@ export default function PrintJob() {
                   {concerns}
                   {pg.svcs.length > 0 && linesTable(pg.svcs.map((k) => billed[k]))}
                   {empty}
-                  {pages === 1 ? (
-                    <>
-                      {bottom}
-                      {drum}
-                      {termsBlock}
-                    </>
-                  ) : contNote(2, billed.length - pg.svcs.length)}
+                  {(pages === 1 || pg.ends.includes('bottom')) && bottom}
+                  {(pages === 1 || pg.ends.includes('drum')) && drum}
+                  {pages > 1 && pg.ends.includes('bottom') && !pg.ends.includes('drum') && drumPayP1}
+                  {(pages === 1 || pg.ends.includes('terms')) && termsBlock}
+                  {pages > 1 && contNote(2, billed.length - pg.svcs.length)}
                   <div className="sheet-fill" />
-                  {pages > 1 && summary(plan.fullOn)}
+                  {/* the summary box only when services carry over (145, item 34): otherwise page 1 has the full totals */}
+                  {pages > 1 && !pg.ends.includes('bottom') && summary(plan.fullOn)}
                   {signs}
                 </>
               ) : (
@@ -441,6 +446,21 @@ export function planPages(h, nSvc) {
   const all = g('head') + g('parties') + g('concerns') + g('empty') + (nSvc ? g('thead') + svcSum : 0) + g('bottom') + g('drum') + g('terms') + g('sign') + g('foot') + g('printed')
   if (all <= H) return { compact: false, pages: [{ svcs: [...Array(nSvc).keys()], ends: [] }], fullOn: 1 }
   if (all * COMPACT <= H) return { compact: true, pages: [{ svcs: [...Array(nSvc).keys()], ends: [] }], fullOn: 1 }
+
+  // every service and the full totals fit on page 1 with the signatures (at 92% if needed): only the drum box and the
+  // terms that don't fit go to page 2, so page 1 needs no summary (145, item 34)
+  const p1 = g('head') + g('parties') + g('concerns') + g('empty') + (nSvc ? g('thead') + svcSum : 0) + g('bottom') + g('dpay') + g('cont') + g('sign') + g('foot')
+  for (const z of [1, COMPACT]) {
+    if (p1 * z > H) continue
+    const ends1 = ['bottom'], rest = []
+    let used1 = p1
+    for (const k of ['drum', 'terms']) {
+      if (!g(k)) continue
+      if (!rest.length && (used1 + g(k)) * z <= H) { ends1.push(k); used1 += g(k) } else rest.push(k)
+    }
+    if (!rest.length) break // (can't happen: everything would have fitted above)
+    return { compact: z !== 1, pages: [{ svcs: [...Array(nSvc).keys()], ends: ends1 }, { svcs: [], ends: rest }], fullOn: 1 }
+  }
 
   // page 1
   const fixed1 = g('head') + g('parties') + g('concerns') + g('empty') + g('cont') + g('summary') + g('sign') + g('foot')

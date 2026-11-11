@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { alternativesIndex, numberTokens, partNumbers } from '../../lib/alternatives'
+import { altBrands, alternativesIndex, numberOwners, numberTokens, partNumbers } from '../../lib/alternatives'
 import { Badge, Button, Input, Select, Textarea, Toggle, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { EditorPanel, EmptyCard, ListShell, SearchBox, Section, RowLink, deleteErrorText } from './common'
@@ -42,7 +42,7 @@ export default function ItemsTab({ tab, data, id, canEdit, showCost, canAdjust, 
       if (status === 'inactive' && x.active) return false
       if (cat !== 'all' && x.category_id !== cat) return false
       if (!needle) return true
-      return [x.name, x.code, x.brand, x.description, x.alt_numbers, x.fits].filter(Boolean).join(' ').toLowerCase().includes(needle)
+      return [x.name, x.code, x.brand, x.description, x.alt_numbers, altBrands(x), x.fits].filter(Boolean).join(' ').toLowerCase().includes(needle)
         || (numberTokens(q).length > 0 && numberTokens(q).some((tk) => partNumbers(x).has(tk)))
     })
   }, [data, type, q, cat, status, id])
@@ -151,7 +151,7 @@ function emptyItem(type, settings, rates) {
     cost: 0, price: 0, markup_pct: type === 'part' ? Number(settings?.default_markup_pct ?? 0) : null, default_qty: 1, labor_hours: null, labor_rate_id: type === 'labor' ? defRate?.id || '' : '',
     fee_kind: type === 'fee' ? 'fixed' : null, fee_value: null, taxable: Boolean(settings?.new_items_taxable),
     show_on_invoice: true, show_qty_price: true, track_inventory: type === 'part', qty_on_hand: 0, reorder_point: null,
-    has_core: false, core_cost: 0, tire_size: '', notes: '', active: true, alt_numbers: '', fits: '', unit: '',
+    has_core: false, core_cost: 0, tire_size: '', notes: '', active: true, alt_numbers: '', alt_parts: [], fits: '', unit: '',
   }
 }
 
@@ -169,7 +169,8 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
     taxable: src.taxable, show_on_invoice: src.show_on_invoice, show_qty_price: src.show_qty_price,
     track_inventory: src.track_inventory, reorder_point: dec(src.reorder_point), opening: '',
     has_core: src.has_core, core_cost: amt(src.core_cost), tire_size: src.tire_size || '', notes: src.notes || '', active: src.active,
-    alt_numbers: src.alt_numbers || '', fits: src.fits || '', unit: src.unit || '',
+    // alternate part numbers as rows of brand + number (145); alt_numbers follows them in the database
+    alt_parts: (src.alt_parts || []).map((r) => ({ brand: r.brand || '', number: r.number || '' })), fits: src.fits || '', unit: src.unit || '',
   }))
   const initialFees = useMemo(() => data.itemFees.filter((x) => x.item_id === item?.id).map((x) => x.fee_item_id), [data.itemFees, item?.id])
   const [fees, setFees] = useState(initialFees)
@@ -226,6 +227,9 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
   const cats = data.categories.filter((c) => c.applies_to === type || c.applies_to === 'any')
   const feeItems = data.items.filter((x) => x.item_type === 'fee' && (x.active || fees.includes(x.id)))
   const dupCode = f.code.trim() && data.items.find((x) => x.id !== item?.id && x.item_type === type && (x.code || '').trim().toLowerCase() === f.code.trim().toLowerCase())
+  // the part number already on another part (as its number or one of its alternate rows), 145
+  const codeOwners = type === 'part' && !dupCode ? numberOwners(data.items, f.code, item?.id) : []
+  const altText = f.alt_parts.map((r) => r.number.trim()).filter(Boolean).join(', ')
   const stock = item ? data.stockById[item.id] : null
   const onHand = Number(stock?.qty_on_hand ?? item?.qty_on_hand ?? 0)
   const onEst = Number(stock?.qty_on_estimates ?? 0)
@@ -272,7 +276,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
       reorder_point: type === 'part' && f.track_inventory && f.reorder_point.trim() ? reorder : null,
       has_core: type === 'part' ? f.has_core : false, core_cost: type === 'part' && f.has_core ? core ?? 0 : 0,
       tire_size: type === 'part' ? f.tire_size.trim() || null : null,
-      alt_numbers: type === 'part' ? f.alt_numbers.trim() || null : null,
+      alt_parts: type === 'part' ? f.alt_parts.map((r) => ({ brand: r.brand.trim() || null, number: r.number.trim() })).filter((r) => r.number) : [],
       fits: type === 'part' ? f.fits.trim() || null : null,
       unit: type === 'part' ? f.unit.trim() || null : null,
     }
@@ -324,16 +328,16 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
       <div className="grid2">
         <Input fieldClass="span2" label={t('cat.name')} value={f.name} onChange={set('name')} error={errors.name} disabled={dis} autoFocus={isNew} />
         <Input label={type === 'part' ? t('cat.partNo') : t('cat.code')} value={f.code} onChange={set('code')} disabled={dis}
-          hint={dupCode ? t('cat.dupCode', { name: dupCode.name }) : null} />
+          hint={dupCode ? t('cat.dupCode', { name: dupCode.name }) : codeOwners.length ? <OwnerHint owners={codeOwners} /> : null} />
         <Select label={t('cat.category')} value={f.category_id} onChange={set('category_id')} disabled={dis}
           options={[{ value: '', label: '—' }, ...cats.map((c) => ({ value: c.id, label: categoryPath(c, data.categoryById) }))]} />
         {type === 'part' && <>
           <Input label={t('cat.brand')} value={f.brand} onChange={set('brand')} disabled={dis} />
           <Select label={t('cat.supplier')} value={f.supplier_id} onChange={set('supplier_id')} disabled={dis}
             options={[{ value: '', label: '—' }, ...data.suppliers.filter((s) => s.active || s.id === f.supplier_id).map((s) => ({ value: s.id, label: s.name }))]} />
-          <Input fieldClass="span2" label={t('alt.numbers')} value={f.alt_numbers} onChange={set('alt_numbers')} disabled={dis} maxLength={500} hint={t('alt.numbersHint')} />
+          <AltRows rows={f.alt_parts} onChange={(rows) => setF((x) => ({ ...x, alt_parts: rows }))} disabled={dis} items={data.items} selfId={item?.id} mainCode={f.code} />
           <Input fieldClass="span2" label={t('alt.fits')} value={f.fits} onChange={set('fits')} disabled={dis} maxLength={500} hint={t('alt.fitsHint')} />
-          {!isNew && <AltList item={{ ...item, code: f.code, alt_numbers: f.alt_numbers }} items={data.items} stockById={data.stockById} />}
+          {!isNew && <AltList item={{ ...item, code: f.code, alt_numbers: altText }} items={data.items} stockById={data.stockById} />}
         </>}
         <Textarea fieldClass="span2" label={t('cat.description')} value={f.description} onChange={set('description')} disabled={dis} rows={2} hint={t('cat.descriptionHint')} />
       </div>
@@ -491,6 +495,53 @@ export function StockAdjust({ item, onHand, dirty, onDone }) {
 }
 
 // Other parts sharing one of this part's numbers (code or alternative numbers), with brand, price and stock.
+// "Nomor ini sudah ada di …": the other parts that already carry this number, with links (145)
+function OwnerHint({ owners }) {
+  const { t } = useT()
+  return (
+    <span className="warn-text">{t('u145.numberTaken')}{' '}
+      {owners.slice(0, 3).map((o, i) => <React.Fragment key={o.id}>{i > 0 && ', '}<Link to={`/catalog/parts/${o.id}`}>{o.name}</Link></React.Fragment>)}
+      {owners.length > 3 && ` +${owners.length - 3}`}
+    </span>
+  )
+}
+
+// Alternate part numbers (145): one row per brand + number, "+" adds a row. Numbers only: one price and one stock
+// for the item; a brand stocked and priced on its own stays its own catalog item.
+function AltRows({ rows, onChange, disabled, items, selfId, mainCode }) {
+  const { t } = useT()
+  const setRow = (i, k, v) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
+  const mainTokens = new Set(numberTokens(mainCode))
+  return (
+    <div className="span2 altrows">
+      <div className="fieldlabel">{t('alt.numbers')}</div>
+      {rows.length === 0 && <div className="muted small">{t('u145.altNone')}</div>}
+      {rows.map((r, i) => {
+        const owners = numberOwners(items, r.number, selfId)
+        const same = numberTokens(r.number).some((tk) => mainTokens.has(tk))
+          || rows.some((o, j) => j < i && numberTokens(o.number).some((tk) => numberTokens(r.number).includes(tk)))
+        return (
+          <div key={i} className="altedit">
+            <div className="altedit-row">
+              <Input label={i === 0 ? t('cat.brand') : null} aria-label={t('cat.brand')} value={r.brand} placeholder={t('u145.brandPh')}
+                onChange={(e) => setRow(i, 'brand', e.target.value)} disabled={disabled} maxLength={60} />
+              <Input label={i === 0 ? t('cat.partNo') : null} aria-label={t('cat.partNo')} value={r.number} placeholder={t('u145.numberPh')}
+                onChange={(e) => setRow(i, 'number', e.target.value)} disabled={disabled} maxLength={40} />
+              {!disabled && <Button size="sm" variant="ghost" aria-label={t('u145.removeRow')} title={t('u145.removeRow')}
+                onClick={() => onChange(rows.filter((_, j) => j !== i))}><Icon name="x" size={14} /></Button>}
+            </div>
+            {same ? <div className="hint warn-text">{t('u145.numberTwice')}</div> : owners.length > 0 && <div className="hint"><OwnerHint owners={owners} /></div>}
+          </div>
+        )
+      })}
+      {!disabled && rows.length < 30 && (
+        <div><Button size="sm" onClick={() => onChange([...rows, { brand: '', number: '' }])}><Icon name="plus" size={14} /> {t('u145.addRow')}</Button></div>
+      )}
+      <div className="hint">{t('u145.altHint')}</div>
+    </div>
+  )
+}
+
 function AltList({ item, items, stockById }) {
   const { t } = useT()
   const alts = useMemo(() => alternativesIndex([...items.filter((x) => x.id !== item.id), item]).get(item.id) || [], [items, item])
