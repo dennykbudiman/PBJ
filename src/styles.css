@@ -991,3 +991,7 @@ tr.totalrow td { border-top: 2px solid var(--line); }
 @media print {
   .rekap-doc.wide { page: report; width: auto; }   /* A4 landscape with page numbers (145) */
 }
+
+/* item 47 (148): Berkas diterima — tick column on the invoice list */
+.table th.pick-col, .table td.pick-col { width: 34px; padding-right: 0; text-align: center; }
+.table td.pick-col input { width: 16px; height: 16px; cursor: pointer; }

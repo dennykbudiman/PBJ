@@ -6,6 +6,7 @@ import Icon from '../../components/Icon'
 import TransferForm from './TransferForm'
 import ScheduleSection from './ScheduleSection'
 import LastService from '../../components/LastService'
+import PreappOil from '../../components/PreappOil'
 import { JobsFor, VehicleInspections } from '../jobs/JobLists'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -109,6 +110,7 @@ export default function VehiclePanel({ vehicle, customers, openJob, canEdit, onE
               <Field label={t('drv.driver')}>{vehicle.driver_name || vehicle.driver_phone ? <DriverText name={vehicle.driver_name} phone={vehicle.driver_phone} /> : null}</Field>
             </div>
             <LastService vehicleId={vehicle.id} showNone style={{ marginTop: 10 }} />
+            <PreappOil vehicleId={vehicle.id} style={{ marginTop: 10 }} />
             {vehicle.notes && <div className="hint" style={{ whiteSpace: 'pre-line', marginTop: 10 }}><b>{t('veh.notes')}:</b> {vehicle.notes}</div>}
 
             <ScheduleSection vehicle={vehicle} />

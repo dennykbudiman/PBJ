@@ -33,6 +33,8 @@ export async function loadHistory({ vehicleId, companyId, withHistory }) {
   const customer = custId ? must(await supabase.from('customers').select('*').eq('id', custId).maybeSingle()) : null
   const vIds = vehicles.map((v) => v.id)
   const schedules = vIds.length ? await byIds('service_schedules', '*', 'vehicle_id', vIds, (q) => q.eq('active', true)) : []
+  // item 48 (149): oil changes before the app (none of them were invoiced)
+  const pre = withHistory && vIds.length ? await byIds('oil_preapp', 'id, vehicle_id, oil_name, done_on, km, litres, note', 'vehicle_id', vIds) : []
 
   let jobs = []
   let services = []
@@ -60,10 +62,12 @@ export async function loadHistory({ vehicleId, companyId, withHistory }) {
   const servicesBy = group(services, 'ro_id')
   const jobsBy = group(jobs, 'vehicle_id')
   const schedBy = group(schedules, 'vehicle_id')
+  const preBy = group(pre, 'vehicle_id')
   return {
     customer,
     vehicles: vehicles.map((v) => ({
       v,
+      pre: (preBy[v.id] || []).sort((a, b) => String(a.done_on).localeCompare(String(b.done_on)) || String(a.oil_name).localeCompare(String(b.oil_name))),
       next: (schedBy[v.id] || []).map((s) => ({ name: s.name, ...nextDue(s) })).filter((d) => d.km != null || d.date)
         .sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999'))),
       jobs: (jobsBy[v.id] || []).map((ro) => ({
@@ -109,8 +113,12 @@ export function historyCsv(data, doc, t, lang, prices, tz) {
   const head = [...vehHead, t('fh.col.date'), t('fh.col.km'), t('fh.col.invoice'), t('fh.col.job'), t('fh.col.billedTo'), t('fh.col.service'), t('fh.col.tech'),
     t('fh.col.itemType'), t('fh.col.item'), t('fh.col.qty'), ...(prices ? [t('fh.col.amount'), t('fh.col.invoiceTotal')] : [])]
   const rows = []
-  for (const { v, jobs } of data.vehicles) {
-    if (!jobs.length) { rows.push([...vehCells(v), ...Array(head.length - vehHead.length).fill('')]); continue }
+  for (const { v, jobs, pre = [] } of data.vehicles) {
+    for (const p of pre) {
+      rows.push([...vehCells(v), fmtDate(p.done_on, lang), p.km ?? '', t('u149.preappDoc'), '', '', t('u149.preappDoc'), '', t('fh.type.part'), p.oil_name || '', Number(p.litres),
+        ...(prices ? ['', ''] : [])])
+    }
+    if (!jobs.length) { if (!pre.length) rows.push([...vehCells(v), ...Array(head.length - vehHead.length).fill('')]); continue }
     for (const { ro, billedTo, services } of jobs) {
       const jobCells = [fmtDate(ro.invoiced_at, lang, tz), ro.odometer_out ?? ro.odometer_in ?? '', invoiceNo(ro.invoice_number), jobNo(ro.job_number), billedTo || '']
       // the invoice total goes on the invoice's first row only, so adding up the column gives the right sum

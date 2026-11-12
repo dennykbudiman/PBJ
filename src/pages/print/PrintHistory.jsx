@@ -149,9 +149,9 @@ function VehicleTable({ data, t, lang }) {
 }
 
 function VehicleHistory({ x, t, lang, tz, prices, single }) {
-  const { v, jobs, next } = x
-  // the latest reading known: the vehicle's own, or a later one on an invoice
-  const lastKm = Math.max(...[v.mileage_km, ...jobs.map(({ ro }) => ro.odometer_out ?? ro.odometer_in)].filter((n) => n != null).map(Number), -1)
+  const { v, jobs, next, pre = [] } = x
+  // the latest reading known: the vehicle's own, or a later one on an invoice (or before the app)
+  const lastKm = Math.max(...[v.mileage_km, ...jobs.map(({ ro }) => ro.odometer_out ?? ro.odometer_in), ...pre.map((p) => p.km)].filter((n) => n != null).map(Number), -1)
   return (
     <section className="doc-block" style={{ marginTop: single ? 12 : 18 }}>
       <div className={single ? 'doc-parties' : ''} style={single ? undefined : { borderTop: '2px solid #111', paddingTop: 8 }}>
@@ -169,8 +169,26 @@ function VehicleHistory({ x, t, lang, tz, prices, single }) {
         )}
       </div>
       {!single && next.length > 0 && <div className="small muted" style={{ marginTop: 4 }}>{t('fh.nextService')}: {nextList(next, t, lang)}</div>}
+      {pre.length > 0 && (
+        <table className="doc-lines preapp-lines">
+          <thead>
+            <tr><th>{t('fh.col.date')}</th><th className="num">{t('fh.col.km')}</th><th>{t('u149.preappHist')}</th><th className="num">{t('fh.col.qty')}</th>{prices && <th />}</tr>
+          </thead>
+          <tbody>
+            {pre.map((p) => (
+              <tr key={p.id}>
+                <td className="nowrap">{fmtDate(p.done_on, lang)}</td>
+                <td className="num">{p.km != null ? km(p.km) : '—'}</td>
+                <td>{p.oil_name}{p.note && <span className="muted"> · {p.note}</span>}</td>
+                <td className="num">{num(p.litres, 2)} L</td>
+                {prices && <td />}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {jobs.length === 0 ? (
-        !single && <div className="doc-empty small">{t('fh.noVisitsVehicle')}</div>
+        !single && !pre.length && <div className="doc-empty small">{t('fh.noVisitsVehicle')}</div>
       ) : (
         <table className="doc-lines">
           <thead>

@@ -31,6 +31,9 @@ export default function FleetReport() {
   const [company, setCompany] = useCompany(rows)
   const list = useMemo(() => (rows || []).filter((r) => !company || r.customer_id === company), [rows, company])
   const tot = sumBy(list, MONEY)
+  // item 48 (149): oil changes before the app, listed apart (never in the totals)
+  const pre = useReport('report_preapp', { p_from: period.from, p_to: period.to }, [period.from, period.to], period.valid)
+  const preList = useMemo(() => (pre.rows || []).filter((r) => !company || r.customer_id === company), [pre.rows, company])
 
   const vehicles = useMemo(() => [...groupBy(list, (r) => r.vehicle_id).entries()].map(([id, rs]) => ({
     id, rows: rs, plate: rs[0].plate || '—', name: vehicleName(rs[0]), company: rs[0].company || '—', customer_id: rs[0].customer_id,
@@ -138,6 +141,30 @@ export default function FleetReport() {
               {view === 'vehicle' && <><td /><td /></>}
             </tr></tfoot>
           </table>
+        </div>
+      )}
+      {preList.length > 0 && (
+        <div className="card preapp-card" style={{ marginTop: 16 }}>
+          <div className="sectionlabel" style={{ marginTop: 0 }}>{t('u149.fleetTitle')}</div>
+          <div className="small muted" style={{ marginBottom: 8 }}>{t('u149.fleetHint')}</div>
+          <div className="table">
+            <table>
+              <thead><tr><th>{t('rep.g.vehicle')}</th><th>{t('rep.col.date')}</th><th className="num">{t('rep.col.km')}</th><th>{t('u149.oil')}</th><th className="num">{t('u142.litres')}</th><th className="num">{t('u142.value')}</th></tr></thead>
+              <tbody>
+                {preList.map((r) => (
+                  <tr key={r.preapp_id}>
+                    <td><b>{r.plate}</b><div className="muted small">{r.company}</div></td>
+                    <td className="nowrap">{fmtDate(r.done_on, lang)}</td>
+                    <td className="num">{r.km != null ? km(r.km) : <span className="muted">–</span>}</td>
+                    <td>{r.oil}{r.note && <div className="muted small">{r.note}</div>}</td>
+                    <td className="num">{num(r.litres, 2)} {r.unit || 'L'}</td>
+                    <td className="num">{r.value == null ? '—' : rp(r.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr><td colSpan={4}><b>{t('rep.total')}</b></td><td className="num"><b>{num(preList.reduce((a, r) => a + Number(r.litres), 0), 2)} L</b></td><td className="num"><b>{rp(preList.reduce((a, r) => a + Number(r.value || 0), 0))}</b></td></tr></tfoot>
+            </table>
+          </div>
         </div>
       )}
       <div className="hint">{t('rep.fleet.hint')}</div>

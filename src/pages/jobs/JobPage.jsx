@@ -22,6 +22,7 @@ import JobInspections from './JobInspections'
 import JobActivity from './JobActivity'
 import { AppointmentsCard, ApprovalsCard, AttachmentsCard, ProfitCard, StatusCard, TotalsCard } from './JobSide'
 import { DeferredBanner } from './Deferred'
+import { PaperworkCard, useOwnerAdmin } from '../../components/Paperwork'
 import DueBanner from './DueWork'
 import { addBundleService } from './ServicesTab'
 import AppointmentModal from '../calendar/AppointmentModal'
@@ -41,6 +42,7 @@ export default function JobPage({ id }) {
   const { job, error, missing, reload } = useJobData(id)
   const { data: cat, reload: reloadCat } = useCatalogData()
   const staff = useStaff()
+  const ownerAdmin = useOwnerAdmin() // item 47: Berkas diterima
   const { run, busy } = useRun(reload)
   // A driver typed here is also saved as the vehicle's driver (Nov 4, Denny), unless the tick is cleared for a one-off
   // substitute. Clearing the job's driver never clears the vehicle's.
@@ -264,6 +266,7 @@ export default function JobPage({ id }) {
             canAdd={canAddFromPo} onAddFromPo={() => open('addFromPo')} />}
           <StatusCard job={job} staff={staff} settings={settings} canEdit={canEdit} canFaktur={canEdit || canPay} editable={editable} canVoid={canVoid && invoiced}
             run={run} onInvoice={() => open('invoice')} onVoid={() => open('void')} />
+          {ownerAdmin && invoiced && <PaperworkCard job={job} staff={staff} />}
           <TotalsCard job={job} settings={settings} editable={editable} canPay={canPay} canRefund={canRefund} canFixPaid={canVoid} canCredit={canPay || canIssue || canRefund}
             run={run} onPayment={() => open('payment')} onCredit={() => open('credit')} onFee={() => open('fee')} onDiscount={() => open('discount')} />
           {showCost && <ProfitCard job={job} />}

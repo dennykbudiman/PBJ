@@ -21,14 +21,20 @@ const VIEWS = ['sum', 'inv', 'lines']
 const n = (x) => Number(x || 0)
 
 // group rows: company → vehicle → invoice → service → lines; "other" per invoice = invoice total − every line billed
-export function buildRekap(rows) {
+// item 48 (149): pre-app oil changes (report_preapp) go under their vehicle as `pre`, never into the money
+export function buildRekap(rows, pre = []) {
   const cos = new Map()
   const invs = new Map()
-  for (const r of rows) {
+  const vehOf = (r) => {
     let c = cos.get(r.customer_id)
     if (!c) cos.set(r.customer_id, c = { id: r.customer_id, name: r.company || '—', payer: r.payer, book: r.book, vehicles: new Map() })
     let v = c.vehicles.get(r.vehicle_id)
-    if (!v) c.vehicles.set(r.vehicle_id, v = { id: r.vehicle_id, plate: r.plate || '—', name: [r.make, r.model, r.year].filter(Boolean).join(' '), invoices: new Map() })
+    if (!v) c.vehicles.set(r.vehicle_id, v = { id: r.vehicle_id, plate: r.plate || '—', name: [r.make, r.model, r.year].filter(Boolean).join(' '), invoices: new Map(), pre: [] })
+    return v
+  }
+  for (const p of pre) vehOf(p).pre.push(p)
+  for (const r of rows) {
+    const v = vehOf(r)
     let i = v.invoices.get(r.ro_id)
     if (!i) {
       v.invoices.set(r.ro_id, i = { id: r.ro_id, no: r.invoice_no || String(r.invoice_number || ''), date: r.invoiced_on, km: r.km_unreadable ? null : r.km,
@@ -41,8 +47,11 @@ export function buildRekap(rows) {
     i.lineSum += n(r.billed)
   }
   for (const i of invs.values()) i.other = Math.round(i.total - i.lineSum)
+  for (const c of cos.values()) for (const v of c.vehicles.values()) v.pre.sort((a, b) => String(a.done_on).localeCompare(String(b.done_on)))
   return [...cos.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
+// pre-app litres and value of some vehicles (never part of the totals)
+export const preSum = (vs) => vs.flatMap((v) => v.pre || []).reduce((m, p) => ({ litres: m.litres + n(p.litres), value: m.value + n(p.value), any: true }), { litres: 0, value: 0, any: false })
 
 // the money of some invoices for the kinds chosen
 function money(invoices, kinds, withCost) {
@@ -90,29 +99,34 @@ export default function PrintRekap({ embedded = false }) {
     navigate(`${location.pathname}?${p.toString()}`, { replace: true })
   }
 
-  const [state, setState] = useState({ rows: null, error: null })
+  const [state, setState] = useState({ rows: null, pre: [], error: null })
   const seq = useRef(0)
   useEffect(() => {
     if (!allowed || !valid) return
     const k = ++seq.current
     setState((s) => ({ ...s, loading: true }))
-    fetchAllRows('report_rekap', { p_from: range.from, p_to: range.to }).then(({ data, error }) => {
-      if (k === seq.current) setState({ rows: data, error, loading: false })
-    })
+    Promise.all([fetchAllRows('report_rekap', { p_from: range.from, p_to: range.to }), fetchAllRows('report_preapp', { p_from: range.from, p_to: range.to })])
+      .then(([a, b]) => {
+        if (k === seq.current) setState({ rows: a.data, pre: b.error ? [] : b.data || [], error: a.error, loading: false })
+      })
   }, [range.from, range.to, allowed, valid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = state.rows || []
+  const preAll = state.pre || []
   // choices for the filters, each narrowed by the ones before it
   const opts = useMemo(() => {
     const uniq = (list, key, label) => [...new Map(list.map((r) => [r[key], label(r)])).entries()].filter(([k]) => k).sort((a, b) => String(a[1]).localeCompare(String(b[1])))
-    const r1 = rows.filter((r) => !f.payer || r.payer === f.payer)
+    const both = [...rows, ...preAll]
+    const r1 = both.filter((r) => !f.payer || r.payer === f.payer)
     const r2 = r1.filter((r) => !f.book || r.book === f.book)
     const r3 = r2.filter((r) => !f.company || r.customer_id === f.company)
-    return { payers: uniq(rows, 'payer', (r) => r.payer), books: uniq(r1, 'book', (r) => r.book), companies: uniq(r2, 'customer_id', (r) => r.company || '—'), vehicles: uniq(r3, 'vehicle_id', (r) => r.plate || '—') }
-  }, [rows, f.payer, f.book, f.company]) // eslint-disable-line react-hooks/exhaustive-deps
-  const list = useMemo(() => rows.filter((r) => (!f.payer || r.payer === f.payer) && (!f.book || r.book === f.book)
-    && (!f.company || r.customer_id === f.company) && (!f.vehicle || r.vehicle_id === f.vehicle)), [rows, f.payer, f.book, f.company, f.vehicle])
-  const companies = useMemo(() => buildRekap(list), [list])
+    return { payers: uniq(both, 'payer', (r) => r.payer), books: uniq(r1, 'book', (r) => r.book), companies: uniq(r2, 'customer_id', (r) => r.company || '—'), vehicles: uniq(r3, 'vehicle_id', (r) => r.plate || '—') }
+  }, [rows, preAll, f.payer, f.book, f.company]) // eslint-disable-line react-hooks/exhaustive-deps
+  const keep = (r) => (!f.payer || r.payer === f.payer) && (!f.book || r.book === f.book) && (!f.company || r.customer_id === f.company) && (!f.vehicle || r.vehicle_id === f.vehicle)
+  const list = useMemo(() => rows.filter(keep), [rows, f.payer, f.book, f.company, f.vehicle]) // eslint-disable-line react-hooks/exhaustive-deps
+  // pre-app oil changes are oil: shown when "Oli drum" is ticked
+  const preList = useMemo(() => (kinds.includes('oil') ? preAll.filter(keep) : []), [preAll, kinds.join(), f.payer, f.book, f.company, f.vehicle]) // eslint-disable-line react-hooks/exhaustive-deps
+  const companies = useMemo(() => buildRekap(list, preList), [list, preList])
 
   // the print page prints by itself when opened from the Laporan tab's "Cetak"
   const printed = useRef(false)
@@ -145,6 +159,8 @@ export default function PrintRekap({ embedded = false }) {
       ...(withCost ? [t('u146.rk.col.cost')] : [])]
     const out = list.filter((r) => kinds.includes(r.kind)).map((r) => [r.company, r.payer, r.book, r.plate, r.invoiced_on, r.invoice_no, r.km_unreadable ? '' : r.km,
       r.service_name, r.name, t(`u146.rk.k.${r.kind}`), n(r.qty), r.unit || '', n(r.price), n(r.value), n(r.billed), ...(withCost ? [r.cost == null ? '' : n(r.cost)] : [])])
+    for (const p of preList) out.push([p.company, p.payer, p.book, p.plate, p.done_on, t('u149.preappDoc'), p.km ?? '', t('u149.preappDoc'), p.oil, t('u146.rk.k.oil'),
+      n(p.litres), p.unit || '', '', p.value == null ? '' : n(p.value), 0, ...(withCost ? [''] : [])])
     downloadCsv(`rekap-servis-${range.from}-${range.to}.csv`, head, out)
   }
   const printNow = () => {
@@ -199,7 +215,7 @@ export default function PrintRekap({ embedded = false }) {
         </div>
       )}
       <div className="spacer" />
-      <button type="button" className="btn" onClick={csv} disabled={!list.length}>{tUi('rep.csv')}</button>
+      <button type="button" className="btn" onClick={csv} disabled={!list.length && !preList.length}>{tUi('rep.csv')}</button>
       <button type="button" className="btn primary" onClick={printNow} disabled={!state.rows}>{tUi('job.print')}</button>
     </div>
   )
@@ -243,6 +259,7 @@ export default function PrintRekap({ embedded = false }) {
             <tr className="grand"><th>{companies.length > 1 ? t('u146.rk.totalCos', { n: companies.length }) : t('pr.total')}</th><td>{rp(grand.total)}</td></tr>
             {withCost && <tr><th>{t('u146.rk.col.cost')}</th><td>{rp(grand.cost)}</td></tr>}
             {withCost && <tr><th>{t('u146.rk.margin')}</th><td>{rp(grand.total - grand.cost)}</td></tr>}
+            {preList.length > 0 && <tr className="rekap-pre"><th>{t('u149.preappTotal', { litres: num(preList.reduce((a, p) => a + n(p.litres), 0), 2) })}</th><td>{rp(preList.reduce((a, p) => a + n(p.value), 0))}</td></tr>}
           </tbody>
         </table>
       )}
@@ -275,12 +292,17 @@ function SumTable({ c, t, lang, kinds, cols, withCost }) {
           const driven = read.length > 1 ? read[read.length - 1].km - read[0].km : null
           const after = driven > 0 ? money(invs.filter((i) => i.date > read[0].date || (i.date === read[0].date && i !== read[0])), kinds, false).total : null
           const last = invs[invs.length - 1]
+          const lastPre = v.pre[v.pre.length - 1]
+          const ps = preSum([v])
           return (
             <tr key={v.id}>
               <td>
                 <b className="nowrap">{v.plate}</b>{v.name && <span className="small muted"> · {v.name}</span>}
-                <div className="small muted">{t('u146.rk.last', { date: fmtDate(last.date, lang), km: last.km != null ? fmtKm(last.km) : '—' })}</div>
+                {last
+                  ? <div className="small muted">{t('u146.rk.last', { date: fmtDate(last.date, lang), km: last.km != null ? fmtKm(last.km) : '—' })}</div>
+                  : lastPre && <div className="small muted">{t('u146.rk.last', { date: fmtDate(lastPre.done_on, lang), km: lastPre.km != null ? fmtKm(lastPre.km) : '—' })}</div>}
                 {driven > 0 && <div className="small muted">{t('u146.rk.driven', { km: fmtKm(driven), perKm: rp(after / driven) })}</div>}
+                {ps.any && <div className="small muted rekap-preline">{t('u149.preSum', { n: v.pre.length, litres: num(ps.litres, 2), value: rp(ps.value) })}</div>}
               </td>
               <td className="num">{num(invs.length)}</td>
               {cols.map((k) => (
@@ -361,6 +383,12 @@ function DetailTable({ c, t, lang, kinds, lines, withCost }) {
                 </React.Fragment>
               )
             })}
+            {v.pre.map((p) => (
+              <tr key={p.preapp_id} className="rekap-lrow rekap-pre">
+                <td colSpan={span - 1}><i>{t('u149.preappDoc')}</i> · {fmtDate(p.done_on, lang)} · {p.km != null ? fmtKm(p.km) : t('u146.rk.noKm')} · {p.oil} {num(p.litres, 2)} {p.unit || 'L'}{p.note ? <span className="muted"> · {p.note}</span> : null}</td>
+                <td className="num muted">{p.value == null ? '' : `(${rp(p.value)})`}</td>
+              </tr>
+            ))}
           </tbody>
         )
       })}

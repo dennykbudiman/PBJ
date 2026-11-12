@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Badge, Button, Empty, Notice, PageHead } from '../../components/ui'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Badge, Button, Empty, Notice, PageHead, useToast } from '../../components/ui'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
 import { useShop } from '../../context/ShopContext'
@@ -12,6 +12,8 @@ import { STATE_COLOR, WORKFLOW_COLOR, jobState, sysText } from '../../lib/jobs'
 import { selectAll } from '../customers/useCustomerData'
 import { MoreMenu } from './common'
 import { AddToJobModal, DismissModal } from './Deferred'
+import { MarkPaperworkModal, useOwnerAdmin } from '../../components/Paperwork'
+import { useStaff } from './useJobData'
 
 const JOB_COLS = 'id, job_number, invoice_number, customer_id, vehicle_id, order_status, workflow_status, priority, total, balance, paid_total, payment_status, invoiced_at, due_date, closed_at, archived_at, created_at'
 
@@ -118,27 +120,52 @@ function RepairOrdersList() {
 function InvoicesList() {
   const { t, lang } = useT()
   const navigate = useNavigate()
+  const toast = useToast()
   const { timezone } = useShop()
   const today = shopToday(timezone)
   const names = useNames()
+  // item 47: the Owner and Admins see and mark "Berkas diterima" here (?berkas=no from the Dasbor)
+  const ownerAdmin = useOwnerAdmin()
+  const staff = useStaff()
+  const [params] = useSearchParams()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState('open')
+  const [status, setStatus] = useState(params.get('berkas') ? 'all' : 'open')
+  const [berkas, setBerkas] = useState(['no', 'yes'].includes(params.get('berkas')) ? params.get('berkas') : 'all')
+  const [advisor, setAdvisor] = useState('')
+  const [papers, setPapers] = useState(null)
+  const [picked, setPicked] = useState(() => new Set())
+  const [marking, setMarking] = useState(false)
   useEffect(() => {
-    selectAll(() => supabase.from('repair_orders').select(JOB_COLS).eq('order_status', 'invoice').order('invoice_number', { ascending: false }).order('id'))
+    selectAll(() => supabase.from('repair_orders').select(`${JOB_COLS}, service_advisor_id`).eq('order_status', 'invoice').order('invoice_number', { ascending: false }).order('id'))
       .then((r) => { setRows(r.data || []); setError(r.error || null) })
   }, [])
+  const loadPapers = () => selectAll(() => supabase.from('invoice_paperwork').select('ro_id, received_on, note, received_by').order('ro_id'))
+    .then((r) => setPapers(Object.fromEntries((r.data || []).map((x) => [x.ro_id, x]))))
+  useEffect(() => { if (ownerAdmin) loadPapers() }, [ownerAdmin])
   const needle = q.trim().toLowerCase()
-  const shown = useMemo(() => (rows || []).filter((j) => {
-    const st = jobState(j, today)
-    if (status === 'open' && st === 'paid') return false
-    if (status === 'overdue' && st !== 'overdue') return false
-    if (status === 'paid' && st !== 'paid') return false
-    const c = names?.customer[j.customer_id]
-    const v = names?.vehicle[j.vehicle_id]
-    return matches(needle, invoiceNo(j.invoice_number), jobNo(j.job_number), c?.display_name, v?.plate)
-  }), [rows, names, status, needle, today])
+  const shown = useMemo(() => {
+    const list = (rows || []).filter((j) => {
+      const st = jobState(j, today)
+      if (status === 'open' && st === 'paid') return false
+      if (status === 'overdue' && st !== 'overdue') return false
+      if (status === 'paid' && st !== 'paid') return false
+      if (ownerAdmin && papers && berkas === 'no' && papers[j.id]) return false
+      if (ownerAdmin && papers && berkas === 'yes' && !papers[j.id]) return false
+      if (ownerAdmin && advisor && (j.service_advisor_id || '') !== advisor) return false
+      const c = names?.customer[j.customer_id]
+      const v = names?.vehicle[j.vehicle_id]
+      return matches(needle, invoiceNo(j.invoice_number), jobNo(j.job_number), c?.display_name, v?.plate)
+    })
+    // papers still to come: oldest first, so the missing bundles stand out
+    return ownerAdmin && berkas === 'no' ? [...list].sort((a, b) => String(a.invoiced_at).localeCompare(String(b.invoiced_at))) : list
+  }, [rows, names, status, needle, today, ownerAdmin, papers, berkas, advisor])
+  const pickable = ownerAdmin && papers ? shown.filter((j) => !papers[j.id]) : []
+  const pickedShown = pickable.filter((j) => picked.has(j.id))
+  const toggle = (id) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const advisors = ownerAdmin ? staff.filter((s) => (rows || []).some((j) => j.service_advisor_id === s.id)) : []
+  const nameOf = (id) => staff.find((s) => s.id === id)?.name
   const outstanding = sumOf(shown, (j) => (j.balance == null ? null : Math.max(0, Number(j.balance))))
   const overdue = sumOf(shown.filter((j) => jobState(j, today) === 'overdue'), (j) => j.balance)
   return (
@@ -152,19 +179,44 @@ function InvoicesList() {
           <option value="paid">{t('job.state.paid')}</option>
           <option value="all">{t('cat.statusAll')}</option>
         </select>
+        {ownerAdmin && (
+          <>
+            <select className="select chipselect" value={berkas} onChange={(e) => setBerkas(e.target.value)} aria-label={t('u148.col')}>
+              <option value="all">{t('u148.f.all')}</option>
+              <option value="no">{t('u148.f.no')}</option>
+              <option value="yes">{t('u148.f.yes')}</option>
+            </select>
+            <select className="select chipselect" value={advisor} onChange={(e) => setAdvisor(e.target.value)} aria-label={t('job.advisor')}>
+              <option value="">{t('u148.advisorAll')}</option>
+              {advisors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </>
+        )}
       </div>
+      {ownerAdmin && pickable.length > 0 && (
+        <div className="row wrap paperwork-bar" style={{ gap: 8, marginBottom: 10, alignItems: 'center' }}>
+          <Button size="sm" variant="primary" icon="check" disabled={!pickedShown.length} onClick={() => setMarking(true)}>{t('u148.markMany', { n: pickedShown.length })}</Button>
+          <button type="button" className="linkbtn small" onClick={() => setPicked(new Set(pickable.map((j) => j.id)))}>{t('u148.selectAll')}</button>
+          {pickedShown.length > 0 && <button type="button" className="linkbtn small" onClick={() => setPicked(new Set())}>{t('u148.selectNone')}</button>}
+        </div>
+      )}
       {error && <Notice kind="err" style={{ marginBottom: 12 }}>{errorText(error, t)}</Notice>}
       {!rows || !names ? <div className="muted">{t('common.loading')}</div> : shown.length === 0 ? (
         <div className="card"><Empty icon="receipt" title={rows.length ? t('cust.noMatch') : t('jobs.noInvoices')}>{rows.length ? t('cust.noMatchText') : t('jobs.noInvoicesText')}</Empty></div>
       ) : (
         <div className="table">
           <table>
-            <thead><tr><th>{t('jobs.col.invoice')}</th><th className="wide-only">{t('jobs.col.job')}</th><th>{t('job.company')}</th><th className="wide-only">{t('job.vehicle')}</th><th>{t('jobs.col.date')}</th><th>{t('job.dueDate')}</th><th className="num">{t('job.total')}</th><th className="num">{t('job.balance')}</th><th>{t('cat.status')}</th></tr></thead>
+            <thead><tr>{ownerAdmin && papers && <th className="pick-col" aria-label={t('u148.col')} />}<th>{t('jobs.col.invoice')}</th><th className="wide-only">{t('jobs.col.job')}</th><th>{t('job.company')}</th><th className="wide-only">{t('job.vehicle')}</th><th>{t('jobs.col.date')}</th><th>{t('job.dueDate')}</th><th className="num">{t('job.total')}</th><th className="num">{t('job.balance')}</th><th>{t('cat.status')}</th>{ownerAdmin && papers && <th>{t('u148.col')}</th>}</tr></thead>
             <tbody>
               {shown.map((j) => {
                 const st = jobState(j, today)
                 return (
                   <tr key={j.id} className="click" onClick={() => navigate(`/jobs/${j.id}`)}>
+                    {ownerAdmin && papers && (
+                      <td className="pick-col" onClick={(e) => e.stopPropagation()}>
+                        {!papers[j.id] && <input type="checkbox" checked={picked.has(j.id)} onChange={() => toggle(j.id)} aria-label={invoiceNo(j.invoice_number)} />}
+                      </td>
+                    )}
                     <td><Link className="rowlink" to={`/jobs/${j.id}`} onClick={(e) => e.stopPropagation()}>{invoiceNo(j.invoice_number)}</Link></td>
                     <td className="wide-only muted">#{jobNo(j.job_number)}</td>
                     <td>{names.customer[j.customer_id]?.display_name || '—'}</td>
@@ -174,6 +226,11 @@ function InvoicesList() {
                     <td className="num">{rp(j.total)}</td>
                     <td className="num"><b>{rp(j.balance)}</b></td>
                     <td><Badge color={STATE_COLOR[st]}>{t(`job.state.${st}`)}</Badge></td>
+                    {ownerAdmin && papers && (
+                      <td className="small">{papers[j.id]
+                        ? <span title={papers[j.id].note || undefined}><Badge color="green">{fmtDate(papers[j.id].received_on, lang)}</Badge>{papers[j.id].note && <div className="muted">{papers[j.id].note}</div>}</span>
+                        : <span className="muted">{t('u148.notYet')}{j.service_advisor_id && nameOf(j.service_advisor_id) ? ` · ${nameOf(j.service_advisor_id)}` : ''}</span>}</td>
+                    )}
                   </tr>
                 )
               })}
@@ -182,6 +239,11 @@ function InvoicesList() {
         </div>
       )}
       {rows && shown.length > 0 && <div className="hint">{t('jobs.invTotal', { n: shown.length, amount: rp(outstanding), overdue: rp(overdue) })}</div>}
+      {ownerAdmin && (
+        <MarkPaperworkModal open={marking} ids={pickedShown.map((j) => j.id)} label={pickedShown.slice(0, 8).map((j) => invoiceNo(j.invoice_number)).join(', ') + (pickedShown.length > 8 ? ' …' : '')}
+          onClose={() => setMarking(false)}
+          onDone={(n) => { setMarking(false); setPicked(new Set()); toast(t('u148.done', { n })); loadPapers() }} />
+      )}
     </>
   )
 }

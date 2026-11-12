@@ -21,6 +21,8 @@ import { u144En, u144Id } from './strings-update144.js'
 import { u145En, u145Id } from './strings-update145.js'
 import { u146En, u146Id } from './strings-update146.js'
 import { u147En, u147Id } from './strings-update147.js'
+import { u148En, u148Id } from './strings-update148.js'
+import { u149En, u149Id } from './strings-update149.js'
 
 const base = {
   en: {
@@ -276,6 +278,6 @@ const base = {
 }
 
 export const dict = {
-  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn, ...historyEn, ...fleetEn, ...loginsEn, ...u136En, ...u138En, ...u139En, ...tanyaEn, ...u141En, ...u142En, ...u143En, ...u144En, ...u145En, ...u146En, ...u147En },
-  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId, ...historyId, ...fleetId, ...loginsId, ...u136Id, ...u138Id, ...u139Id, ...tanyaId, ...u141Id, ...u142Id, ...u143Id, ...u144Id, ...u145Id, ...u146Id, ...u147Id },
+  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn, ...historyEn, ...fleetEn, ...loginsEn, ...u136En, ...u138En, ...u139En, ...tanyaEn, ...u141En, ...u142En, ...u143En, ...u144En, ...u145En, ...u146En, ...u147En, ...u148En, ...u149En },
+  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId, ...historyId, ...fleetId, ...loginsId, ...u136Id, ...u138Id, ...u139Id, ...tanyaId, ...u141Id, ...u142Id, ...u143Id, ...u144Id, ...u145Id, ...u146Id, ...u147Id, ...u148Id, ...u149Id },
 }

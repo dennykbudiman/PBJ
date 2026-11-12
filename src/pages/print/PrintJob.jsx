@@ -130,7 +130,7 @@ export default function PrintJob() {
                 <td className="num">{hide ? '' : rp(l.price)}</td>
                 {showDisc && <td className="num">{hide || !disc ? '' : `-${rp(disc)}`}</td>}
                 <td className="num">{flat ? '' : l.item_type === 'labor' && Number(ro.labor_waived) > 0 && Number(lineNet(l)) > 0
-                  ? <><span className="small">{t('u142.notCharged')}</span><div>{rp(0)}</div></> : rp(lineNet(l))}</td>
+                  ? <span className="nowrap"><span className="small muted">{t('u142.notCharged')}</span> {rp(0)}</span> : rp(lineNet(l))}</td>
               </tr>
               {Number(l.core_charge) > 0 && (
                 <tr><td className="ind small">{t('pr.coreCharge', { name: l.name })}</td><td className="num">{flat ? '' : num(l.qty, 2)}</td><td className="num">{flat ? '' : rp(l.core_charge)}</td>{showDisc && <td />}<td className="num">{flat ? '' : rp(Math.round(Number(l.core_charge) * Number(l.qty)))}</td></tr>
@@ -395,8 +395,9 @@ export default function PrintJob() {
         {parties}
         {drum}
         <div className="sheet-fill" />
-        <section className="doc-sign">
-          {[['pr.sign.advisor', advisor], ['pr.sign.driver', ro.driver_name || veh.driver_name || job.vehicle?.driver_name]].map(([k, name]) => (
+        {/* item 45 (Nov 12): the mechanic signs the oil sheet too */}
+        <section className="doc-sign three">
+          {[['pr.sign.advisor', advisor], ['pr.sign.mechanic', mechanics], ['pr.sign.driver', ro.driver_name || veh.driver_name || job.vehicle?.driver_name]].map(([k, name]) => (
             <div key={k}><div className="sign-line" />{t(k)}<div className="small muted sign-name">{name || ''}</div></div>
           ))}
         </section>

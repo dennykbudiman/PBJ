@@ -6,7 +6,7 @@ import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
 import { useT, translate } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
-import { fmtDate, num, rp } from '../../lib/format'
+import { fmtDate, km as fmtKm, num, rp } from '../../lib/format'
 import { nameKey, payerBookLabel } from '../../lib/books'
 import { terbilang } from '../../lib/terbilang'
 
@@ -77,7 +77,7 @@ export default function PrintDrums() {
   function csv() {
     const rows = [[t('u145.csv.from'), t('u145.csv.to'), t('u145.col.oil'), t('u145.col.date'), t('inv.col.invoice'), t('u145.col.truck'), t('u142.company'), t('u142.litres'), t('u145.col.perL'), t('inv.col.amount'), t('u145.csv.toPay')]]
     for (const st of statements) for (const { drum: d, debtor: x } of st.drums) for (const l of x.lines || []) {
-      rows.push([st.from, st.to, d.oil, l.day, l.invoice_no, l.plate || '', l.company || '', String(l.litres).replace('.', ','), d.cost_per_l, l.amount, st.owes ? 'ya' : 'tidak'])
+      rows.push([st.from, st.to, d.oil, l.day, l.preapp ? t('u149.preappCsv', { km: l.km ?? '' }) : l.invoice_no, l.plate || '', l.company || '', String(l.litres).replace('.', ','), d.cost_per_l, l.amount, st.owes ? 'ya' : 'tidak'])
     }
     const text = rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n')
     const a = document.createElement('a')
@@ -137,14 +137,14 @@ export default function PrintDrums() {
             <div key={d.id} className="doc-block">
               <div className="drum-dochead">
                 <b>{d.oil}</b>
-                <span className="small muted">{t('u145.drumInfo', { litres: num(d.litres, 2), date: fmtDate(d.opened_on, lang), price: rp(d.cost_per_l), unit: d.unit || 'L', left: num(d.left, 2) })}{d.estimated && ` · ${t('u143.estimate')}`}</span>
+                <span className="small muted">{t('u145.drumInfo', { litres: num(d.litres, 2), date: fmtDate(d.opened_on, lang), price: rp(d.cost_per_l), unit: d.unit || 'L', left: num(d.left, 2) })}{d.estimated && ` · ${t('u143.estimate')}`}{d.emptied_on && ` · ${t('u149.emptied', { date: fmtDate(d.emptied_on, lang) })}`}</span>
               </div>
               <table className="doc-lines">
                 <thead><tr><th>{t('u145.col.date')}</th><th>{t('inv.col.invoice')}</th><th>{t('u145.col.truck')}</th><th>{t('u142.company')}</th>
                   <th className="num">{t('u142.litres')}</th><th className="num">{t('u145.col.perL')}</th><th className="num">{t('inv.col.amount')}</th></tr></thead>
                 <tbody>
                   {(x.lines || []).map((l, k) => (
-                    <tr key={k}><td className="nowrap">{fmtDate(l.day, lang)}</td><td className="nowrap">{l.invoice_no}</td><td className="nowrap">{l.plate}</td><td>{l.company}</td>
+                    <tr key={k}><td className="nowrap">{fmtDate(l.day, lang)}</td><td className="nowrap">{l.preapp ? <i>{t('u149.preappDoc')}{l.km != null ? <span className="muted"> · {fmtKm(l.km)}</span> : null}</i> : l.invoice_no}</td><td className="nowrap">{l.plate}</td><td>{l.company}</td>
                       <td className="num">{num(l.litres, 2)}</td><td className="num">{rp(d.cost_per_l)}</td><td className="num">{rp(l.amount)}</td></tr>
                   ))}
                   {(x.lines || []).length === 0 && <tr><td colSpan={7} className="muted">{t('u145.noLinesPeriod')}</td></tr>}

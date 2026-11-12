@@ -7,9 +7,10 @@ import { useAuth } from '../context/AuthContext'
 import { useShop } from '../context/ShopContext'
 import { useT } from '../lib/i18n'
 import { supabase, errorText } from '../lib/supabase'
-import { num, rp } from '../lib/format'
+import { fmtDate, num, rp } from '../lib/format'
 import { rpShort } from '../lib/customers'
 import { dayLabel } from '../lib/calendar'
+import { useOwnerAdmin } from '../components/Paperwork'
 
 // Chart colours: categorical slots 1 and 2 (checked for colour-blind separation and contrast on white).
 const C_INVOICED = '#2a78d6'
@@ -22,6 +23,16 @@ export default function Dashboard() {
   const [d, setD] = useState(null)
   const [error, setError] = useState(null)
   const first = (profile?.name || '').split(' ')[0]
+  // item 47: invoices whose papers the Owner/Admin haven't received yet
+  const ownerAdmin = useOwnerAdmin()
+  const { timezone } = useShop()
+  const [papers, setPapers] = useState(null)
+  useEffect(() => {
+    if (!ownerAdmin) return undefined
+    let live = true
+    supabase.rpc('paperwork_pending').then(({ data }) => { if (live) setPapers(data || null) })
+    return () => { live = false }
+  }, [ownerAdmin])
 
   useEffect(() => {
     let live = true
@@ -98,6 +109,10 @@ export default function Dashboard() {
               detail={t('dash.coresDetail', { take: d.cores_to_retrieve, send: d.cores_to_return })} />
             <Attn to="/inventory/returns" icon="undo" label={t('dash.returns')} count={Number(d.returns_open)} detail={t('dash.returnsDetail')} />
             <Attn to="/board" icon="wrench" label={t('dash.estimates')} count={Number(d.open_estimates)} detail={t('dash.estimatesDetail')} />
+            {ownerAdmin && papers && (
+              <Attn to="/customers/invoices?berkas=no" icon="receipt" label={t('u148.dash')} count={Number(papers.count)}
+                detail={papers.oldest ? t('u148.dashDetail', { date: fmtDate(papers.oldest, lang, timezone) }) : ''} />
+            )}
           </div>
         </>
       )}

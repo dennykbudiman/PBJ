@@ -329,6 +329,7 @@ from public.repair_orders t
   cross join lateral (select case when p.money then false else public.works_on_job(t.id) or public.fleet_job(t.id) end as works) m
 where (select public.is_staff()) or t.id in (select public.fleet_job_ids());
 revoke all on public.repair_orders_read from public, anon;
+grant select on public.repair_orders_read to authenticated;
 
 -- ===== 6. leftovers already on the shelf: linked once ===============================================================
 -- Earlier invoices are replayed in order: each took its own PT · book's leftovers (from jobs invoiced before it) first
