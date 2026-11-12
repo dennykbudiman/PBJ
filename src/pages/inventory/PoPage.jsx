@@ -8,7 +8,7 @@ import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, fmtDateTime, jobNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
-import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poLinesNotOnJob, poBook, poPaidByPt, poPayer, poTotals, sparePoParts, stockState } from '../../lib/inventory'
+import { LINE_COLOR, RETURN_COLOR, lineAmount, lineDue, lineState, openQty, owedQty, poLinesNotOnJob, poBook, poPaidByPt, poPayer, poTotals, sparePoParts, stockState, SHOW_TALANGAN_PAYBACK } from '../../lib/inventory'
 import { booksOfPayer } from '../../lib/books'
 import { BlurInput, MoreMenu, Picker, TotalRow, useRun } from '../jobs/common'
 import { JobRef, PayBadge, PoBadge, Tick } from './bits'
@@ -152,7 +152,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   const toggle = (lid, on) => setSel((s) => { const n = new Set(s); if (on) n.add(lid); else n.delete(lid); return n })
   const menu = [
     { label: t('inv.po.print'), icon: 'print', onClick: () => navigate(`/print/po/${po.id}`) },
-    talangan && { label: t('u145.printSlip'), icon: 'print', onClick: () => navigate(`/print/talangan/${po.id}`) },
+    // the reimbursement slip (145) is hidden since Nov 12 (item 42; staff didn't like it); /print/talangan/<po> still works
     canEdit && ['draft', 'ordered', 'partially_delivered'].includes(po.status) && openLines.length > 0 && { label: anyDelivered ? t('inv.po.cancelRest') : t('inv.po.cancel'), icon: 'x', danger: true, onClick: cancelPo },
     canEdit && po.status === 'draft' && { label: t('inv.po.delete'), icon: 'trash', danger: true, onClick: deletePo },
   ]
@@ -370,15 +370,14 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                   onCommit={(v) => upd({ talangan_nota: v.trim() || null })} />
               </label>
               <div className="small" style={{ marginTop: 6 }}>{t('u145.reimbursedBy', { who: reimburser })}</div>
-              <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
+              {SHOW_TALANGAN_PAYBACK && <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
                 {po.reimbursed_on
                   ? <><Badge color="green">{t('u145.reimbursedOn', { date: fmtDate(po.reimbursed_on, lang) })}</Badge>
                     <span className="small muted">{[po.reimbursed_method && t(`inv.pay.m.${po.reimbursed_method}`), po.reimbursed_reference].filter(Boolean).join(' · ')}</span>
                     {ownerAdmin && <button type="button" className="linkbtn small" onClick={() => run(() => supabase.rpc('po_reimburse', { p_po: po.id, p_on: null }), t('u145.reimburseUndone'))}>{t('u145.reimburseUndo')}</button>}</>
                   : <><Badge color="amber">{t('u145.notReimbursed')}</Badge>
                     {ownerAdmin && <Button size="sm" onClick={() => setModal({ kind: 'reimburse' })}>{t('u145.reimburse')}</Button>}</>}
-                <Link className="small" to={`/print/talangan/${po.id}`}>{t('u145.printSlip')}</Link>
-              </div>
+              </div>}
             </div>
           )}
           {shopPaidSome && <div className="hint">{t('u142.shopPaidSome')}</div>}

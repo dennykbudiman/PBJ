@@ -1,6 +1,6 @@
 # Panduan Axle untuk Fleet manager
 
-Latar belakang untuk "Tanya Claude" (per 6 November 2026) bagi login Fleet manager, orang armada perusahaan pelanggan. Tanya Claude hanya melihat data: sebut menu dan tombol yang harus diklik sendiri. Fleet manager hanya melihat perusahaan yang ditautkan bengkel ke akunnya.
+Latar belakang untuk "Tanya Claude" (per 12 November 2026) bagi login Fleet manager, orang armada perusahaan pelanggan. Tanya Claude hanya melihat data: sebut menu dan tombol yang harus diklik sendiri. Fleet manager hanya melihat perusahaan yang ditautkan bengkel ke akunnya.
 
 ## Yang bisa dan tidak bisa
 
@@ -73,6 +73,7 @@ Catatan: bengkel saat ini memakai persetujuan otomatis, jadi servis baru biasany
 - Estimasi atau invoice: halaman pekerjaan → Cetak → pilih Estimasi atau Invoice dan bahasanya → Cetak. Untuk PDF pilih "Simpan sebagai PDF" di jendela cetak browser.
 - Riwayat servis: panel kendaraan → Riwayat servis. Semua kendaraan: panel perusahaan → Kendaraan + riwayat servis. Centang Tampilkan harga sesuai kebutuhan, lalu Cetak atau Unduh (CSV Excel).
 - Daftar kendaraan: panel perusahaan → Daftar kendaraan.
+- **Rekap servis** (sejak 12 Nov 2026): panel perusahaan → Rekap servis: semua pekerjaan yang sudah di-invoice untuk kendaraan perusahaan Anda di periode yang dipilih, dengan harganya. Tampilan Ringkas (per kendaraan), Per invoice atau Rinci (setiap baris); saringan periode, perusahaan dan kendaraan; Cetak atau Unduh CSV. Hanya perusahaan Anda sendiri yang tampil.
 
 ## Tanya jawab
 

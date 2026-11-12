@@ -7,7 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { fmtDate, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { addDays } from '../../lib/calendar'
-import { amountsTotal, lineDue, owedQty, poAmounts, poPaidByPt } from '../../lib/inventory'
+import { amountsTotal, lineDue, owedQty, poAmounts, poPaidByPt, SHOW_TALANGAN_PAYBACK } from '../../lib/inventory'
 import { useAuth } from '../../context/AuthContext'
 import { TalanganModal } from './PoPage'
 import { useRun } from '../jobs/common'
@@ -123,16 +123,16 @@ export default function BillsTab({ data, reload, canPay: canEdit }) {
           <h2>{t('u145.talanganShop')}</h2>
           <div className="table compact flush">
             <table>
-              <thead><tr><th>{t('inv.col.po')}</th><th>{t('u145.driver')}</th><th className="wide-only">{t('inv.col.supplier')}</th><th>{t('u145.status')}</th><th className="num">{t('inv.col.amount')}</th><th aria-label={t('inv.more')} /></tr></thead>
+              <thead><tr><th>{t('inv.col.po')}</th><th>{t('u145.driver')}</th><th className="wide-only">{t('inv.col.supplier')}</th>{SHOW_TALANGAN_PAYBACK && <th>{t('u145.status')}</th>}<th className="num">{t('inv.col.amount')}</th>{SHOW_TALANGAN_PAYBACK && <th aria-label={t('inv.more')} />}</tr></thead>
               <tbody>
                 {talangan.map(({ po, sup, amount }) => (
                   <tr key={po.id}>
                     <td className="nowrap"><Link to={`/inventory/purchase-orders/${po.id}`}>{po.po_number}</Link></td>
                     <td>{po.talangan_name}{po.talangan_nota && <div className="small muted">{t('u145.notaNo', { no: po.talangan_nota })}</div>}</td>
                     <td className="wide-only">{sup?.name || '—'}</td>
-                    <td>{po.reimbursed_on ? <Badge color="green">{t('u145.reimbursedOn', { date: fmtDate(po.reimbursed_on, lang) })}</Badge> : <Badge color="amber">{t('u145.notReimbursed')}</Badge>}</td>
+                    {SHOW_TALANGAN_PAYBACK && <td>{po.reimbursed_on ? <Badge color="green">{t('u145.reimbursedOn', { date: fmtDate(po.reimbursed_on, lang) })}</Badge> : <Badge color="amber">{t('u145.notReimbursed')}</Badge>}</td>}
                     <td className="num nowrap">{rp(amount)}</td>
-                    <td className="num">{ownerAdmin && !po.reimbursed_on && <button type="button" className="linkbtn small" onClick={() => setReimb(po)}>{t('u145.reimburse')}</button>}</td>
+                    {SHOW_TALANGAN_PAYBACK && <td className="num">{ownerAdmin && !po.reimbursed_on && <button type="button" className="linkbtn small" onClick={() => setReimb(po)}>{t('u145.reimburse')}</button>}</td>}
                   </tr>
                 ))}
               </tbody>

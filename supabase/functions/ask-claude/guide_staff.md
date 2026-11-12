@@ -1,6 +1,6 @@
 # Panduan Axle untuk staf bengkel
 
-Latar belakang untuk "Tanya Claude", per 11 November 2026. Tanya Claude hanya melihat data, tidak mengubah apa pun: sebut menu dan tombol yang harus diklik sendiri oleh pengguna. Nama tombol persis seperti di layar.
+Latar belakang untuk "Tanya Claude", per 12 November 2026. Tanya Claude hanya melihat data, tidak mengubah apa pun: sebut menu dan tombol yang harus diklik sendiri oleh pengguna. Nama tombol persis seperti di layar.
 
 ## Peran dan hak singkat
 
@@ -106,7 +106,7 @@ Menerima part yang sudah datang:
 Lainnya di PO:
 - **Sudah ada di katalog?** (sejak 11 Nov 2026): saat mengetik part di luar katalog di PO atau di pekerjaan, Axle menunjukkan part katalog yang mirip (nama atau nomor part) dengan stoknya; klik **Pakai ini** supaya yang dipakai part katalog. Baris pekerjaan yang sudah di PO dihubungkan lewat Katalog → Part di luar katalog.
 - **PPN dihitung sekali dari total PO** (dan per invoice supplier bila PO datang bertahap), sama seperti faktur supplier, jadi tidak ada selisih Rp 1. Di PO, jumlah per baris tampil sebelum PPN.
-- **Dibayar supir dulu (talangan)**: bila supir membayar sendiri ke bengkel luar atau toko, di PO bagian "Yang membayar supplier" centang Dibayar supir dulu (talangan); nama dan HP supir terisi dari pekerjaan, isi No. nota. Supir diganti oleh PT · pembukuan perusahaan truknya (atau oleh bengkel bila perusahaannya membayar ke bengkel). Menu … → **Cetak bukti penggantian** (satu lembar, total dan terbilang, tanda tangan). Setelah uang supir diganti, Pemilik/Admin klik **Sudah diganti** (bisa dibatalkan). Bengkel tidak membayar supplier untuk PO ini.
+- **Dibayar supir dulu (talangan)**: bila supir membayar sendiri ke bengkel luar atau toko, di PO bagian "Yang membayar supplier" centang Dibayar supir dulu (talangan); nama dan HP supir terisi dari pekerjaan, isi No. nota. Supir diganti oleh PT · pembukuan perusahaan truknya (atau oleh bengkel bila perusahaannya membayar ke bengkel). Penggantian uang supir disetujui pimpinan langsung (lisan atau WhatsApp), jadi sejak 12 Nov 2026 Axle tidak mencatat status Belum/Sudah diganti dan tidak ada tombol Sudah diganti. Cetakan PO dan cetakan invoice/estimasi menandai PO ini: baris part "Dibayar supir dulu: <nama>" dan kotak **Dibayar supir dulu (talangan)** dengan PO, nota, jumlah dan siapa yang mengganti. Lembar "bukti penggantian" tidak dipakai lagi. Bengkel tidak membayar supplier untuk PO ini.
 - Salah jumlah diterima: menu baris → Koreksi jumlah diterima. Menu …: Cetak PO, Batalkan PO / Batalkan yang belum datang, Hapus draf.
 - Harga modal dari PO otomatis masuk ke baris part di pekerjaan. Harga jual ikut (= modal × markup bawaan, saat ini 0%) selama belum diketik sendiri; harga jual yang diketik di pekerjaan tidak ditimpa.
 - Baris pekerjaan dan baris PO-nya saling terhubung:
@@ -180,7 +180,7 @@ Lainnya di PO:
 - Jumlah dihitung dari yang benar-benar diterima, termasuk biaya core dan pajak; part yang diretur tidak ditagih.
 - Salah bayar: Pembayaran terakhir di bawah daftar → Batalkan.
 - PO yang dibayar langsung oleh PT tidak ada di Tagihan supplier (lihat bagian 11a).
-- PO talangan (dibayar supir dulu) juga tidak ada di daftar supplier. Bila perusahaannya membayar ke bengkel, PO itu muncul di bagian "Supir yang harus diganti (oleh bengkel)" dengan tombol Sudah diganti (Pemilik/Admin).
+- PO talangan (dibayar supir dulu) juga tidak ada di daftar supplier. Bila perusahaannya membayar ke bengkel, PO itu muncul di bagian "Supir yang harus diganti (oleh bengkel)" (PO, supir, supplier, jumlah).
 
 ## 11a. PT yang membayar supplier sendiri, jasa tidak ditagih, drum oli
 
@@ -200,9 +200,9 @@ Saat ini bengkel belum punya rekening dan kasir, jadi setiap PT membayar supplie
 - PO pekerjaan dan cetakannya menulis "Tagihan atas nama: <PT>" dan "Pembukuan: <pembukuan perusahaan>". PO stok (mis. drum) punya pilihan Pembukuan di bawah nama PT yang membayar (kosong = seluruh PT).
 - Invoice perusahaan yang membayar langsung menulis PT pembayar dan Pembukuan di bagian Tagihan kepada.
 - Inventaris → **Drum**: setiap drum oli bulk (oli, liter, harga per liter, PT dan pembukuan yang membayar, tanggal dibuka; harga bisa ditandai **harga perkiraan**). Oli yang terpakai di pekerjaan yang sudah di-invoice mengisi drum dari yang paling lama, dan tercatat saat invoice dibuat (invoice lain tidak mengubahnya; hanya menambah, menghapus atau mengubah liter/tanggal drum yang menghitung ulang). Setiap drum menunjukkan sisa, terpakai, per perusahaan, dan "<PT · pembukuan> membayar ke <PT · pembukuan>: … L = Rp …" untuk oli yang dipakai pembukuan lain, juga di dalam satu PT (mis. PIJ 2 membayar ke PIJ 1 untuk drum Meditran). Drum tanpa pembukuan milik seluruh PT. Oli di pekerjaan yang belum di-invoice belum dihitung. Tambah, ubah, hapus drum: yang boleh mengelola inventaris.
-- Cetakan invoice (perusahaan yang membayar langsung) punya kotak **Oli dari drum**: per baris oli, drum milik siapa, liter, harga per liter, jumlah, dan "Bayar ke <PT · pembukuan>" atau "Drum sendiri". Di bawahnya "Pembayaran oli drum: bayar Rp … ke …". Harga yang masih perkiraan ditandai. Bila harga drum diperbaiki, cetakan berikutnya ikut harga baru.
+- **Lampiran oli drum** (sejak 12 Nov 2026): invoice yang memakai oli drum dicetak bersama satu lembar terpisah "Pemakaian oli drum · Lampiran invoice INV-…": per baris oli, drum milik siapa, liter, harga per liter, jumlah, total, dan "Bayar ke <PT · pembukuan>" atau "Drum sendiri"; di bawahnya "Pembayaran oli drum: bayar Rp … ke …" dan tanda tangan Service advisor dan Supir. Invoice-nya sendiri tidak lagi menyebut oli drum. Di halaman cetak bisa dipilih **Invoice + lampiran oli drum** atau **Lampiran oli drum saja**. Harga yang masih perkiraan ditandai. Bila harga drum diperbaiki, cetakan berikutnya ikut harga baru.
 - **Tagihan oli drum** (sejak 11 Nov 2026): Inventaris → Drum → **Cetak tagihan**: satu lembar per pembukuan yang memakai oli drum PT/pembukuan lain (tiap invoice: tanggal, truk, liter, jumlah; total, sudah dibayar, sisa), pilih drum, pembukuan dan periode, unduh CSV; pemakaian sendiri pemilik drum dicetak terpisah sebagai info. **Tandai lunas** (Pemilik/Admin) mencatat pembayaran antar PT/pembukuan; di halaman Drum tertulis Lunas atau "dibayar …, sisa …".
-- Tagihan PT juga punya **Oli dari drum · bayar ke <PT · pembukuan>** (oli dari invoice bulan itu, masuk total pembukuan) dan di sisi pemilik drum "Akan diterima"; PO talangan tampil sebagai "Dibayar supir dulu: <nama>" dengan status Belum/Sudah diganti.
+- Tagihan PT juga punya **Oli dari drum · bayar ke <PT · pembukuan>** (oli dari invoice bulan itu, masuk total pembukuan) dan di sisi pemilik drum "Akan diterima"; PO talangan tampil sebagai "Dibayar supir dulu: <nama>".
 - Bila harga drum diubah, Axle menawarkan mengubah harga katalog oli itu (jual dan modal) dan oli di pekerjaan yang belum di-invoice. Invoice yang sudah ada tidak berubah.
 - Laporan → Penjualan menampilkan "Jasa tidak ditagih (tidak masuk total)" dan "Dibayar PT ke supplier (masuk total)" bila ada.
 - PPN saat bengkel bukan PKP (Pengaturan → Status PKP = Non-PKP): bengkel tidak bisa mengkreditkan PPN supplier, jadi PPN itu bagian dari harga modal.
@@ -241,6 +241,7 @@ Pilih periode dan perusahaan; Unduh CSV untuk Excel.
 - Penjualan, Umur piutang, Pembayaran diterima: Pemilik, Admin, Service advisor, Kasir.
 - Teknisi, Biaya armada, Kepatuhan servis: Pemilik, Admin, Service advisor.
 - Laba, Inventaris (memuat harga modal): Pemilik, Admin, Service advisor.
+- **Rekap servis** (sejak 12 Nov 2026): Pemilik, Admin, Service advisor, Kasir. Apa yang dikerjakan pada kendaraan tiap perusahaan dengan harganya, dari invoice yang terbit di periode itu (menurut tanggal invoice; invoice batal tidak termasuk). Saringan: periode, PT pembayar, Pembukuan, Perusahaan, Kendaraan; jenis Part, Jasa, Pekerjaan luar, Oli drum, Lain-lain (diskon, harga paket, biaya, pajak). Tampilan **Ringkas** (per kendaraan: kunjungan, jumlah per jenis, total, kunjungan terakhir, km ditempuh dan Rp per km), **Per invoice** (tanggal, nomor, km, pekerjaan, total) atau **Rinci** (setiap servis dan baris). Jasa yang tidak ditagih tertulis Rp 0 dengan nilainya. "Satu perusahaan per halaman", Unduh CSV, Cetak (membuka halaman cetak). **Tampilkan harga modal** (modal dan laba) hanya untuk Pemilik/Admin. Juga dari panel perusahaan: tombol **Rekap servis** (tahun ini, perusahaan itu).
 
 ## 16. Hari ini (semua staf; isinya mengikuti hak peran)
 

@@ -7,6 +7,7 @@ import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, jobNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { nameKey, payerBookLabel } from '../../lib/books'
+import { SHOW_TALANGAN_PAYBACK } from '../../lib/inventory'
 
 // Inventory → Tagihan PT (142, Denny Nov 9): what each PT owes for a month. From the POs it pays directly (delivered
 // that month, less returns), per supplier, to check against the supplier's month-end bill; a PO the driver paid first
@@ -169,7 +170,7 @@ export default function PtBillsTab() {
               <div className="row wrap pt-grouphead" style={{ gap: 8 }}>
                 <b>{t('u145.talanganTo', { name: s.name })}</b>
                 <span className="small muted">{t('u145.talanganAt', { supplier: s.supplier || '—' })}{s.talangan?.nota && ` · ${t('u145.notaNo', { no: s.talangan.nota })}`}</span>
-                {s.talangan?.reimbursed_on ? <Badge color="green">{t('u145.reimbursedOn', { date: fmtDate(s.talangan.reimbursed_on, lang) })}</Badge> : <Badge color="amber">{t('u145.notReimbursed')}</Badge>}
+                {SHOW_TALANGAN_PAYBACK && (s.talangan?.reimbursed_on ? <Badge color="green">{t('u145.reimbursedOn', { date: fmtDate(s.talangan.reimbursed_on, lang) })}</Badge> : <Badge color="amber">{t('u145.notReimbursed')}</Badge>)}
                 <div className="spacer" /><span className="small">{rp(s.total)}</span>
               </div>
               {lineTable(s.lines, `${p.payer} · ${t('u145.talanganTo', { name: s.name })}`)}

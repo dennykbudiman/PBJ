@@ -77,6 +77,10 @@ export const LINE_COLOR = { waiting: 'blue', partial: 'amber', delivered: 'green
 
 // The PO's totals on what is still wanted (ordered minus cancelled), and what was delivered / paid.
 // (145) the PPN once per PO and supplier invoice, as on the supplier's faktur
+// item 42 (Denny, Nov 12): a driver's payback (talangan) is approved in person, so the app shows no Belum/Sudah diganti
+// and no "Sudah diganti" button. The data and po_reimburse stay; set this to true to show them again.
+export const SHOW_TALANGAN_PAYBACK = false
+
 export function poTotals(po, lines) {
   const rows = (lines || []).map((l) => ({ l, po }))
   const want = poAmounts(rows, 'wanted')

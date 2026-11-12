@@ -162,6 +162,15 @@ export default function PrintPo() {
         <section className="doc-bottom">
           <div className="doc-notes">
             {po.notes && <div className="doc-block"><div className="doc-label">{t('pr.po.notes')}</div><div className="pre">{po.notes}</div></div>}
+            {/* item 42 (Nov 12): the driver paid this PO first (talangan), and whether he has been paid back */}
+            {po.talangan_name && (
+              <div className="doc-block doc-talangan">
+                <div className="doc-label">{t('u146.talanganTitle')}</div>
+                <div><b>{po.talangan_name}</b>{po.talangan_phone ? ` · ${po.talangan_phone}` : ''}{po.talangan_nota ? ` · ${t('u146.notaShort', { no: po.talangan_nota })}` : ''}{money && <> · <span className="nowrap">{rp(tot.delivered || tot.total)}</span></>}</div>
+                {/* the payback is approved in person (Denny, Nov 12): no Belum/Sudah diganti on paper */}
+                <div>{t('u145.reimbursedBy', { who: billTo ? [billTo, book].filter(Boolean).join(' · ') : t('u145.theShopPays') })}</div>
+              </div>
+            )}
             <div className="small muted">{t('pr.po.quote', { no: po.po_number })}</div>
           </div>
           {money && <table className="doc-totals">

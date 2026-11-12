@@ -6,6 +6,7 @@ import { useShop } from '../../context/ShopContext'
 import { useT, translate } from '../../lib/i18n'
 import { errorText } from '../../lib/supabase'
 import { fmtDate, invoiceNo, jobNo, km, num, rp } from '../../lib/format'
+import { poTotals } from '../../lib/inventory'
 import { vehicleName } from '../../lib/customers'
 import { lineAmount, lineDiscount, lineNet } from '../../lib/jobs'
 import { useJobData, useStaff } from '../jobs/useJobData'
@@ -67,6 +68,18 @@ export default function PrintJob() {
   const payerName = snap?.payer || job.customer?.payer_name?.trim() || job.customer?.display_name || ''
   const bookName = snap?.book || job.customer?.book_name?.trim() || job.customer?.display_name || ''
   const box = doc === 'invoice' ? job.drumBox : null
+  // item 41: the drum oil prints on its own sheet after the invoice; "part=oil" prints that sheet alone
+  const hasOil = !!box && (box.lines || []).length > 0
+  const oilOnly = hasOil && params.get('part') === 'oil'
+  // item 42: POs of this job the driver paid first (talangan): marked on the lines and under the notes, with
+  // whether the driver has been paid back ("Sudah diganti")
+  const talanganPos = (job.pos || []).filter((p) => p.talangan_name && p.status !== 'cancelled')
+  const talanganOf = (l) => {
+    const pl = l.po_item_id && (job.poLines || []).find((x) => x.id === l.po_item_id)
+    return pl ? talanganPos.find((p) => p.id === pl.po_id) : null
+  }
+  // what the driver paid: what came in (with PPN once per PO, 145), else what was ordered
+  const talanganAmount = (p) => { const x = poTotals(p, (job.poLines || []).filter((l) => l.po_id === p.id)); return x.delivered || x.total }
   const taxRate = shop.pkp_status === 'non_pkp' ? 0 : Number(shop.tax_rate ?? 11)
   const taxName = shop.tax_name || 'PPN'
   const billed = job.services.filter((s) => (doc === 'invoice' ? s.approval_status === 'approved' : s.approval_status === 'approved' || s.approval_status === 'pending'))
@@ -108,7 +121,8 @@ export default function PrintJob() {
           return (
             <React.Fragment key={l.id}>
               <tr>
-                <td className="ind">{l.name}{l.description && <div className="small muted">{l.description}</div>}</td>
+                <td className="ind">{l.name}{l.description && <div className="small muted">{l.description}</div>}
+                  {talanganOf(l) && <div className="small">{t('u146.byDriver', { name: talanganOf(l).talangan_name })}</div>}</td>
                 <td className="num">{hide && flat ? num(l.qty, 2) : hide ? '' : `${num(l.qty, 2)}${l.item_type === 'labor' ? ` ${t('pr.hrs')}` : ''}`}</td>
                 <td className="num">{hide ? '' : rp(l.price)}</td>
                 {showDisc && <td className="num">{hide || !disc ? '' : `-${rp(disc)}`}</td>}
@@ -223,6 +237,20 @@ export default function PrintJob() {
             </ul>
           </div>
         )}
+        {talanganPos.length > 0 && (
+          <div className="doc-block doc-talangan">
+            <div className="doc-label">{t('u146.talanganTitle')}</div>
+            {talanganPos.map((p) => (
+              <div key={p.id}>
+                <b>{t('u146.talanganPo', { no: p.po_number, name: p.talangan_name })}</b>
+                {p.talangan_nota && ` · ${t('u146.notaShort', { no: p.talangan_nota })}`}
+                {' · '}<span className="nowrap">{rp(talanganAmount(p))}</span>
+                {/* the payback is approved in person (Denny, Nov 12): no Belum/Sudah diganti on paper */}
+                <div>{t('u145.reimbursedBy', { who: p.paid_by_pt ? [payerName, bookName].filter(Boolean).join(' · ') : t('u145.theShopPays') })}</div>
+              </div>
+            ))}
+          </div>
+        )}
         {shop.bank_details && (
           <div className="doc-block">
             <div className="doc-label">{t('pr.payTo')}</div>
@@ -261,7 +289,8 @@ export default function PrintJob() {
   const drum = box && (box.lines || []).length > 0 && (
     <section className="doc-block doc-drums">
       <div className="doc-label">{t('u143.drumBoxTitle')}</div>
-      <table className="doc-lines compact">
+      <table className="doc-lines compact fixed">
+        <colgroup><col style={{ width: '21%' }} /><col style={{ width: '21%' }} /><col style={{ width: '8%' }} /><col style={{ width: '12%' }} /><col style={{ width: '13%' }} /><col /></colgroup>
         <thead><tr><th>{t('pr.description')}</th><th>{t('u143.drumCol')}</th><th className="num">{t('pr.qty')}</th><th className="num">{t('u143.perLCol')}</th><th className="num">{t('pr.amount')}</th><th>{t('u143.payCol')}</th></tr></thead>
         <tbody>
           {box.lines.map((l, i) => (
@@ -275,13 +304,12 @@ export default function PrintJob() {
             </tr>
           ))}
         </tbody>
+        <tfoot><tr className="svc-total"><td colSpan={4}>{t('pr.total')}</td><td className="num"><b>{rp(box.lines.reduce((a, l) => a + Number(l.amount || 0), 0))}</b></td><td /></tr></tfoot>
       </table>
       {drumPay.length > 0 ? drumPay : <div className="small muted">{t('u143.drumNothingToPay')}</div>}
     </section>
   )
 
-  // page 1 has the full totals but the drum box went to page 2 (145): whom to pay for drum oil stays on page 1
-  const drumPayP1 = drumPay.length > 0 && <div className="doc-block doc-drumpay">{drumPay}</div>
   const termsBlock = terms && <section className="doc-terms pre">{terms}</section>
 
   const signs = doc === 'invoice' ? (
@@ -298,12 +326,11 @@ export default function PrintJob() {
     </section>
   )
 
-  // A split document's page 1: the amounts the signatures are for, and whom to pay for drum oil.
+  // A split document's page 1: the amounts the signatures are for (the drum oil is on its own sheet, item 41).
   const summary = (fullOn) => (
     <section className="doc-summary">
       <div className="doc-notes">
         <div className="doc-label">{t('u144.summary', { page: fullOn })}</div>
-        {drumPay}
       </div>
       <table className="doc-sumtotals">
         <tbody>
@@ -337,6 +364,48 @@ export default function PrintJob() {
     </footer>
   )
 
+  // item 41: the drum oil sheet, printed after the invoice (or alone)
+  const oilSheet = hasOil && (
+    <article className="doc sheet doc-oilsheet" aria-label={t('u146.sheetAria')}>
+      <div className="sheet-in">
+        <header className="doc-head">
+          <div className="doc-shop">
+            {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
+            <div>
+              <div className="doc-shopname">{shop.shop_name || shop.legal_name}</div>
+              {shop.address && <div className="pre">{shop.address}</div>}
+              <div>{[shop.phone, shop.email].filter(Boolean).join(' · ')}</div>
+            </div>
+          </div>
+          <div className="doc-title">
+            <h1>{t('u146.oilTitle')}</h1>
+            <div className="muted">{t('u146.oilSub', { no: docNo })}</div>
+            <table className="doc-meta">
+              <tbody>
+                <tr><th>{t('pr.invoiceNo')}</th><td><b>{docNo}</b></td></tr>
+                <tr><th>{t('pr.date')}</th><td>{fmtDate(ro.invoiced_at, lang, timezone)}</td></tr>
+                <tr><th>{t('pr.jobNo')}</th><td>{jobNo(ro.job_number)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </header>
+        {parties}
+        {drum}
+        <div className="sheet-fill" />
+        <section className="doc-sign">
+          {[['pr.sign.advisor', advisor], ['pr.sign.driver', ro.driver_name || veh.driver_name || job.vehicle?.driver_name]].map(([k, name]) => (
+            <div key={k}><div className="sign-line" />{t(k)}<div className="small muted sign-name">{name || ''}</div></div>
+          ))}
+        </section>
+        <footer className="doc-pagefoot">
+          <span className="doc-foot" />
+          <span className="doc-pageno">{t('u146.oilFoot', { no: docNo })}</span>
+        </footer>
+        <PrintedBy lang={lang} timezone={timezone} />
+      </div>
+    </article>
+  )
+
   // What the pages depend on: when any of it changes, the pieces are measured again.
   const pageKey = JSON.stringify([doc, lang, ro.id, ro.updated_at, ro.total, ro.balance, ro.paid_total, ro.settled_direct, job.concerns.map((c) => c.text),
     billed.map((s) => [s.id, s.name, s.notes_external, s.service_net]), job.items.map((l) => [l.id, l.service_id, l.name, l.description, l.qty, l.price, l.discount_pct, l.discount_amount]),
@@ -355,11 +424,17 @@ export default function PrintJob() {
           <button type="button" className={`seg-btn ${lang === 'id' ? 'on' : ''}`} onClick={() => setParam('lang', 'id')}>Bahasa Indonesia</button>
           <button type="button" className={`seg-btn ${lang === 'en' ? 'on' : ''}`} onClick={() => setParam('lang', 'en')}>English</button>
         </div>
+        {hasOil && (
+          <div className="seg">
+            <button type="button" className={`seg-btn ${!oilOnly ? 'on' : ''}`} onClick={() => setParam('part', 'all')}>{tUi('u146.withOil')}</button>
+            <button type="button" className={`seg-btn ${oilOnly ? 'on' : ''}`} onClick={() => setParam('part', 'oil')}>{tUi('u146.oilOnly')}</button>
+          </div>
+        )}
         <div className="spacer" />
-        <button type="button" className="btn primary" disabled={!plan} onClick={() => window.print()}>{tUi('job.print')}</button>
+        <button type="button" className="btn primary" disabled={!plan && !oilOnly} onClick={() => window.print()}>{tUi('job.print')}</button>
       </div>
 
-      {!plan && (
+      {!plan && !oilOnly && (
         <>
           <div className="print-msg no-print">{tUi('u144.preparing')}</div>
           {/* hidden: each piece at the printed width, measured once, then removed */}
@@ -372,8 +447,6 @@ export default function PrintJob() {
             {/* the services in one table, as printed: each service is its tbody, the rest (head row, table margin) is "thead" */}
             <div data-m="lines" className="m-blk" data-svcs={billed.length}>{billed.length > 0 && linesTable(billed)}</div>
             <div data-m="bottom" className="m-blk">{bottom}</div>
-            <div data-m="drum" className="m-blk">{drum}</div>
-            <div data-m="dpay" className="m-blk">{drumPayP1}</div>
             <div data-m="terms" className="m-blk">{termsBlock}</div>
             <div data-m="sign" className="m-blk">{signs}</div>
             <div data-m="cont" className="m-blk">{contNote(2, 1)}</div>
@@ -386,7 +459,7 @@ export default function PrintJob() {
         </>
       )}
 
-      {plan && plan.pages.map((pg, i) => {
+      {plan && !oilOnly && plan.pages.map((pg, i) => {
         const pages = plan.pages.length
         const last = i === pages - 1
         return (
@@ -400,8 +473,6 @@ export default function PrintJob() {
                   {pg.svcs.length > 0 && linesTable(pg.svcs.map((k) => billed[k]))}
                   {empty}
                   {(pages === 1 || pg.ends.includes('bottom')) && bottom}
-                  {(pages === 1 || pg.ends.includes('drum')) && drum}
-                  {pages > 1 && pg.ends.includes('bottom') && !pg.ends.includes('drum') && drumPayP1}
                   {(pages === 1 || pg.ends.includes('terms')) && termsBlock}
                   {pages > 1 && contNote(2, billed.length - pg.svcs.length)}
                   <div className="sheet-fill" />
@@ -414,18 +485,18 @@ export default function PrintJob() {
                   {miniHead(i + 1, pages)}
                   {pg.svcs.length > 0 && linesTable(pg.svcs.map((k) => billed[k]))}
                   {pg.ends.includes('bottom') && bottom}
-                  {pg.ends.includes('drum') && drum}
                   {pg.ends.includes('terms') && termsBlock}
                   <div className="sheet-fill" />
                   {paraf}
                 </>
               )}
               {pageFoot(i + 1, pages)}
-              {last && <PrintedBy lang={lang} timezone={timezone} />}
+              {last && !hasOil && <PrintedBy lang={lang} timezone={timezone} />}
             </div>
           </article>
         )
       })}
+      {(plan || oilOnly) && oilSheet}
     </div>
   )
 }
@@ -443,18 +514,18 @@ export function planPages(h, nSvc) {
   const g = (k) => h[k] || 0
   const svc = (i) => g(`svc${i}`)
   const svcSum = Array.from({ length: nSvc }, (_, i) => svc(i)).reduce((a, b) => a + b, 0)
-  const all = g('head') + g('parties') + g('concerns') + g('empty') + (nSvc ? g('thead') + svcSum : 0) + g('bottom') + g('drum') + g('terms') + g('sign') + g('foot') + g('printed')
+  const all = g('head') + g('parties') + g('concerns') + g('empty') + (nSvc ? g('thead') + svcSum : 0) + g('bottom') + g('terms') + g('sign') + g('foot') + g('printed')
   if (all <= H) return { compact: false, pages: [{ svcs: [...Array(nSvc).keys()], ends: [] }], fullOn: 1 }
   if (all * COMPACT <= H) return { compact: true, pages: [{ svcs: [...Array(nSvc).keys()], ends: [] }], fullOn: 1 }
 
-  // every service and the full totals fit on page 1 with the signatures (at 92% if needed): only the drum box and the
-  // terms that don't fit go to page 2, so page 1 needs no summary (145, item 34)
-  const p1 = g('head') + g('parties') + g('concerns') + g('empty') + (nSvc ? g('thead') + svcSum : 0) + g('bottom') + g('dpay') + g('cont') + g('sign') + g('foot')
+  // every service and the full totals fit on page 1 with the signatures (at 92% if needed): only the terms that don't
+  // fit go to page 2, so page 1 needs no summary (145, item 34; the drum oil has its own sheet since item 41)
+  const p1 = g('head') + g('parties') + g('concerns') + g('empty') + (nSvc ? g('thead') + svcSum : 0) + g('bottom') + g('cont') + g('sign') + g('foot')
   for (const z of [1, COMPACT]) {
     if (p1 * z > H) continue
     const ends1 = ['bottom'], rest = []
     let used1 = p1
-    for (const k of ['drum', 'terms']) {
+    for (const k of ['terms']) {
       if (!g(k)) continue
       if (!rest.length && (used1 + g(k)) * z <= H) { ends1.push(k); used1 += g(k) } else rest.push(k)
     }
@@ -472,7 +543,7 @@ export function planPages(h, nSvc) {
     first.push(i); used += cost
   }
   const pages = [{ svcs: first, ends: [] }]
-  // continuation pages: a short head, services, then the totals, the drum box and the terms; initials at the bottom
+  // continuation pages: a short head, services, then the totals and the terms; initials at the bottom
   const fixedN = g('mini') + g('paraf') + g('foot') + g('printed')
   let cur = { svcs: [], ends: [] }
   used = fixedN
@@ -483,7 +554,7 @@ export function planPages(h, nSvc) {
     cur.svcs.push(i); used += svc(i) + (cur.svcs.length === 1 ? g('thead') : 0)
   }
   let fullOn = 0
-  for (const k of ['bottom', 'drum', 'terms']) {
+  for (const k of ['bottom', 'terms']) {
     if (!g(k)) continue
     if (used + g(k) > H && (cur.svcs.length || cur.ends.length)) push()
     cur.ends.push(k); used += g(k)

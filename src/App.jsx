@@ -25,6 +25,7 @@ import PrintPo from './pages/print/PrintPo'
 import PrintHistory from './pages/print/PrintHistory'
 import PrintDrums from './pages/print/PrintDrums'
 import PrintTalangan from './pages/print/PrintTalangan'
+import PrintRekap from './pages/print/PrintRekap'
 import FleetDashboard from './pages/FleetDashboard'
 
 // Old-style links (/vehicles/<id>, e.g. from notifications) open the vehicle under Customers.
@@ -50,6 +51,7 @@ export default function App() {
       <Route path="print/history" element={<PrintHistory />} />
       <Route path="print/drums" element={<PrintDrums />} />
       <Route path="print/talangan/*" element={<PrintTalangan />} />
+      <Route path="print/rekap" element={<PrintRekap />} />
       <Route path="print/*" element={<PrintJob />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
@@ -77,6 +79,7 @@ function FleetRoutes() {
   return (
     <Routes>
       <Route path="print/history" element={<PrintHistory />} />
+      <Route path="print/rekap" element={<PrintRekap />} />
       <Route path="print/po/*" element={<Navigate to="/" replace />} />
       <Route path="print/*" element={<PrintJob />} />
       <Route element={<Layout />}>

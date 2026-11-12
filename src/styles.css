@@ -957,3 +957,25 @@ tr.totalrow td { border-top: 2px solid var(--line); }
 .slip .line-fill.short { width: 120px; }
 .repeat-job { border-top: 1px solid var(--line-soft); padding: 8px 0; }
 .repeat-job:first-of-type { border-top: none; }
+
+/* ---------- item 41 · the drum oil sheet printed after the invoice ---------- */
+.doc-oilsheet .doc-lines td b { white-space: normal; }
+.doc-oilsheet .doc-drums tfoot td { padding-top: 4px; }
+.doc-oilsheet .doc-title .muted { margin: 2px 0 6px; text-align: right; }
+
+/* ---------- item 43 · Rekap servis (Laporan tab and /print/rekap) ---------- */
+.rekap-bar .chipselect { max-width: 220px; }
+.rekap-embed .rekap-doc { margin: 12px 0 0; max-width: 100%; min-height: 0; box-shadow: 0 1px 4px rgba(0,0,0,.08); border: 1px solid var(--line); }
+.rekap-embed { overflow-x: auto; }
+.rekap-cohead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; padding-bottom: 3px; border-bottom: 1.5px solid #111; font-size: 13px; }
+.rekap-sum td, .rekap-detail td { vertical-align: top; }
+.rekap-vrow td { background: #f4f6f7; border-top: 1px solid #d5d9dd; }
+.rekap-irow td:first-child { padding-left: 10px; }
+.rekap-srow td { padding-left: 18px !important; font-style: italic; }
+.rekap-lrow td:first-child { padding-left: 28px; }
+.rekap-sub td { font-weight: 700; border-top: 1.5px solid #111; }
+.rekap-grand { margin: 14px 0 0 auto; }
+@media print {
+  .rekap-co.pagebreak { break-before: page; }
+  .rekap-embed .rekap-doc { border: none; box-shadow: none; }
+}

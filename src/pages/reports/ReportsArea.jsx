@@ -18,8 +18,10 @@ import TechniciansReport from './TechniciansReport'
 import FleetReport from './FleetReport'
 import InventoryReport from './InventoryReport'
 import ServiceReport from './ServiceReport'
+import PrintRekap from '../print/PrintRekap'
 
-export const REPORT_TABS = ['sales', 'aging', 'payments', 'profit', 'technicians', 'fleet', 'inventory', 'service']
+// 'rekap' (item 43, Nov 12): the service summary per company; every role with view_reports (Kasir too)
+export const REPORT_TABS = ['sales', 'aging', 'payments', 'profit', 'technicians', 'fleet', 'rekap', 'inventory', 'service']
 // Reports that show cost prices also need the view_costs permission.
 const NEEDS_COSTS = ['profit', 'inventory']
 // The workshop's own reports need view_ops_reports (Owner, Admin, Service advisor); a Cashier doesn't see them.
@@ -47,6 +49,7 @@ export default function ReportsArea() {
       {tab === 'sales' && <SalesReport />}
       {tab === 'aging' && <AgingReport />}
       {tab === 'payments' && <PaymentsReport />}
+      {tab === 'rekap' && <PrintRekap embedded />}
       {NEEDS_OPS.includes(tab) && !can('view_ops_reports') ? (
         <Card><Empty icon="lock" title={t('rep.opsTitle')}>{t('rep.opsText')}</Empty></Card>
       ) : NEEDS_COSTS.includes(tab) && !can('view_costs') ? (
