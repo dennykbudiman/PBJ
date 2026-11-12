@@ -164,9 +164,12 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const openPos = (job.pos || []).filter((p) => p.status !== 'cancelled').map((p) => ({
     po: p, n: (job.poLines || []).filter((l) => l.po_id === p.id && Number(l.qty_ordered) - Number(l.qty_delivered) - Number(l.qty_cancelled) > 0).length,
   })).filter((x) => x.n > 0)
+  // parts the job takes from the shelf that can only be another PT · book's leftover (147, item 40): blocked too
+  const otherLeft = (job.leftover?.planned ? job.leftover.uses : []).filter((u) => u.other_book)
   const [override, setOverride] = useState('')
   const overrideOk = ownerAdmin && override.trim().length >= 5
-  const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0 || noKm || (openPos.length > 0 && !overrideOk)
+  const needReason = openPos.length > 0 || otherLeft.length > 0
+  const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0 || noKm || (needReason && !overrideOk)
   // Warnings only (the invoice can still be made): parts that would go below zero on the shelf, the company's credit
   // limit, and companies that aren't on account (pay at pickup).
   const [check, setCheck] = useState({ short: [], owed: null })
@@ -202,8 +205,9 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
         const d = await supabase.from('ro_services').delete().in('id', empty.map((s) => s.id))
         if (d.error) return d
       }
-      const r = openPos.length > 0
-        ? await supabase.rpc('convert_to_invoice_open_po', { p_ro: ro.id, p_reason: override.trim() })
+      // one reason covers an open PO (145) and another book's leftover (147)
+      const r = needReason
+        ? await supabase.rpc('convert_to_invoice_reason', { p_ro: ro.id, p_reason: override.trim() })
         : await supabase.rpc('convert_to_invoice', { p_ro: ro.id })
       no = r.data
       return r
@@ -230,6 +234,19 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
               <textarea className="textarea" rows={2} maxLength={250} value={override} onChange={(e) => setOverride(e.target.value)} placeholder={t('u145.openPoReasonPh')} />
             </label>
           ) : <div className="small" style={{ marginTop: 4 }}>{t('u145.openPoAskOwner')}</div>}
+        </Notice>
+      )}
+      {otherLeft.length > 0 && (
+        <Notice kind="warn" style={{ marginBottom: 10 }}>
+          <div><b>{t('u147.otherTitle')}</b></div>
+          {otherLeft.map((u, i) => (
+            <div key={i}>{t('u147.otherLine', { name: u.name || '', n: num(u.qty, 2), po: u.po_number, who: [u.payer, u.book].filter(Boolean).join(' · ') })} — {t('u147.otherDo')}</div>
+          ))}
+          {openPos.length > 0 ? null : ownerAdmin ? (
+            <label className="mini" style={{ display: 'block', marginTop: 8 }}>{t('u147.reason')}
+              <textarea className="textarea" rows={2} maxLength={250} value={override} onChange={(e) => setOverride(e.target.value)} />
+            </label>
+          ) : <div className="small" style={{ marginTop: 4 }}>{t('u147.askOwner')}</div>}
         </Notice>
       )}
       {overpaid > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overpaidFirst', { amount: rp(overpaid) })}</Notice>}

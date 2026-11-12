@@ -7,6 +7,7 @@ import { useT, translate } from '../../lib/i18n'
 import { errorText } from '../../lib/supabase'
 import { fmtDate, invoiceNo, jobNo, km, num, rp } from '../../lib/format'
 import { poTotals } from '../../lib/inventory'
+import LeftoverNote from '../../components/LeftoverNote'
 import { vehicleName } from '../../lib/customers'
 import { lineAmount, lineDiscount, lineNet } from '../../lib/jobs'
 import { useJobData, useStaff } from '../jobs/useJobData'
@@ -122,7 +123,9 @@ export default function PrintJob() {
             <React.Fragment key={l.id}>
               <tr>
                 <td className="ind">{l.name}{l.description && <div className="small muted">{l.description}</div>}
-                  {talanganOf(l) && <div className="small">{t('u146.byDriver', { name: talanganOf(l).talangan_name })}</div>}</td>
+                  {talanganOf(l) && <div className="small">{t('u146.byDriver', { name: talanganOf(l).talangan_name })}</div>}
+                  {/* item 40 (147): taken from a part left over on another job's PO (issued invoices) */}
+                  {doc === 'invoice' && job.leftover && !job.leftover.planned && <LeftoverNote leftover={job.leftover} lineId={l.id} t={t} links={false} />}</td>
                 <td className="num">{hide && flat ? num(l.qty, 2) : hide ? '' : `${num(l.qty, 2)}${l.item_type === 'labor' ? ` ${t('pr.hrs')}` : ''}`}</td>
                 <td className="num">{hide ? '' : rp(l.price)}</td>
                 {showDisc && <td className="num">{hide || !disc ? '' : `-${rp(disc)}`}</td>}

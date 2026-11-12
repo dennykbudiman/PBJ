@@ -1,0 +1,33 @@
+// Item 40 (Nov 12, 2026): leftover PO parts (migration 147); item 44: Rekap servis fits the page.
+export const u147En = {
+  'u147.keptFor': 'kept for {who}',
+  'u147.usedBy': 'used on job {job}{inv}',
+  'u147.usedOn': 'used on job', 'u147.otherBookTag': '(another book, with a reason)',
+  'u147.fromLeftover': 'From leftover PO {po} · job {job}{inv}',
+  'u147.willTake': 'Will take the leftover of PO {po} · job {job}{inv}',
+  'u147.otherTitle': 'A part this job takes from the shelf is another book\'s leftover:',
+  'u147.otherLine': '{name} ({n}) — leftover of PO {po} · {who}',
+  'u147.otherDo': 'order the part for this job (its own PO)',
+  'u147.otherShort': 'Only another book\'s leftover is on the shelf: {who} (PO {po}) — order the part for this job',
+  'u147.reason': 'Owner/Admin: invoice anyway — why?',
+  'u147.askOwner': 'Only the Owner or an Admin can invoice with another book\'s leftover.',
+  'u147.note': 'Invoiced with another book\'s leftover: {note}',
+  'db:leftoverOther': 'Parts on the shelf belong to another book: {n}. Order the part for this job, or the Owner/Admin invoices it with a reason.',
+  'u147.without': 'Columns left out (Rp 0 in this printout): {kinds}',
+}
+export const u147Id = {
+  'u147.keptFor': 'disimpan untuk {who}',
+  'u147.usedBy': 'dipakai di job {job}{inv}',
+  'u147.usedOn': 'dipakai di job', 'u147.otherBookTag': '(pembukuan lain, dengan alasan)',
+  'u147.fromLeftover': 'Diambil dari sisa PO {po} · job {job}{inv}',
+  'u147.willTake': 'Akan diambil dari sisa PO {po} · job {job}{inv}',
+  'u147.otherTitle': 'Part yang diambil dari rak untuk pekerjaan ini adalah sisa milik pembukuan lain:',
+  'u147.otherLine': '{name} ({n}) — sisa PO {po} · {who}',
+  'u147.otherDo': 'pesan part sendiri untuk pekerjaan ini (PO-nya sendiri)',
+  'u147.otherShort': 'Di rak hanya ada sisa milik {who} (PO {po}) — pesan part sendiri untuk pekerjaan ini',
+  'u147.reason': 'Pemilik/Admin: tetap buat invoice — kenapa?',
+  'u147.askOwner': 'Hanya Pemilik atau Admin yang bisa membuat invoice dengan sisa part milik pembukuan lain.',
+  'u147.note': 'Invoice dibuat dengan sisa part milik pembukuan lain: {note}',
+  'db:leftoverOther': 'Sisa part di rak milik pembukuan lain: {n}. Pesan part sendiri untuk pekerjaan ini, atau Pemilik/Admin membuat invoice dengan alasan.',
+  'u147.without': 'Kolom yang tidak ditampilkan (Rp 0 di cetakan ini): {kinds}',
+}

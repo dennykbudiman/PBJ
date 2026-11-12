@@ -38,12 +38,14 @@ export function useJobData(id) {
     const svcIds = (services.data || []).map((s) => s.id)
     const inspIds = (inspections.data || []).map((x) => x.id)
     const poIds = (pos.data || []).map((x) => x.id)
-    const [items, results, poLines, drumBox] = await Promise.all([
+    const [items, results, poLines, drumBox, leftover] = await Promise.all([
       svcIds.length ? supabase.from('ro_service_items').select('*').in('service_id', svcIds).order('position').order('created_at') : { data: [] },
       inspIds.length ? supabase.from('ro_inspection_results').select('*').in('inspection_id', inspIds).order('id') : { data: [] },
       poIds.length ? supabase.from('purchase_order_items').select('*').in('po_id', poIds).order('created_at').order('id') : { data: [] },
       // drum oil on an issued invoice: which drum, whose, whom to pay (143); null when there is none or it isn't for this person
       r.order_status === 'invoice' ? supabase.rpc('invoice_drum_box', { p_ro: id }) : { data: null },
+      // leftover PO parts (147): taken from (invoice) or to be taken from (open job) another job's PO; staff only
+      supabase.rpc('leftover_info', { p_ro: id }),
     ])
     // typed-in PO lines that were added to the catalog afterwards (migration 138)
     const lineIds = (poLines.data || []).filter((l) => !l.catalog_item_id).map((l) => l.id)
@@ -78,6 +80,7 @@ export function useJobData(id) {
       poLines: poLines.data || [],
       poLineLinks: Object.fromEntries((links.data || []).map((x) => [x.line_id, x.catalog_item_id])),
       drumBox: drumBox.error ? null : drumBox.data || null,
+      leftover: leftover.error ? null : leftover.data || null,
       attachments: files.data || [],
       version: n,
     })

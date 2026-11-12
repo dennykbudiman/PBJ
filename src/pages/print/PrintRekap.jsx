@@ -130,8 +130,12 @@ export default function PrintRekap({ embedded = false }) {
   if (!settings) return <div className="print-msg">{tUi('common.loading')}</div>
 
   const showOther = kinds.includes('other') && companies.some((c) => [...c.vehicles.values()].some((v) => [...v.invoices.values()].some((i) => i.other !== 0 || [...i.services.values()].some((s) => s.lines.some((l) => l.kind === 'other')))))
-  const cols = kinds.filter((k) => k !== 'other' || showOther)
   const grand = money(companies.flatMap((c) => [...c.vehicles.values()].flatMap((v) => [...v.invoices.values()])), kinds, withCost)
+  // item 44 (Nov 12): a kind that is Rp 0 in the whole printout gets no column (labour not charged keeps its column for
+  // its value); with cost prices the page is printed landscape, so Modal and Laba fit
+  const cols = kinds.filter((k) => (k !== 'other' || showOther) && (grand[k] !== 0 || (k === 'labor' && grand.laborValue > 0)))
+  const dropped = state.rows && companies.length ? kinds.filter((k) => !cols.includes(k) && (k !== 'other' || showOther)) : []
+  const wide = withCost && view === 'sum'
   const filtLabel = [f.payer, f.book, companyName, opts.vehicles.find(([id]) => id === f.vehicle)?.[1]].filter(Boolean).join(' · ')
   const back = params.get('back') || (isFleet ? '/customers' : '/reports/rekap')
 
@@ -202,7 +206,7 @@ export default function PrintRekap({ embedded = false }) {
 
   const shop = settings
   const doc = (
-    <article className={`doc rekap-doc ${embedded ? 'embedded' : ''}`} aria-label={t('u146.rk.title')}>
+    <article className={`doc rekap-doc ${embedded ? 'embedded' : ''} ${wide ? 'wide' : ''}`} aria-label={t('u146.rk.title')}>
       <header className="doc-head">
         <div className="doc-shop">
           {logoUrl && <img src={logoUrl} alt="" className="doc-logo" />}
@@ -217,6 +221,7 @@ export default function PrintRekap({ embedded = false }) {
           <div>{fmtDate(range.from, lang)} – {fmtDate(range.to, lang)}</div>
           <div className="small muted">{filtLabel || t('u146.rk.allCompaniesDoc')}{kinds.length < KINDS.length ? ` · ${t('u146.rk.only', { kinds: kinds.map((k) => t(`u146.rk.k.${k}`)).join(', ') || '—' })}` : ''}</div>
           {withCost && <div className="small"><b>{t('u146.rk.internal')}</b></div>}
+          {view === 'sum' && dropped.length > 0 && <div className="small muted">{t('u147.without', { kinds: dropped.map((k) => t(`u146.rk.k.${k}`)).join(', ') })}</div>}
         </div>
       </header>
       {state.error ? <div className="doc-empty">{errorText(state.error, tUi)}</div>
@@ -257,7 +262,7 @@ function SumTable({ c, t, lang, kinds, cols, withCost }) {
   return (
     <table className="doc-lines rekap-sum">
       <thead><tr>
-        <th style={{ width: withCost ? '26%' : '32%' }}>{t('u146.rk.col.vehicle')}</th><th className="num">{t('u146.rk.col.visits')}</th>
+        <th className="rekap-vcol">{t('u146.rk.col.vehicle')}</th><th className="num">{t('u146.rk.col.visits')}</th>
         {cols.map((k) => <th key={k} className="num">{t(`u146.rk.k.${k}`)}</th>)}
         <th className="num">{t('pr.total')}</th>
         {withCost && <><th className="num">{t('u146.rk.col.cost')}</th><th className="num">{t('u146.rk.margin')}</th></>}
@@ -273,11 +278,9 @@ function SumTable({ c, t, lang, kinds, cols, withCost }) {
           return (
             <tr key={v.id}>
               <td>
-                <b>{v.plate}</b>{v.name && <span className="small muted"> · {v.name}</span>}
-                <div className="small muted">
-                  {t('u146.rk.last', { date: fmtDate(last.date, lang), km: last.km != null ? fmtKm(last.km) : '—' })}
-                  {driven > 0 && ` · ${t('u146.rk.driven', { km: fmtKm(driven), perKm: rp(after / driven) })}`}
-                </div>
+                <b className="nowrap">{v.plate}</b>{v.name && <span className="small muted"> · {v.name}</span>}
+                <div className="small muted">{t('u146.rk.last', { date: fmtDate(last.date, lang), km: last.km != null ? fmtKm(last.km) : '—' })}</div>
+                {driven > 0 && <div className="small muted">{t('u146.rk.driven', { km: fmtKm(driven), perKm: rp(after / driven) })}</div>}
               </td>
               <td className="num">{num(invs.length)}</td>
               {cols.map((k) => (

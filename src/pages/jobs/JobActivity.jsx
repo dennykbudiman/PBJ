@@ -158,7 +158,8 @@ export default function JobActivity({ job, cat, staff, showCost }) {
         if (r.action?.startsWith('line_')) return describeLine(r)
         if (r.changes?.order_status?.[1] === 'invoice') return <div><b>{t('job.act.invoiced', { no: invoiceNo(r.changes.invoice_number?.[1]) })}</b>
           {/* made while a PO line was still open, by Pemilik/Admin with a reason (145) */}
-          {r.changes.invoice_open_po_note?.[1] && <div className="small" style={{ color: 'var(--amber)' }}>{t('u145.openPoNote', { note: r.changes.invoice_open_po_note[1] })}</div>}</div>
+          {r.changes.invoice_open_po_note?.[1] && <div className="small" style={{ color: 'var(--amber)' }}>{t('u145.openPoNote', { note: r.changes.invoice_open_po_note[1] })}</div>}
+          {r.changes.invoice_leftover_note?.[1] && <div className="small" style={{ color: 'var(--amber)' }}>{t('u147.note', { note: r.changes.invoice_leftover_note[1] })}</div>}</div>
         if (r.changes?.order_status?.[1] === 'estimate') return <div><b style={{ color: 'var(--red)' }}>{t('job.act.voided', { no: invoiceNo(r.changes.invoice_number?.[0]) })}</b></div>
         if (r.changes?.closed_at && r.changes.closed_at[1]) return <div><b>{t('job.act.closed')}</b>{r.changes.close_reason?.[1] && <span className="muted"> · {r.changes.close_reason[1]}</span>}</div>
         if (r.changes?.closed_at && !r.changes.closed_at[1]) return <div><b>{t('job.act.reopened')}</b></div>

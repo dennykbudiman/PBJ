@@ -979,3 +979,15 @@ tr.totalrow td { border-top: 2px solid var(--line); }
   .rekap-co.pagebreak { break-before: page; }
   .rekap-embed .rekap-doc { border: none; box-shadow: none; }
 }
+
+/* ---------- item 44 · Rekap servis fits the page ---------- */
+.rekap-sum { table-layout: auto; }
+.rekap-sum th, .rekap-sum td { font-size: 10.5px; }
+.rekap-sum td.num, .rekap-sum th.num { white-space: nowrap; }
+.rekap-sum td.num .small { white-space: normal; max-width: 120px; margin-left: auto; }
+.rekap-sum .rekap-vcol { width: 30%; }
+.rekap-doc.wide .rekap-sum .rekap-vcol { width: 26%; }
+.print-wrap .rekap-doc.wide { width: 297mm; }
+@media print {
+  .rekap-doc.wide { page: report; width: auto; }   /* A4 landscape with page numbers (145) */
+}

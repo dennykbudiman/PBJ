@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Avatar, Badge, Button, Empty, Modal, useToast, Input, Notice, Toggle } from '../../components/ui'
 import CatalogMatches from '../../components/CatalogMatches'
+import LeftoverNote from '../../components/LeftoverNote'
 import Icon from '../../components/Icon'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
@@ -417,6 +418,8 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
                         onUse={l.stock_deducted || l.po_item_id ? null : (x) => swapLine(l, x)}
                         disabledHint={l.po_item_id ? t('u145.cantSwapPo') : null} />
                     )}
+                    {/* taken (or to be taken) from a part left over on another job's PO (147, item 40) */}
+                    {!isFleet && <LeftoverNote leftover={job.leftover} lineId={l.id} t={t} />}
                   </td>
                   {showCost && (
                     <td className="num">{editable ? <BlurInput className="input cell num" value={num(l.cost)} aria-label={t('cat.cost')} onCommit={commitMoney(l.id, 'cost')} /> : (Number(l.cost) ? rp(l.cost) : '—')}</td>

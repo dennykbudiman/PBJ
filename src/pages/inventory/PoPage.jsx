@@ -35,7 +35,18 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
   // A job's PO: what the job itself uses, to show delivered parts it doesn't need (they stay in stock; Nov 4).
   const [jobUse, setJobUse] = useState(null)
   const [linkOf, setLinkOf] = useState({}) // typed-in lines added to the catalog afterwards
+  const [leftover, setLeftover] = useState(null) // item 40 (147): per line its leftover, whose it is and who used it
   const roId = po?.ro_id
+  const poId = po?.id
+  useEffect(() => {
+    let live = true
+    setLeftover(null)
+    if (!poId || !roId) return
+    supabase.rpc('leftover_info', { p_po: poId }).then(({ data: d }) => {
+      if (live) setLeftover(Object.fromEntries(((d && d.lines) || []).map((x) => [x.line_id, x])))
+    })
+    return () => { live = false }
+  }, [poId, roId, data])
   useEffect(() => {
     let live = true
     const typed = lines.filter((l) => !l.catalog_item_id).map((l) => l.id)
@@ -229,8 +240,17 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                           {spare.has(l.id) && (
                             <div className="small" style={{ color: 'var(--amber-ink, #9A5B10)' }}>
                               {t(item || linkOf[l.id] ? 'po138.spare' : 'po138.spareTyped', { n: num(spare.get(l.id), 2), job: jobNoOf != null ? `#${jobNo(jobNoOf)}` : '' })}
+                              {leftover?.[l.id] && ` · ${t('u147.keptFor', { who: [leftover[l.id].payer, leftover[l.id].book].filter(Boolean).join(' · ') })}`}
                             </div>
                           )}
+                          {/* the jobs that took this leftover since (147, item 40) */}
+                          {(leftover?.[l.id]?.uses || []).map((u, i) => (
+                            <div key={i} className="small" style={{ color: 'var(--amber-ink, #9A5B10)' }}>
+                              {num(u.qty, 2)} {t('u147.usedOn')}{' '}
+                              <Link className="plainlink" to={`/jobs/${u.ro_id}`}>#{jobNo(u.job_number)}</Link>{u.invoice_no ? ` · ${u.invoice_no}` : ''}
+                              {u.other_book && ` ${t('u147.otherBookTag')}`}
+                            </div>
+                          ))}
                           {/* A part typed by hand: add it to the catalog (item 9, Nov 4). */}
                           {!item && !linkOf[l.id] && l.line_type !== 'sublet' && can('edit_catalog') && <Link className="small" to={`/catalog/parts?typed=${encodeURIComponent(l.name)}`}>{t('tp.addLink')}</Link>}
                         </td>
