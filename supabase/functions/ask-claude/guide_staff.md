@@ -1,6 +1,6 @@
 # Panduan Axle untuk staf bengkel
 
-Latar belakang untuk "Tanya Claude", per 13 November 2026 (update 148). Tanya Claude hanya melihat data, tidak mengubah apa pun: sebut menu dan tombol yang harus diklik sendiri oleh pengguna. Nama tombol persis seperti di layar.
+Latar belakang untuk "Tanya Claude", per 16 November 2026 (update 150). Tanya Claude hanya melihat data, tidak mengubah apa pun: sebut menu dan tombol yang harus diklik sendiri oleh pengguna. Nama tombol persis seperti di layar.
 
 ## Peran dan hak singkat
 
@@ -20,7 +20,8 @@ Hanya Pemilik dan Admin yang bisa: membatalkan (void) invoice, menghapus estimas
 
 - Jasa (ongkos kerja) belum ditagihkan ke armada untuk saat ini. Setiap PT membayar part-nya sendiri lewat PO yang dicap PT itu.
 - Part sisa (dibeli lewat PO yang dibayar PT tetapi tidak terpakai) tetap dihitung sebagai stok, dan sejak 12 Nov 2026 Axle mencatat milik PT · pembukuan siapa (lihat bagian 6, "Sisa part dari PO"). Secara fisik tetap diberi label PT di rak. Tidak ada fitur "titipan" terpisah.
-- Persetujuan pelanggan saat ini otomatis (Pengaturan "Setujui pekerjaan otomatis" menyala): servis baru langsung berstatus Disetujui. Tolak dan Tunda tetap bisa dicatat manual.
+- Persetujuan pelanggan saat ini otomatis (Pengaturan "Setujui pekerjaan otomatis" menyala): servis baru langsung berstatus Disetujui. Persetujuan diawasi service advisor dan diperiksa lagi oleh pimpinan setelah servis, jadi sejak 16 Nov 2026 (update 150) layar persetujuan disembunyikan selama pengaturan itu menyala (lihat bagian 3). Hanya **Tunda** yang tersisa; servis yang tidak jadi biasanya dihapus saja.
+- **Setiap part punya nomor part dan ada di katalog** (sejak 16 Nov 2026): lihat bagian 9a.
 - Oli bulk (drum) dicatat dalam liter (satuan "L"). Stok oli bulk boleh minus dengan sengaja; Pemilik memakai angka itu untuk mengukur pemakaian. Jangan menyarankan koreksi stok oli bulk kecuali Pemilik memintanya.
 - Jam pakai aplikasi: bila "Batasi staf sesuai jam buka bengkel" menyala, Service advisor, Kasir, Teknisi dan Hanya lihat hanya bisa memakai Axle mulai 1 jam sebelum buka sampai 1 jam setelah tutup (menurut Pengaturan → Jam buka). Di luar itu muncul layar "Di luar jam kerja". Pemilik, Admin dan Fleet manager tidak dibatasi.
 
@@ -62,7 +63,8 @@ Nomor pekerjaan 6 angka (mis. #100004). Pekerjaan tetap berjudul "(Estimasi)" sa
 ## 3. Persetujuan (Pemilik, Admin, Service advisor; Fleet manager untuk perusahaannya)
 
 - Saat ini servis baru otomatis Disetujui. Hanya servis Disetujui yang masuk invoice.
-- Untuk menolak atau menunda: kotak Persetujuan di kanan → Catat persetujuan → centang servis → Setujui, Tunda, Tolak, atau Kembalikan ke menunggu → isi Lewat (Langsung, Telepon, WhatsApp, Email, Internal) dan Diputuskan oleh → Simpan keputusan.
+- **Selama "Setujui pekerjaan otomatis" menyala** (sejak 16 Nov 2026): tidak ada kotak Persetujuan, tombol Catat persetujuan, lencana persetujuan, kolom Persetujuan di Papan Kerja, "Boleh menyetujui" di kontak, maupun tombol keputusan untuk fleet manager. Cetakan estimasi menulis "Diterima oleh", bukan "Disetujui oleh". Di setiap servis (yang belum Selesai) ada tombol **Tunda**: servis pindah ke Servis ditunda (tidak ditagih) dan tombolnya berubah jadi **Kembalikan**. Tidak ada Tolak; servis yang tidak jadi dihapus.
+- Bila pengaturan itu dimatikan, semua yang di bawah ini muncul lagi. Untuk menolak atau menunda: kotak Persetujuan di kanan → Catat persetujuan → centang servis → Setujui, Tunda, Tolak, atau Kembalikan ke menunggu → isi Lewat (Langsung, Telepon, WhatsApp, Email, Internal) dan Diputuskan oleh → Simpan keputusan.
 - Ditunda: tidak ditagih, masuk Pelanggan → Servis ditunda untuk kunjungan berikutnya (Tambahkan ke pekerjaan… atau Abaikan…). Ditolak: tidak ditagih.
 - Servis yang sudah Selesai tidak bisa ditolak atau ditunda; kembalikan status kerjanya dulu.
 - Bila persetujuan otomatis dimatikan, servis baru mulai sebagai Menunggu dan fleet manager bisa memutuskan sendiri secara online (tercatat "Online (Axle)", staf mendapat notifikasi). Fleet manager tidak bisa mengubah keputusannya; staf yang mengubah lewat Catat persetujuan.
@@ -100,7 +102,7 @@ Menerima part yang sudah datang:
 1. Buka PO-nya (Inventaris → Purchase order, cari nomor/supplier/plat/part; atau klik PO di "Menunggu apa" atau kotak Pesanan part).
 2. Klik Terima part.
 3. Di Datang sekarang ketik jumlah yang benar-benar datang (Semua datang mengisi semuanya). Sisanya tetap dipesan.
-4. Isi Diterima tanggal, No. invoice supplier, Tanggal invoice; Jatuh tempo bayar boleh dikosongkan (dihitung dari termin).
+4. Isi Diterima tanggal, No. invoice supplier (opsional sejak 16 Nov 2026, karena PO sudah jadi acuannya), Tanggal invoice; Jatuh tempo bayar boleh dikosongkan (dihitung dari termin).
 5. Klik Terima. Part masuk ke rak dan muncul di Tagihan supplier. Part keluar dari rak saat pekerjaan yang memakainya dibuatkan invoice.
 
 Lainnya di PO:
@@ -143,6 +145,16 @@ Lainnya di PO:
 - Koreksi hasil hitung: hanya Pemilik/Admin, di kartu stok atau part katalog → Sesuaikan stok → Jumlah hasil hitung + Alasan → Konfirmasi jumlah stok baru. Peran lain minta Pemilik/Admin.
 - Satuan part (mis. L, pcs, set) diisi di form part (Satuan). Tampil di kartu stok, daftar stok dan Hari ini; belum di baris pekerjaan dan cetakan.
 - Oli bulk: isi jumlah liter yang benar di baris pekerjaan; jumlah bawaan katalognya 1, jadi baris yang tetap 1 biasanya berarti liternya belum diisi.
+
+## 9a. Nomor part dan katalog (sejak 16 Nov 2026, update 150)
+
+- Setiap part di pekerjaan harus dari katalog dan punya nomor part. Di halaman pekerjaan, **+ Baris manual… → + Part baru (ke katalog)** membuka form **Part baru**: Nama, No. part, Merek, harga modal dan harga jual (kosong = modal + markup) → **Masukkan ke katalog dan job**. Part masuk katalog (stok dilacak) lalu ke pekerjaan. Butuh hak mengubah katalog (Pemilik, Admin, Service advisor).
+- No. part wajib, atau centang **Part ini tidak punya nomor part** → muncul pertanyaan "Yakin … tidak punya nomor part?" → **Ya, tidak punya nomor part**. Nomor buatan sendiri boleh (tulis dengan cara yang sama setiap kali). Nomor yang sudah dipakai part lain ditolak: pakai part itu.
+- **Cek nama saat mengetik** (form Part baru dan Katalog → part): "Maksud Anda …?" (+ **Pakai ini**) dari kamus nama part atau ejaan katalog; peringatan bila nama terdengar seperti jasa (Ganti, Bongkar, Pasang…), berisi merek (masuk kolom Merek) atau berisi nomor part (masuk kolom No. part); part mirip yang sudah ada (**Pakai part itu**).
+- **Katalog → Nama part**: kamus "Tertulis → Seharusnya" (mis. isuzu nmr 71 → Elf NMR71, mitsubishi engkel → Colt FE71, saringan oli → Filter oli). Semua staf melihat; hanya Pemilik/Admin yang menambah, mengubah dan menghapus.
+- Cetakan invoice dan estimasi menulis nomor part dengan huruf kecil di bawah nama part.
+- **Buat invoice ditolak** bila ada part yang diketik manual (belum di katalog) atau part katalog tanpa nomor part (dan tidak dicentang "tidak punya nomor part"). Dialog invoice menyebut part-nya. Hanya Pemilik/Admin yang bisa tetap membuat invoice dengan menulis alasan (alasan yang sama berlaku untuk PO belum diterima dan sisa part). Part yang dicentang "tidak punya nomor part" ditanyakan sekali lagi saat invoice: centang **Ya, sudah saya cek: part ini memang tidak punya nomor part**.
+- Invoice lama (sebelum 16 Nov 2026) tidak berubah.
 
 ## 9. Invoice (Pemilik, Admin, Service advisor)
 
@@ -204,9 +216,15 @@ Saat ini bengkel belum punya rekening dan kasir, jadi setiap PT membayar supplie
 - Invoice perusahaan yang membayar langsung menulis PT pembayar dan Pembukuan di bagian Tagihan kepada.
 - Inventaris → **Drum**: setiap drum oli bulk (oli, liter, harga per liter, PT dan pembukuan yang membayar, tanggal dibuka; harga bisa ditandai **harga perkiraan**). Oli yang terpakai di pekerjaan yang sudah di-invoice mengisi drum dari yang paling lama, dan tercatat saat invoice dibuat (invoice lain tidak mengubahnya; hanya menambah, menghapus atau mengubah liter/tanggal drum yang menghitung ulang). Setiap drum menunjukkan sisa, terpakai, per perusahaan, dan "<PT · pembukuan> membayar ke <PT · pembukuan>: … L = Rp …" untuk oli yang dipakai pembukuan lain, juga di dalam satu PT (mis. PIJ 2 membayar ke PIJ 1 untuk drum Meditran). Drum tanpa pembukuan milik seluruh PT. Oli di pekerjaan yang belum di-invoice belum dihitung. Tambah, ubah, hapus drum: yang boleh mengelola inventaris.
 - **Ganti oli sebelum aplikasi** (dicatat 13 Nov 2026, sekali impor, tanpa layar isian): ganti oli dari drum oli mesin SAE 40 (United), perseneling SAE 90 dan gardan SAE 140 yang dilakukan sebelum aplikasi dipakai (sebelum 2 Nov 2026). Tidak ada invoice dan tidak dihitung sebagai penjualan. Liter ini dihitung lebih dulu di drum (sebelum invoice), jadi PT yang memakainya berutang ke pemilik drum (halaman Drum: "termasuk n L sebelum aplikasi"; Cetak tagihan: baris "Sebelum aplikasi" dengan km; Tandai lunas dan "sisa" di Tagihan PT ikut menghitungnya). Juga tampil di panel kendaraan ("Ganti oli sebelum aplikasi"), Riwayat servis, Rekap servis (baris "Sebelum aplikasi", nilainya dalam kurung, tidak masuk total; hanya bila Oli drum dicentang) dan Laporan → Biaya armada (bagian tersendiri di bawah tabel). Untuk menambah atau mengubahnya, hubungi Pemilik (tidak ada layar isian).
+- **Drum menurut tanggal** (sejak 16 Nov 2026): setiap ganti oli (invoice atau sebelum aplikasi) masuk ke drum yang terbuka pada hari itu (dibuka ≤ hari itu dan belum habis sebelum hari itu); bila ada beberapa, yang paling lama dulu. Tidak tumpah ke drum berikutnya: bila liternya melebihi isi drum, drum itu tertulis merah **lebih dari isi: n L** ("Cek liternya atau tanggal drum"). Hari tanpa drum yang terbuka: drum paling lama yang masih ada isinya, seperti sebelumnya.
+- **Tagihan oli lama** (Inventaris → Drum, tombol di kanan atas): tagihan sekali untuk oli drum yang dipakai sebelum aplikasi = Cetak tagihan sampai 1 Nov 2026. Oli lama tidak pernah masuk Tagihan bulanan.
 - **Habis tanggal** di form drum (opsional): saat drum habis. Sisa yang masih dihitung aplikasi lalu tampil sebagai "tidak tercatat" (terpakai tapi tidak tercatat di mana pun; tidak ditagih ke siapa pun).
 - **Lampiran oli drum** (sejak 12 Nov 2026): invoice yang memakai oli drum dicetak bersama satu lembar terpisah "Pemakaian oli drum · Lampiran invoice INV-…": per baris oli, drum milik siapa, liter, harga per liter, jumlah, total, dan "Bayar ke <PT · pembukuan>" atau "Drum sendiri"; di bawahnya "Pembayaran oli drum: bayar Rp … ke …" dan tanda tangan Service advisor, Mekanik dan Supir. Invoice-nya sendiri tidak lagi menyebut oli drum. Di halaman cetak bisa dipilih **Invoice + lampiran oli drum** atau **Lampiran oli drum saja**. Harga yang masih perkiraan ditandai. Bila harga drum diperbaiki, cetakan berikutnya ikut harga baru.
 - **Tagihan oli drum** (sejak 11 Nov 2026): Inventaris → Drum → **Cetak tagihan**: satu lembar per pembukuan yang memakai oli drum PT/pembukuan lain (tiap invoice: tanggal, truk, liter, jumlah; total, sudah dibayar, sisa), pilih drum, pembukuan dan periode, unduh CSV; pemakaian sendiri pemilik drum dicetak terpisah sebagai info. **Tandai lunas** (Pemilik/Admin) mencatat pembayaran antar PT/pembukuan; di halaman Drum tertulis Lunas atau "dibayar …, sisa …".
+- **Tagihan bulanan** (sejak 16 Nov 2026; Dasbor → tombol **Tagihan bulanan**; Pemilik/Admin, dan fleet manager yang diberi "Lihat tagihan & biaya" untuk pembukuannya sendiri): satu tagihan per pembukuan. Pilih periode (bawaan **Bulan lalu**; Bulan ini; Pilih tanggal), pembukuan, dan **Oli drum: per bulan** (oli drum di invoice periode itu) atau **per drum habis** (semua oli drum yang habis di periode itu; drum yang masih terbuka hanya dicantumkan) → **Cetak**, atau **Cetak semua** (setiap pembukuan yang ada isinya, masing-masing mulai halaman baru).
+  - Halaman 1 Ringkasan: Invoice dari bengkel (jumlah, kendaraan, total, dibayar PT langsung, jasa tidak ditagih, **Bayar ke bengkel**); Bayar ke tiap supplier (PO yang dibayar PT, diterima di periode itu); Oli drum dua arah (Buku ini membayar / Buku ini dibayar, satu baris per pembukuan); Talangan per sopir. Lalu kotak **Dibayar buku ini** (supplier + oli drum + bengkel) dan, bila pembukuan itu juga menerima oli drum, kotak **Diterima buku ini**. Tanda tangan "Disiapkan oleh (bengkel)" dan "Diperiksa oleh (kasir PT)". Bila ringkasan lebih dari satu halaman, setiap bagian tetap utuh dan total serta tanda tangan selalu ikut bagian terakhir.
+  - Lalu Rincian di halaman baru: setiap invoice; baris PO menurut tanggal diterima (tanpa no. nota supplier); baris oli drum; talangan. Setiap baris punya kotak centang untuk dicocokkan kasir PT dengan berkasnya. Tanpa harga modal atau margin bengkel.
+  - Pengaturan → Pekerjaan & part → **Tagihan bulanan: oli drum** = pilihan awal (per bulan / per drum habis).
 - Tagihan PT juga punya **Oli dari drum · bayar ke <PT · pembukuan>** (oli dari invoice bulan itu, masuk total pembukuan) dan di sisi pemilik drum "Akan diterima"; PO talangan tampil sebagai "Dibayar supir dulu: <nama>".
 - Bila harga drum diubah, Axle menawarkan mengubah harga katalog oli itu (jual dan modal) dan oli di pekerjaan yang belum di-invoice. Invoice yang sudah ada tidak berubah.
 - Laporan → Penjualan menampilkan "Jasa tidak ditagih (tidak masuk total)" dan "Dibayar PT ke supplier (masuk total)" bila ada.
@@ -284,7 +302,7 @@ Dasbor: Hari ini (janji, Di bengkel = truk yang benar-benar ada, Menunggu part, 
 Semua staf bisa membuka Pengaturan (roda gigi); hanya Pemilik/Admin yang mengubah, lalu Simpan perubahan. Bagian: Profil bengkel, Tampilan, Bahasa & cetak, Jam buka, Invoice & penomoran (termasuk Pekerjaan & part: Setujui pekerjaan otomatis, Keluhan otomatis jadi servis, Status pekerjaan bergerak sendiri, Markup part bawaan), Biaya & pajak, Tarif jasa, Pengguna & akses, Impor data.
 
 - Markup part bawaan (saat ini 0%): part katalog baru dan part yang diketik diberi harga modal + markup. Terapkan …% ke semua part…: hanya Pemilik.
-- Pengguna & akses (Pemilik/Admin): Undang pengguna → nama, email, username, peran → Cara masuk pertama kali: Undangan lewat email (Kirim undangan) atau Kata sandi sementara (tanpa email) (Buat login; orangnya lalu membuat kata sandi sendiri). Atur ulang kata sandi = kata sandi sementara baru. Nonaktifkan untuk yang keluar; Hapus hanya akun salah buat. Fleet manager: centang perusahaannya (Perusahaan… untuk mengubah); hentikan dengan Nonaktifkan, jangan ganti ke peran staf.
+- Pengguna & akses (Pemilik/Admin): Undang pengguna → nama, email, username, peran → Cara masuk pertama kali: Undangan lewat email (Kirim undangan) atau Kata sandi sementara (tanpa email) (Buat login; orangnya lalu membuat kata sandi sendiri). Atur ulang kata sandi = kata sandi sementara baru. Nonaktifkan untuk yang keluar; Hapus hanya akun salah buat. Fleet manager: centang perusahaannya (Perusahaan… untuk mengubah); hentikan dengan Nonaktifkan, jangan ganti ke peran staf. Sejak 16 Nov 2026 setiap login fleet manager punya dua centang: **Setujui servis** (bawaan menyala; hanya berarti bila persetujuan otomatis dimatikan) dan **Lihat tagihan & biaya** (bawaan mati): Tagihan bulanan pembukuan perusahaan yang ditautkan, hanya lihat dan cetak. Dipakai untuk kasir internal PT; pimpinan PT ditautkan ke semua perusahaannya.
 - Jam pakai aplikasi untuk staf (Pemilik/Admin, di bawah Pengguna & akses): Batasi staf sesuai jam buka bengkel; Izinkan lembur (pilih orang, sampai tanggal/jam, paling lama 2 hari ke depan; Akhiri sekarang); daftar Dipakai di luar jam kerja.
 - Impor data (Pemilik/Admin): Unduh templat → isi → CSV UTF-8 → Pilih berkas CSV… → Impor.
 

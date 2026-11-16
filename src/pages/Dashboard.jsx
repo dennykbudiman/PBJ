@@ -11,6 +11,7 @@ import { fmtDate, num, rp } from '../lib/format'
 import { rpShort } from '../lib/customers'
 import { dayLabel } from '../lib/calendar'
 import { useOwnerAdmin } from '../components/Paperwork'
+import StatementMenu from '../components/StatementMenu'
 
 // Chart colours: categorical slots 1 and 2 (checked for colour-blind separation and contrast on white).
 const C_INVOICED = '#2a78d6'
@@ -49,7 +50,8 @@ export default function Dashboard() {
 
   return (
     <Page>
-      <PageHead title={t('dash.hello', { name: first })} sub={d ? dayLabel(d.today, lang, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : t('dash.sub')} />
+      <PageHead title={t('dash.hello', { name: first })} sub={d ? dayLabel(d.today, lang, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : t('dash.sub')}
+        actions={ownerAdmin ? <StatementMenu /> : null} />
       {error && <Notice kind="err" style={{ marginBottom: 12 }}>{errorText(error, t)}</Notice>}
       {!d ? !error && <div className="muted">{t('common.loading')}</div> : (
         <>

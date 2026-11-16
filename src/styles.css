@@ -995,3 +995,38 @@ tr.totalrow td { border-top: 2px solid var(--line); }
 /* item 47 (148): Berkas diterima — tick column on the invoice list */
 .table th.pick-col, .table td.pick-col { width: 34px; padding-right: 0; text-align: center; }
 .table td.pick-col input { width: 16px; height: 16px; cursor: pointer; }
+
+/* ---------- update 150 ---------- */
+/* item 49: the naming check under a new part's name */
+.namecheck { margin: 4px 0 2px; padding: 6px 9px; border: 1px solid var(--line); background: var(--head-bg); border-radius: 8px; font-size: 12.5px; display: flex; flex-direction: column; gap: 3px; }
+.nc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.nc-warn { color: var(--amber-ink, #9A5B10); }
+.partno { font-size: 9.5px; margin-top: 1px; }
+@media print { .namecheck { display: none !important; } }
+.dict-edit td { vertical-align: top; }
+.dict-edit .field { margin: 0; }
+/* item 53: the monthly statement */
+.st-doc .st-sumlabel { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #555; margin: 10px 0 0; }
+.st-tab { margin-top: 10px; }
+.st-tab th.st-t, .st-tab td.st-t { width: 22px; text-align: center; padding-left: 2px; padding-right: 0; }
+.st-tick { display: inline-block; width: 11px; height: 11px; border: 1.2px solid #111; border-radius: 2px; vertical-align: -1px; }
+.st-tab tr.rule td { border-top: 1px solid #bbb; padding-top: 3px; }
+.st-tab tr.st-sub td { font-weight: 700; padding-top: 6px; border-top: 1px solid #ddd; }
+.st-tab tbody:first-of-type tr.st-sub:first-child td { border-top: none; }
+.st-tab tr.st-subtotal td { border-top: 1px dashed #bbb; font-weight: 600; text-align: right; }
+.st-tab .st-cap { text-transform: none; letter-spacing: 0; font-size: 12px; color: #111; border-bottom: none; padding-bottom: 0; }
+.st-tab td { padding-top: 2px; padding-bottom: 2px; }
+.st-end { margin-top: 12px; border-top: 1.5px solid #111; padding-top: 8px; }
+.st-boxes { display: flex; justify-content: flex-end; gap: 16px; flex-wrap: wrap; }
+.st-boxes.two { justify-content: space-between; }
+.st-box { border: 1.5px solid #111; border-radius: 6px; padding: 4px 10px; border-collapse: separate; }
+.st-box .st-boxhead { font-weight: 800; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; padding-bottom: 3px; }
+.st-foot { margin-top: 8px; text-align: center; }
+.st-h2 { font-size: 14px; margin: 0 0 4px; padding-bottom: 3px; border-bottom: 2px solid #111; }
+.st-details { margin-top: 22px; }
+@media print {
+  .st-keep { break-inside: avoid; }
+  .st-end { break-inside: avoid; break-before: avoid-page; }
+  .st-details { break-before: page; margin-top: 0; }
+  .st-lines tr.st-sub { break-after: avoid; }
+}

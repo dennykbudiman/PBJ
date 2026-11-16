@@ -9,7 +9,7 @@ import { Tick } from './bits'
 // (same part, or same name for a typed part / outside work) is linked to it; the others are added as new job lines to
 // the chosen service, or to a new "Part tambahan" service. From then on the lines are connected.
 // entries: [{ line, match }] from poLinesNotOnJob; poNoOf: PO line → PO number; services/items: the job's.
-export default function AddToJobModal({ open, onClose, jobNoText, entries, services, items, poNoOf, showCost, onDone }) {
+export default function AddToJobModal({ open, onClose, jobNoText, entries, services, items, poNoOf, showCost, onDone, catName }) {
   const { t } = useT()
   const [picked, setPicked] = useState({})
   const [choice, setChoice] = useState({})
@@ -81,14 +81,15 @@ export default function AddToJobModal({ open, onClose, jobNoText, entries, servi
             {showCost && <th className="num">{t('inv.col.unitCost')}</th>}<th>PO</th>
           </tr></thead>
           <tbody>
-            {(entries || []).map(({ line: l, match }) => {
-              const q = Number(l.qty_ordered) - Number(l.qty_cancelled) - Number(l.qty_returned || 0)
+            {(entries || []).map(({ line: l, match, stock }) => {
+              const q = stock ? Number(l.qty_delivered) - Number(l.qty_returned || 0) : Number(l.qty_ordered) - Number(l.qty_cancelled) - Number(l.qty_returned || 0)
               return (
                 <tr key={l.id} className={picked[l.id] ? '' : 'dim'}>
                   <td><Tick checked={!!picked[l.id]} onChange={(v) => setPicked((x) => ({ ...x, [l.id]: v }))} label={t('inv.order.pick', { name: l.name })} /></td>
                   <td>
                     <b>{l.name}</b>{l.part_number && <span className="muted small"> · {l.part_number}</span>}
                     {l.line_type === 'sublet' && <div className="small muted">{t('u141.subletNote')}</div>}
+                    {stock && <div className="small muted">{t('u150.fromStockLine', { name: catName?.(stock) || l.name })}</div>}
                     {match && (
                       <div className="small" style={{ marginTop: 4 }}>
                         <label className="row" style={{ gap: 6 }}>

@@ -22,7 +22,7 @@ const ALL_SECTIONS = ['shop', 'appearance', 'language', 'hours', 'numbering', 'f
 
 // shop_settings columns edited on this page, with how each is read from the form.
 const TEXT = ['shop_name', 'legal_name', 'npwp', 'address', 'phone', 'email', 'bank_details', 'terms_id', 'terms_en', 'tax_name']
-const CHOICE = ['pkp_status', 'timezone', 'default_app_language', 'default_print_language', 'shop_supplies_type', 'shop_supplies_base']
+const CHOICE = ['pkp_status', 'timezone', 'default_app_language', 'default_print_language', 'shop_supplies_type', 'shop_supplies_base', 'statement_drum_mode']
 const FLAG = ['shop_supplies_enabled', 'shop_supplies_taxable', 'new_items_taxable', 'auto_approve', 'auto_concern_services', 'auto_workflow']
 const DECIMAL = ['tax_rate', 'default_markup_pct']
 const MONEY = ['shop_supplies_min', 'shop_supplies_max']
@@ -339,6 +339,16 @@ export default function Settings() {
             {settings.auto_workflow !== undefined && <>
               <Toggle checked={form.auto_workflow} onChange={set('auto_workflow')} disabled={dis} label={t('u139.autoWorkflow')} />
               <div className="hint">{t('u139.autoWorkflowHint')}</div>
+            </>}
+            {settings.statement_drum_mode !== undefined && <>
+              <div className="field" style={{ marginTop: 12 }}>
+                <span className="fieldlabel">{t('u150.st.drumModeSetting')}</span>
+                <div className="seg" role="group">
+                  {['month', 'drum'].map((m) => <button key={m} type="button" disabled={dis} className={`seg-btn ${form.statement_drum_mode === m ? 'on' : ''}`}
+                    onClick={() => setForm((f) => ({ ...f, statement_drum_mode: m }))}>{t(`u150.st.mode.${m}`)}</button>)}
+                </div>
+              </div>
+              <div className="hint">{t('u150.st.drumModeSettingHint')}</div>
             </>}
             <div className="grid3" style={{ marginTop: 12 }}>
               <Input label={t('set138.markup')} value={form.default_markup_pct} onChange={set('default_markup_pct')} disabled={dis} inputMode="decimal" suffix="%" error={errors.default_markup_pct} />

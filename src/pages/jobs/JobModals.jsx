@@ -168,8 +168,19 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
   const otherLeft = (job.leftover?.planned ? job.leftover.uses : []).filter((u) => u.other_book)
   const [override, setOverride] = useState('')
   const overrideOk = ownerAdmin && override.trim().length >= 5
-  const needReason = openPos.length > 0 || otherLeft.length > 0
+  // every part has a part number (150, item 49): typed parts and parts without a number block (Pemilik/Admin: with a
+  // reason); parts ticked "tidak punya nomor part" are listed to confirm once more
+  const [pn, setPn] = useState({ typed: [], missing: [], ticked: [] })
+  const [pnOk, setPnOk] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    setPnOk(false)
+    supabase.rpc('job_part_numbers', { p_ro: ro.id }).then(({ data }) => data && setPn(data))
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const noNumber = [...pn.typed, ...pn.missing]
+  const needReason = openPos.length > 0 || otherLeft.length > 0 || noNumber.length > 0
   const blocked = pending.length > 0 || approved.length === 0 || noTech.length > 0 || overpaid > 0 || noKm || (needReason && !overrideOk)
+    || (pn.ticked.length > 0 && !pnOk)
   // Warnings only (the invoice can still be made): parts that would go below zero on the shelf, the company's credit
   // limit, and companies that aren't on account (pay at pickup).
   const [check, setCheck] = useState({ short: [], owed: null })
@@ -247,6 +258,29 @@ export function InvoiceModal({ open, onClose, job, settings, staff, run, busy, o
               <textarea className="textarea" rows={2} maxLength={250} value={override} onChange={(e) => setOverride(e.target.value)} />
             </label>
           ) : <div className="small" style={{ marginTop: 4 }}>{t('u147.askOwner')}</div>}
+        </Notice>
+      )}
+      {noNumber.length > 0 && (
+        <Notice kind="warn" style={{ marginBottom: 10 }}>
+          <div><b>{t('u150.invNoNumberTitle')}</b></div>
+          {pn.typed.map((x) => <div key={x.id}>{t('u150.invTyped', { name: x.name })}</div>)}
+          {pn.missing.map((x) => <div key={x.id}>{t('u150.invMissing', { name: x.name })}</div>)}
+          <div className="small" style={{ marginTop: 4 }}>{t('u150.invNoNumberDo')}</div>
+          {openPos.length > 0 || otherLeft.length > 0 ? null : ownerAdmin ? (
+            <label className="mini" style={{ display: 'block', marginTop: 8 }}>{t('u150.invReason')}
+              <textarea className="textarea" rows={2} maxLength={250} value={override} onChange={(e) => setOverride(e.target.value)} />
+            </label>
+          ) : <div className="small" style={{ marginTop: 4 }}>{t('u150.invAskOwner')}</div>}
+        </Notice>
+      )}
+      {pn.ticked.length > 0 && (
+        <Notice kind="info" style={{ marginBottom: 10 }}>
+          <div><b>{t('u150.invTickedTitle')}</b></div>
+          {pn.ticked.map((x) => <div key={x.id}>· {x.name}</div>)}
+          <label className="check" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+            <input type="checkbox" checked={pnOk} onChange={(e) => setPnOk(e.target.checked)} />
+            <span>{t('u150.invTickedYes')}</span>
+          </label>
         </Notice>
       )}
       {overpaid > 0 && <Notice kind="warn" style={{ marginBottom: 10 }}>{t('job.overpaidFirst', { amount: rp(overpaid) })}</Notice>}

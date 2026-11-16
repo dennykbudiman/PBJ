@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Avatar, Badge, Button, Empty, Modal, useToast, Input, Notice, Toggle } from '../../components/ui'
+import { Avatar, Badge, Button, Empty, Modal, useToast, Input, Notice, Toggle, useConfirm } from '../../components/ui'
 import CatalogMatches from '../../components/CatalogMatches'
 import LeftoverNote from '../../components/LeftoverNote'
 import Icon from '../../components/Icon'
@@ -11,10 +11,11 @@ import { APPROVAL_COLOR, LINE_TYPES, WORK_STATUS, autoFeesFor, linesFromCatalogI
 import { discountState } from '../catalog/DiscountsTab'
 import { useShop } from '../../context/ShopContext'
 import { shopToday } from '../../lib/customers'
-import { LINE_COLOR, isNonPkp, jobToPoCost, lineState, poToJobCost } from '../../lib/inventory'
+import { LINE_COLOR, isNonPkp, jobToPoCost, lineState, poToJobCost, poLinesNotOnJob, poPaidByPt } from '../../lib/inventory'
 import { BlurInput, MoreMenu, Picker, discountText, parseDiscount } from './common'
 import { worksOnJobs } from './useJobData'
 import { useAuth } from '../../context/AuthContext'
+import { NewPartModal } from '../../components/NewPart'
 import { alternativesIndex, fitsVehicle, numberTokens, altBrands, catalogMatches } from '../../lib/alternatives'
 
 const nextPos = (rows) => rows.reduce((m, r) => Math.max(m, Number(r.position) || 0), -1) + 1
@@ -80,7 +81,7 @@ export async function fillFromBundle({ job, cat, tp, svc }) {
   return insertLines(svc.id, job.ro.id, 0, bundleLines(cat, tp), job.fees)
 }
 
-export default function ServicesTab({ job, cat, staff, editable, workEditable, showCost, run, busy, openApproval }) {
+export default function ServicesTab({ job, cat, staff, editable, workEditable, showCost, run, busy, openApproval, reloadCat }) {
   const { t, lang } = useT()
   const ro = job.ro
   const [adding, setAdding] = useState(false)
@@ -174,13 +175,13 @@ export default function ServicesTab({ job, cat, staff, editable, workEditable, s
         <div className="card"><Empty icon="wrench" title={t('job.noServices')}>{editable ? t('job.noServicesText') : null}</Empty></div>
       ) : job.services.map((s, i) => (
         <ServiceCard key={s.id} s={s} index={i} job={job} cat={cat} staff={staff} editable={editable} workEditable={workEditable}
-          showCost={showCost} run={run} busy={busy} openApproval={openApproval} alts={alts} templateOptions={templateOptions} />
+          showCost={showCost} run={run} busy={busy} openApproval={openApproval} alts={alts} templateOptions={templateOptions} reloadCat={reloadCat} />
       ))}
     </div>
   )
 }
 
-function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCost, run, busy, openApproval, alts, templateOptions }) {
+function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCost, run, busy, openApproval, alts, templateOptions, reloadCat }) {
   const { t } = useT()
   const toast = useToast()
   const ro = job.ro
@@ -210,6 +211,27 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
   function addItem(item) {
     run(() => insertLines(s.id, ro.id, nextPos(lines), buildFor(item, cat), job.fees))
   }
+  // "Ambil dari PO" (150, item 50): a catalog part this job's PO already brought in (a line not on the job yet) is
+  // offered from that PO line first, so it stays tied to the PO (and to the PT that paid it) instead of a shelf line.
+  const [askPo, askPoEl] = useConfirm()
+  const canFromPo = can('manage_inventory') && !isFleet
+  async function pickItem(item) {
+    if (item.item_type !== 'part' || !canFromPo) return addItem(item)
+    const hit = poLinesNotOnJob(job.pos, job.poLines, job.items, job.services, job.poLineLinks || {})
+      .find((e) => !e.match && (e.stock === item.id || e.line.catalog_item_id === item.id))
+    if (!hit) return addItem(item)
+    const po = job.pos.find((p) => p.id === hit.line.po_id)
+    const got = Number(hit.line.qty_delivered) - Number(hit.line.qty_returned || 0)
+    const ans = await askPo({
+      title: t('u150.fromPoTitle'),
+      text: t(got > 0 ? 'u150.fromPoArrived' : 'u150.fromPoComing', { name: item.name, po: po?.po_number || '—', qty: num(got > 0 ? got : Number(hit.line.qty_ordered) - Number(hit.line.qty_cancelled), 2) })
+        + (poPaidByPt(po) ? ' ' + t('u150.fromPoPaidPt') : ''),
+      yes: t('u150.fromPoYes'), no: t('u150.fromPoShelf'),
+    })
+    if (ans === true) {
+      run(() => supabase.rpc('add_po_lines_to_job', { p_lines: [hit.line.id], p_service: s.id, p_new_service: null }), t('u150.fromPoDone', { name: item.name, po: po?.po_number || '' }))
+    } else if (ans === false) addItem(item)
+  }
   // Swap a part line for an alternative: the new part goes in at the same place with the same quantity and discount,
   // then the old line is removed (only while the part isn't taken from stock or ordered on a PO). If the old line can't
   // be removed, the new one is taken out again, so the job never ends up with both. A fixed discount larger than the
@@ -236,7 +258,13 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
       return insertLines(s.id, ro.id, nextPos(lines), { lines: fees, jobFees: built.jobFees }, job.fees)
     }, t('alt.swapped', { name: item.name }))
   }
+  // Tunda / back (150, item 52): recorded as an internal decision
+  const setDecision = (decision) => run(() => supabase.from('approvals').insert({ ro_id: ro.id, service_id: s.id, decision, method: 'internal' }),
+    decision === 'deferred' ? t('u150.deferred', { name: s.name }) : t('u150.undeferred', { name: s.name }))
+  // a part is never typed by hand any more: it goes into the catalog first (150, item 49)
+  const [newPart, setNewPart] = useState(false)
   function addCustom(type) {
+    if (type === 'part') return setNewPart(true)
     run(() => supabase.from('ro_service_items').insert({
       service_id: s.id, item_type: type, name: t(`job.newLine.${type}`), qty: 1, price: 0, position: nextPos(lines),
     }))
@@ -295,9 +323,20 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
             onCommit={(v, reset) => (v.trim() ? upd({ name: v.trim() }) : reset())} />
         ) : <h3 className="svc-title">{s.name}</h3>}
         <div className="spacer" />
-        <button type="button" className="badgebtn" disabled={!editable} onClick={() => openApproval([s.id])} title={editable ? t('job.recordApproval') : undefined}>
-          <Badge color={APPROVAL_COLOR[s.approval_status]}>{t(`job.appr.${s.approval_status}`)}</Badge>
-        </button>
+        {settings?.auto_approve ? (
+          // approvals hidden (150, item 52): only "Tunda" (to the Ditunda list for a later visit) and back
+          s.approval_status === 'deferred' ? (
+            <span className="row" style={{ gap: 6 }}>
+              <Badge color={APPROVAL_COLOR.deferred}>{t('job.appr.deferred')}</Badge>
+              {editable && <Button size="sm" onClick={() => setDecision('approved')} disabled={busy}>{t('u150.undefer')}</Button>}
+            </span>
+          ) : s.approval_status === 'declined' ? <Badge color={APPROVAL_COLOR.declined}>{t('job.appr.declined')}</Badge>
+            : editable && s.work_status !== 'completed' ? <Button size="sm" className="ghost" onClick={() => setDecision('deferred')} disabled={busy} title={t('u150.deferHint')}>{t('u150.defer')}</Button> : null
+        ) : (
+          <button type="button" className="badgebtn" disabled={!editable} onClick={() => openApproval([s.id])} title={editable ? t('job.recordApproval') : undefined}>
+            <Badge color={APPROVAL_COLOR[s.approval_status]}>{t(`job.appr.${s.approval_status}`)}</Badge>
+          </button>
+        )}
         {/* A fleet manager doesn't see the shop's staff, so there's no technician to show (migration 133). */}
         {!isFleet && <label className="techpick" title={t('job.technician')}>
           {tech ? <Avatar name={tech.name} size={24} /> : <span className="avatar noone"><Icon name="user" size={13} /></span>}
@@ -450,15 +489,22 @@ function ServiceCard({ s, index, job, cat, staff, editable, workEditable, showCo
       {editable && (
         <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
           <div style={{ flex: '1 1 260px' }}>
-            <Picker options={itemOptions} onPick={(o) => addItem(o.item)} placeholder={t('job.searchItems')} disabled={busy}
+            <Picker options={itemOptions} onPick={(o) => pickItem(o.item)} placeholder={t('job.searchItems')} disabled={busy}
               render={(o) => <ItemOption item={o.item} cat={cat} fits={o.fits} />} />
           </div>
           <select className="select" style={{ width: 'auto' }} value="" aria-label={t('job.customLine')} onChange={(e) => e.target.value && addCustom(e.target.value)}>
             <option value="">{t('job.customLine')}</option>
-            {LINE_TYPES.map((x) => <option key={x} value={x}>{t(`job.type.${x}`)}</option>)}
+            {LINE_TYPES.map((x) => <option key={x} value={x}>{x === 'part' ? t('u150.newPartOption') : t(`job.type.${x}`)}</option>)}
           </select>
         </div>
       )}
+      {editable && (
+        <NewPartModal open={newPart} onClose={() => setNewPart(false)} items={cat.items} vehicle={job.vehicle}
+          showCost={showCost} showPrice={can('view_reports')} markupPct={settings?.default_markup_pct}
+          onCreated={(item) => { setNewPart(false); addItem(item); reloadCat?.() }}
+          onUse={(item) => { setNewPart(false); pickItem(item) }} />
+      )}
+      {askPoEl}
       <div className="svc-foot">
         {isFlat && (
           <span className="row" style={{ gap: 6 }}>

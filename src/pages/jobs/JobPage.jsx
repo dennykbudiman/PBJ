@@ -38,6 +38,11 @@ export default function JobPage({ id }) {
   const { t } = useT()
   const navigate = useNavigate()
   const { can, isFleet } = useAuth()
+  // a fleet login without "Setujui servis" doesn't decide (150, item 51)
+  const [fleetDecide, setFleetDecide] = useState(true)
+  useEffect(() => {
+    if (isFleet) supabase.rpc('fleet_can', { p_what: 'decide' }).then(({ data }) => setFleetDecide(data !== false))
+  }, [isFleet])
   const { settings } = useShop()
   const { job, error, missing, reload } = useJobData(id)
   const { data: cat, reload: reloadCat } = useCatalogData()
@@ -237,7 +242,7 @@ export default function JobPage({ id }) {
           <div className="card tabcard">{tabs}</div>
 
           {tab === 'services' && (
-            <ServicesTab job={job} cat={cat} staff={staff} editable={editable} workEditable={workEditable} showCost={showCost}
+            <ServicesTab reloadCat={reloadCat} job={job} cat={cat} staff={staff} editable={editable} workEditable={workEditable} showCost={showCost}
               run={run} busy={busy} openApproval={(ids) => open('approval', { preselect: ids })} />
           )}
           {tab === 'concerns' && <ConcernsTab job={job} editable={editable} run={run} busy={busy} />}
@@ -259,8 +264,11 @@ export default function JobPage({ id }) {
         </div>
 
         <aside className="jobside">
-          <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')}
-            fleetCanDecide={isFleet && !invoiced && !closed} onFleetDecide={() => open('fleet')} />
+          {/* approvals hidden while work is approved automatically (150, item 52); fleet logins without "Setujui servis" don't decide */}
+          {!settings?.auto_approve && (
+            <ApprovalsCard job={job} editable={editable} onRecord={() => open('approval')}
+              fleetCanDecide={isFleet && fleetDecide && !invoiced && !closed} onFleetDecide={() => open('fleet')} />
+          )}
           <AppointmentsCard job={job} staff={staff} canBook={editable} onOpen={(a) => open('appt', { appointment: a })} onNew={() => open('appt', {})} />
           {!isFleet && <PartsOrdersCard job={job} cat={cat} canOrder={canOrder} candidates={candidates} onOrder={() => open('order')}
             canAdd={canAddFromPo} onAddFromPo={() => open('addFromPo')} />}
@@ -294,6 +302,7 @@ export default function JobPage({ id }) {
       <AddToJobModal open={modal?.kind === 'addFromPo'} onClose={close} jobNoText={jobNo(ro.job_number)} showCost={showCost}
         entries={modal?.kind === 'addFromPo' ? poLinesNotOnJob(job.pos, job.poLines, job.items, job.services, job.poLineLinks || {}) : []}
         services={job.services} items={job.items} poNoOf={(l) => job.pos.find((p) => p.id === l.po_id)?.po_number || '—'}
+        catName={(id) => cat.items.find((x) => x.id === id)?.name}
         onDone={(n, partial) => { close(); reload(); if (partial) toast(partial, 'err'); else toast(t('u141.done', { n })) }} />
       <ApprovalModal open={modal?.kind === 'approval'} onClose={close} job={job} preselect={modal?.preselect} run={run} busy={busy} />
       {isFleet && <FleetDecisionModal open={modal?.kind === 'fleet'} onClose={close} job={job} run={run} busy={busy} />}

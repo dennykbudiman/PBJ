@@ -13,8 +13,9 @@ import InspectionsTab from './InspectionsTab'
 import ChecklistsTab from './ChecklistsTab'
 import CategoriesTab from './CategoriesTab'
 import SuppliersTab from './SuppliersTab'
+import PartWordsTab from './PartWordsTab'
 
-export const CATALOG_TABS = ['labor', 'parts', 'fees', 'discounts', 'flat-rate', 'bundles', 'inspections', 'checklists', 'categories', 'suppliers']
+export const CATALOG_TABS = ['labor', 'parts', 'fees', 'discounts', 'flat-rate', 'bundles', 'inspections', 'checklists', 'categories', 'suppliers', 'names']
 
 // /catalog → Parts, /catalog/<tab>, /catalog/<tab>/<id>, /catalog/<tab>/new
 export function parseCatalogPath(pathname) {
@@ -45,6 +46,7 @@ export default function CatalogArea() {
   else if (tab === 'inspections') body = <InspectionsTab {...props} />
   else if (tab === 'checklists') body = <ChecklistsTab {...props} />
   else if (tab === 'categories') body = <CategoriesTab {...props} />
+  else if (tab === 'names') body = <PartWordsTab />
   else body = <SuppliersTab {...props} />
 
   return (

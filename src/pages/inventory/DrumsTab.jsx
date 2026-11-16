@@ -58,6 +58,8 @@ export default function DrumsTab({ data, canEdit }) {
       <PageHead title={t('u142.drumsTitle')} sub={t('u142.drumsSub')}
         actions={<div className="row" style={{ gap: 6 }}>
           {money && <Link className="btn" to="/print/drums"><Icon name="print" size={15} /> {t('u145.printDrums')}</Link>}
+          {/* 150: the one-time bill for the oil used before the app (up to 1 Nov 2026) */}
+          {money && <Link className="btn" to="/print/drums?to=2026-11-01" title={t('u150.oldOilHint')}><Icon name="print" size={15} /> {t('u150.oldOil')}</Link>}
           {canEdit && <Button variant="primary" icon="plus" onClick={() => setModal({})}>{t('u142.drumAdd')}</Button>}
         </div>} />
       {rep?.error && <Notice kind="err">{errorText(rep.error, t)}</Notice>}
@@ -83,14 +85,15 @@ export default function DrumsTab({ data, canEdit }) {
                   {/* 149: a drum marked empty shows what the app still counts in it as "tidak tercatat" */}
                   {d.emptied_on && !neg
                     ? <><Badge color="gray">{t('u149.emptied', { date: fmtDate(d.emptied_on, lang) })}</Badge>{Number(d.untracked) > 0 && <Badge color="amber">{t('u149.untracked', { n: num(d.untracked, 2), unit: oil.unit || 'L' })}</Badge>}</>
-                    : <Badge color={neg ? 'red' : Number(d.left) === 0 ? 'gray' : 'green'}>{t('u142.drumLeft', { n: num(d.left, 2), unit: oil.unit || 'L' })}</Badge>}
+                    : neg ? <Badge color="red">{t('u150.overFull', { n: num(-Number(d.left), 2), unit: oil.unit || 'L' })}</Badge>
+                    : <Badge color={Number(d.left) === 0 ? 'gray' : 'green'}>{t('u142.drumLeft', { n: num(d.left, 2), unit: oil.unit || 'L' })}</Badge>}
                   <span className="small">{t('u142.drumUsed', { n: num(d.used, 2), unit: oil.unit || 'L' })}{Number(d.preapp) > 0 && <span className="muted"> {t('u149.ofWhichPre', { n: num(d.preapp, 2), unit: oil.unit || 'L' })}</span>}</span>
                   <button type="button" className="linkbtn small" onClick={() => setOpen((x) => ({ ...x, [key]: !x[key] }))}>{open[key] ? t('u142.hide') : t('u142.details')}</button>
                   {canEdit && <button type="button" className="linkbtn small" onClick={() => setModal({ drum: d, item: oil.catalog_item_id })}>{t('common.edit')}</button>}
                   {canEdit && <button type="button" className="linkbtn small danger" onClick={() => remove(d, oil.name)}>{t('common.delete')}</button>}
                 </div>
                 {d.note && <div className="small muted">{d.note}</div>}
-                {neg && d.last && <div className="small text-red">{t('u142.drumOverdrawn')}</div>}
+                {neg && <div className="small text-red">{t('u150.overFullHint')}</div>}
                 {(d.owed || []).length > 0 && (
                   <div className="small" style={{ marginTop: 4 }}>
                     {d.owed.map((o) => {

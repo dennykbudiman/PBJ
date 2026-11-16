@@ -10,6 +10,7 @@ import { supabase, errorText } from '../lib/supabase'
 import { fmtDate, invoiceNo, jobNo, km, num, rp } from '../lib/format'
 import { shopToday, vehicleName } from '../lib/customers'
 import { WORKFLOW_COLOR } from '../lib/jobs'
+import StatementMenu from '../components/StatementMenu'
 
 // Home for a customer's fleet manager (migration 133): only the companies linked to the login. What is waiting for
 // their decision comes first, then what is in the shop, unpaid invoices and service that is due.
@@ -17,7 +18,16 @@ export default function FleetDashboard() {
   const { t, lang } = useT()
   const navigate = useNavigate()
   const { profile, fleetCompanies } = useAuth()
-  const { timezone } = useShop()
+  const { timezone, settings } = useShop()
+  // 150 (items 51, 52): what this login may do (set per login in Pengaturan → Pengguna)
+  const [can, setCan] = useState({ decide: false, bills: false })
+  useEffect(() => {
+    let live = true
+    Promise.all([supabase.rpc('fleet_can', { p_what: 'decide' }), supabase.rpc('fleet_can', { p_what: 'bills' })])
+      .then(([a, b]) => { if (live) setCan({ decide: a.data === true, bills: b.data === true }) })
+    return () => { live = false }
+  }, [])
+  const showWaiting = !settings?.auto_approve && can.decide
   const today = shopToday(timezone)
   const [d, setD] = useState(null)
   const [error, setError] = useState(null)
@@ -69,13 +79,14 @@ export default function FleetDashboard() {
 
   return (
     <Page>
-      <PageHead title={t('dash.hello', { name: first })} sub={d ? d.companies.map((c) => c.display_name).join(' · ') : t('common.loading')} />
+      <PageHead title={t('dash.hello', { name: first })} sub={d ? d.companies.map((c) => c.display_name).join(' · ') : t('common.loading')}
+        actions={can.bills ? <StatementMenu /> : null} />
       {error && <Notice kind="err" style={{ marginBottom: 12 }}>{errorText(error, t)}</Notice>}
       {!d ? !error && <div className="muted">{t('common.loading')}</div> : (
         <>
           <div className="dashgrid">
-            <Tile href="#fleet-waiting" icon="check" label={t('fleet.waitingTile')} value={num(waiting.length)}
-              note={waiting.length ? t('fleet.waitingNote', { n: d.pending.length }) : t('fleet.nothingWaiting')} warn={waiting.length > 0} />
+            {showWaiting && <Tile href="#fleet-waiting" icon="check" label={t('fleet.waitingTile')} value={num(waiting.length)}
+              note={waiting.length ? t('fleet.waitingNote', { n: d.pending.length }) : t('fleet.nothingWaiting')} warn={waiting.length > 0} />}
             <Tile to="/customers/repair-orders" icon="wrench" label={t('fleet.inShop')} value={num(open.length)} note={t('fleet.inShopNote')} />
             <Tile to="/customers/invoices" icon="receipt" label={t('fleet.owed')} value={rp(owed)}
               note={overdue.length ? t('fleet.overdueNote', { n: overdue.length }) : t('fleet.unpaidNote', { n: unpaid.length })} danger={overdue.length > 0} />
@@ -83,8 +94,8 @@ export default function FleetDashboard() {
               note={t('fleet.dueNote', { n: d.due.filter((x) => x.due_status === 'overdue').length })} warn={d.due.some((x) => x.due_status === 'overdue')} />
           </div>
 
-          <h2 className="dash-h" id="fleet-waiting">{t('fleet.waitingTitle')}</h2>
-          {waiting.length === 0 ? <div className="card"><Empty icon="check" title={t('fleet.nothingWaiting')}>{t('fleet.nothingWaitingText')}</Empty></div> : (
+          {showWaiting && <h2 className="dash-h" id="fleet-waiting">{t('fleet.waitingTitle')}</h2>}
+          {!showWaiting ? null : waiting.length === 0 ? <div className="card"><Empty icon="check" title={t('fleet.nothingWaiting')}>{t('fleet.nothingWaitingText')}</Empty></div> : (
             <div className="table">
               <table>
                 <thead><tr><th>{t('jobs.col.job')}</th><th>{t('job.vehicle')}</th><th>{t('job.company')}</th><th>{t('fleet.col.waiting')}</th><th className="num">{t('fleet.col.value')}</th><th /></tr></thead>

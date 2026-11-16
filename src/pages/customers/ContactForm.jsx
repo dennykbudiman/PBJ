@@ -4,12 +4,14 @@ import { supabase, errorText } from '../../lib/supabase'
 import { useT } from '../../lib/i18n'
 import { CONTACT_ROLES } from '../../lib/customers'
 import { useAuth } from '../../context/AuthContext'
+import { useShop } from '../../context/ShopContext'
 
 const EMPTY = { name: '', role: 'fleet_manager', phone: '', email: '', is_primary: false, can_approve: false }
 
 // A person at a company: fleet manager (the future approver), billing contact, or other.
 export default function ContactForm({ open, customerId, contact, others, onClose, onSaved }) {
   const { t } = useT()
+  const { settings } = useShop()
   const { isOwner } = useAuth()
   const [f, setF] = useState(EMPTY)
   const [busy, setBusy] = useState(false)
@@ -78,7 +80,7 @@ export default function ContactForm({ open, customerId, contact, others, onClose
         <Input label={t('settings.email')} type="email" value={f.email} onChange={set('email')} />
       </div>
       <Toggle checked={f.is_primary} onChange={set('is_primary')} label={t('cust.isPrimary')} />
-      <Toggle checked={f.can_approve} onChange={set('can_approve')} label={t('cust.canApprove')} />
+      {!settings?.auto_approve && <Toggle checked={f.can_approve} onChange={set('can_approve')} label={t('cust.canApprove')} />}
     </Modal>
   )
 }

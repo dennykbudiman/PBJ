@@ -282,7 +282,8 @@ const SORTS = {
 function BoardList({ jobs, data, today }) {
   const { t, lang } = useT()
   const navigate = useNavigate()
-  const { timezone } = useShop()
+  const { timezone, settings } = useShop()
+  const showAppr = !settings?.auto_approve   // approvals hidden while work is approved automatically (150, item 52)
   const [sort, setSort] = useState('status')
   const rows = [...jobs].sort((a, b) => SORTS[sort](a, b) || SORTS.job(a, b))
   const th = (key, label, cls = '') => (
@@ -298,7 +299,7 @@ function BoardList({ jobs, data, today }) {
           <thead>
             <tr>
               {th('job', t('jobs.col.job'))}<th>{t('board.col.invoice')}</th><th>{t('job.company')}</th><th>{t('job.vehicle')}</th>
-              {th('status', t('job.workflow'))}<th>{t('wait.col')}</th><th>{t('job.priority')}</th><th>{t('board.col.approval')}</th>
+              {th('status', t('job.workflow'))}<th>{t('wait.col')}</th><th>{t('job.priority')}</th>{showAppr && <th>{t('board.col.approval')}</th>}
               {th('appt', t('board.col.appt'))}<th className="num hrs">{t('board.col.hours')}</th>{th('total', t('job.total'), 'num')}
             </tr>
           </thead>
@@ -314,7 +315,7 @@ function BoardList({ jobs, data, today }) {
                   <td><Badge color={WORKFLOW_COLOR[j.workflow_status]}>{t(`job.wf.${j.workflow_status}`)}</Badge></td>
                   <td className="waitcell">{j.wait ? <WaitingTag kind={j.wait.kind} info={j.wait.info} /> : <span className="muted">—</span>}</td>
                   <td><Badge color={PRIORITY_COLOR[j.priority]}>{t(`job.pri.${j.priority}`)}</Badge></td>
-                  <td>{j.pending > 0 ? <Badge color="amber">{t('board.pending', { n: j.pending })}</Badge> : j.approved > 0 ? <Badge color="green">{t('board.approved')}</Badge> : <span className="muted">—</span>}</td>
+                  {showAppr && <td>{j.pending > 0 ? <Badge color="amber">{t('board.pending', { n: j.pending })}</Badge> : j.approved > 0 ? <Badge color="green">{t('board.approved')}</Badge> : <span className="muted">—</span>}</td>}
                   <td>{j.appt ? <span className="nowrap"><span className={`dot d-${APPT_COLOR[j.appt.status]}`} /> {apptWhen(j.appt, today, timezone, lang, t)}</span> : <span className="muted">—</span>}</td>
                   <td className="num hrs">{num(j.hours, 2)}</td>
                   <td className="num">{rp(j.total)}</td>

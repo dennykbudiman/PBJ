@@ -122,7 +122,10 @@ export default function PrintJob() {
           return (
             <React.Fragment key={l.id}>
               <tr>
-                <td className="ind">{l.name}{l.description && <div className="small muted">{l.description}</div>}
+                <td className="ind">{l.name}
+                  {/* part number under the name (150, item 49) */}
+                  {l.item_type === 'part' && job.partCodes?.[l.catalog_item_id]?.code && <div className="small muted partno">{job.partCodes[l.catalog_item_id].code}</div>}
+                  {l.description && <div className="small muted">{l.description}</div>}
                   {talanganOf(l) && <div className="small">{t('u146.byDriver', { name: talanganOf(l).talangan_name })}</div>}
                   {/* item 40 (147): taken from a part left over on another job's PO (issued invoices) */}
                   {doc === 'invoice' && job.leftover && !job.leftover.planned && <LeftoverNote leftover={job.leftover} lineId={l.id} t={t} links={false} />}</td>
@@ -324,7 +327,7 @@ export default function PrintJob() {
     </section>
   ) : (
     <section className="doc-sign">
-      <div><div className="sign-line" />{t('pr.approvedBy')}<div className="small muted">{bill.display_name || bill.legal_name}</div></div>
+      <div><div className="sign-line" />{shop.auto_approve ? t('u150.receivedBy') : t('pr.approvedBy')}<div className="small muted">{bill.display_name || bill.legal_name}</div></div>
       <div><div className="sign-line" />{t('pr.shopSign')}<div className="small muted">{advisor ? `${advisor} · ` : ''}{shop.shop_name || shop.legal_name}</div></div>
     </section>
   )

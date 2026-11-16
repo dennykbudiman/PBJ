@@ -172,7 +172,14 @@ export function poLinesNotOnJob(pos, poLines, jobItems, services, linkOf = {}) {
   for (const l of poLines || []) {
     if (!openPo.has(l.po_id) || l.ro_service_item_id) continue
     // a typed-in part added to the catalog after it arrived is stock now; it goes on the job as the catalog part
-    if (!l.catalog_item_id && linkOf[l.id] && Number(l.qty_delivered) > 0) continue
+    // (150, item 50 "Ambil dari PO"): offered as { stock: catalog id } until that catalog part is on the job
+    if (!l.catalog_item_id && linkOf[l.id] && Number(l.qty_delivered) > 0) {
+      const c = linkOf[l.id]
+      if ((jobItems || []).some((i) => i.catalog_item_id === c && !i.po_item_id && live.has(i.service_id))) continue
+      if (Number(l.qty_delivered) - Number(l.qty_returned || 0) <= 0) continue
+      out.push({ line: l, match: null, stock: c })
+      continue
+    }
     if (Number(l.qty_ordered) - Number(l.qty_cancelled) - Number(l.qty_returned || 0) <= 0) continue
     const list = free.get(key(l, l.line_type || 'part'))
     out.push({ line: l, match: list?.length ? list.shift() : null })

@@ -35,6 +35,18 @@ export default function Users({ id }) {
   const [savingId, setSavingId] = useState(null)
   const [confirm, setConfirm] = useState(null) // { person, patch | remove, text }
   const [links, setLinks] = useState({}) // Fleet manager id → [company ids] (migration 133)
+  const [access, setAccess] = useState({}) // Fleet manager id → { can_decide, can_bills } (150, item 51)
+  async function saveAccess(person, patch) {
+    const cur = { can_decide: true, can_bills: false, ...access[person.id], ...patch }
+    const before = access[person.id]
+    setAccess((a) => ({ ...a, [person.id]: { ...cur, user_id: person.id } }))   // shown at once, put back if it fails
+    const { error } = await supabase.rpc('set_fleet_access', { p_user: person.id, p_decide: cur.can_decide, p_bills: cur.can_bills })
+    if (error) {
+      setAccess((a) => ({ ...a, [person.id]: before }))
+      return toast(errorText(error, t), 'err')
+    }
+    toast(t('u150.fleetSaved', { name: person.name }))
+  }
   const [companies, setCompanies] = useState([])
   const [linking, setLinking] = useState(null) // { person, picked }
   const [made, setMade] = useState(null) // { name, username, password, reset, copied } after a temporary password is set
@@ -46,13 +58,15 @@ export default function Users({ id }) {
   const [resetting, setResetting] = useState(null) // { person, password, error }
 
   const load = useCallback(async () => {
-    const [p, r, l, f, c] = await Promise.all([
+    const [p, r, l, f, c, fa] = await Promise.all([
       supabase.from('profiles').select('id, name, username, phone, status, role_id, roles(name)').order('name'),
       supabase.from('roles').select('id, name'),
       manage ? supabase.rpc('user_logins') : { data: [] },
       manage ? supabase.from('fleet_manager_companies').select('user_id, customer_id') : { data: [] },
       manage ? supabase.from('customers').select('id, display_name, active').order('display_name') : { data: [] },
+      manage ? supabase.from('fleet_access').select('user_id, can_decide, can_bills') : { data: [] },   // 150, item 51
     ])
+    setAccess(Object.fromEntries((fa.data ?? []).map((x) => [x.user_id, x])))
     setLogins(Object.fromEntries((l.data ?? []).map((x) => [x.id, x])))
     const byUser = {}
     for (const x of f.data ?? []) (byUser[x.user_id] ||= []).push(x.customer_id)
@@ -216,6 +230,12 @@ export default function Users({ id }) {
                         <div className="small" style={{ marginTop: 4 }}>
                           <span className="muted">{(links[p.id] || []).map((x) => companyName[x]).filter(Boolean).join(', ') || t('users.fleetNone')}</span>
                           {canTouch(p) && <> · <button type="button" className="linkbtn small" onClick={() => setLinking({ person: p, picked: links[p.id] || [] })}>{t('users.fleetEdit')}</button></>}
+                          <div className="row wrap" style={{ gap: 12, marginTop: 4 }}>
+                            <label className="check small"><input type="checkbox" disabled={!canTouch(p)} checked={access[p.id]?.can_decide ?? true}
+                              onChange={(e) => saveAccess(p, { can_decide: e.target.checked })} /> {t('u150.fleetDecide')}</label>
+                            <label className="check small"><input type="checkbox" disabled={!canTouch(p)} checked={access[p.id]?.can_bills ?? false}
+                              onChange={(e) => saveAccess(p, { can_bills: e.target.checked })} /> {t('u150.fleetBills')}</label>
+                          </div>
                         </div>
                       )}
                     </td>

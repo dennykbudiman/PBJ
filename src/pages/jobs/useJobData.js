@@ -50,6 +50,9 @@ export function useJobData(id) {
     // typed-in PO lines that were added to the catalog afterwards (migration 138)
     const lineIds = (poLines.data || []).filter((l) => !l.catalog_item_id).map((l) => l.id)
     const links = lineIds.length ? await supabase.from('typed_part_links').select('line_id, catalog_item_id').in('line_id', lineIds) : { data: [] }
+    // part numbers of the catalog parts on the job, for the invoice print (150, item 49); staff only
+    const partIds = [...new Set((items.data || []).filter((l) => l.item_type === 'part' && l.catalog_item_id).map((l) => l.catalog_item_id))]
+    const codes = partIds.length ? await supabase.from('catalog_items').select('id, code, no_part_number').in('id', partIds) : { data: [] }
     if (n !== loads.current) return
     const all = [customer, vehicle, contacts, concerns, services, fees, discounts, approvals, payments, credits, inspections, voids, appts, schedules, pos, files, items, results, poLines, links]
     const firstError = all.find((x) => x.error)?.error
@@ -64,6 +67,7 @@ export function useJobData(id) {
       concerns: concerns.data || [],
       services: services.data || [],
       items: items.data || [],
+      partCodes: Object.fromEntries((codes.data || []).map((x) => [x.id, x])),
       fees: fees.data || [],
       discounts: discounts.data || [],
       approvals: approvals.data || [],

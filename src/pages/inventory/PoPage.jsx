@@ -268,7 +268,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
                         {/* before PPN: the PPN is worked out once on the PO's total (145) */}
                         {showCost && <td className="num nowrap">{rp(lineAmount(l.cost, l.core_cost, q, false, 0))}</td>}
                         <td className="wide-only small">
-                          {l.supplier_invoice_no || (l.delivered_at ? <span className="muted">{t('inv.line.noInvoiceNo')}</span> : <span className="muted">—</span>)}
+                          {l.supplier_invoice_no || <span className="muted">—</span>}
                           {l.delivered_at && <div className="muted">{t('inv.line.receivedOn', { date: fmtDate(l.delivered_at, lang) })}</div>}
                           {showCost && owedQty(l) > 0 && due && <div className={due < today ? 'text-red' : 'muted'}>{t('inv.dueOn', { date: fmtDate(due, lang) })}</div>}
                         </td>

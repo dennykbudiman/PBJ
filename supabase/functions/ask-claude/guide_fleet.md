@@ -1,14 +1,15 @@
 # Panduan Axle untuk Fleet manager
 
-Latar belakang untuk "Tanya Claude" (per 12 November 2026) bagi login Fleet manager, orang armada perusahaan pelanggan. Tanya Claude hanya melihat data: sebut menu dan tombol yang harus diklik sendiri. Fleet manager hanya melihat perusahaan yang ditautkan bengkel ke akunnya.
+Latar belakang untuk "Tanya Claude" (per 16 November 2026) bagi login Fleet manager, orang armada perusahaan pelanggan. Tanya Claude hanya melihat data: sebut menu dan tombol yang harus diklik sendiri. Fleet manager hanya melihat perusahaan yang ditautkan bengkel ke akunnya.
 
 ## Yang bisa dan tidak bisa
 
 Bisa:
 - melihat data perusahaan, kontak, kendaraan (termasuk supir), jadwal servis dan servis jatuh tempo;
 - melihat repair order dan invoice lengkap dengan harga jual, total, PPN, pembayaran dan sisa tagihan;
-- menyetujui, menunda atau menolak servis yang menunggu, satu kali;
-- mencetak estimasi, invoice, riwayat servis dan daftar kendaraan.
+- menyetujui, menunda atau menolak servis yang menunggu, satu kali (bila bengkel memberi login Anda "Setujui servis" dan persetujuan otomatis bengkel dimatikan);
+- mencetak estimasi, invoice, riwayat servis dan daftar kendaraan;
+- bila bengkel memberi login Anda **Lihat tagihan & biaya**: mencetak **Tagihan bulanan** pembukuan perusahaan Anda (Dasbor → Tagihan bulanan).
 
 Tidak bisa:
 - mengubah data apa pun (semua hanya dibaca);
@@ -47,9 +48,16 @@ Armada saya, dengan tab: Pelanggan, Kendaraan, Jadwal servis, Repair order, Invo
 - Saat ini jasa (ongkos kerja) belum ditagihkan ke armada; setiap PT membayar part-nya sendiri lewat PO yang dicap PT itu.
 - Data salah (odometer, keluhan, alamat, NPWP): minta bengkel memperbaikinya.
 
+## Tagihan bulanan (hanya login dengan "Lihat tagihan & biaya")
+
+- Dasbor → **Tagihan bulanan** → periode (bawaan Bulan lalu), pembukuan (hanya pembukuan perusahaan yang ditautkan ke login Anda), Oli drum per bulan atau per drum habis → **Cetak** (atau **Cetak semua**).
+- Halaman 1 Ringkasan: invoice dari bengkel dan yang harus dibayar ke bengkel, yang dibayar ke tiap supplier (PO), oli drum (dibayar ke / diterima dari pembukuan lain), talangan sopir, total "Dibayar buku ini" (dan "Diterima buku ini"), tanda tangan bengkel dan kasir PT. Lalu Rincian per baris dengan kotak centang untuk dicocokkan dengan invoice, PO dan kertas drum.
+- Hanya lihat dan cetak; tanpa harga modal atau margin bengkel. Oli drum sebelum 2 Nov 2026 punya tagihan sendiri dari bengkel.
+- Tidak ada tombol Tagihan bulanan: login Anda belum diberi "Lihat tagihan & biaya"; minta bengkel.
+
 ## Menyetujui, menunda atau menolak
 
-Catatan: bengkel saat ini memakai persetujuan otomatis, jadi servis baru biasanya langsung Disetujui dan daftar "Menunggu keputusan Anda" kosong. Langkah di bawah berlaku bila ada servis berstatus Menunggu.
+Catatan: bengkel saat ini memakai persetujuan otomatis, jadi servis baru langsung Disetujui dan bagian persetujuan ("Menunggu keputusan Anda", tombol keputusan) tidak tampil. Langkah di bawah berlaku bila bengkel mematikan persetujuan otomatis dan login Anda boleh "Setujui servis".
 
 1. Dasbor → Menunggu keputusan Anda → Tinjau.
 2. Periksa servis yang menunggu di tab Servis.

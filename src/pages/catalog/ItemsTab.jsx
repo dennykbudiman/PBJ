@@ -7,6 +7,7 @@ import { categoryPath } from './useCatalogData'
 import { supabase, errorText, writeRow } from '../../lib/supabase'
 import History from './History'
 import TypedParts from './TypedParts'
+import { PartNameCheck, NoNumberTick, usePartWords } from '../../components/NewPart'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
@@ -171,7 +172,9 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
     has_core: src.has_core, core_cost: amt(src.core_cost), tire_size: src.tire_size || '', notes: src.notes || '', active: src.active,
     // alternate part numbers as rows of brand + number (145); alt_numbers follows them in the database
     alt_parts: (src.alt_parts || []).map((r) => ({ brand: r.brand || '', number: r.number || '' })), fits: src.fits || '', unit: src.unit || '',
+    no_part_number: !!src.no_part_number,
   }))
+  const words = usePartWords()
   const initialFees = useMemo(() => data.itemFees.filter((x) => x.item_id === item?.id).map((x) => x.fee_item_id), [data.itemFees, item?.id])
   const [fees, setFees] = useState(initialFees)
   const [errors, setErrors] = useState({})
@@ -237,6 +240,8 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
   async function save() {
     const e = {}
     if (!f.name.trim()) e.name = t('settings.required')
+    // every part has a number, or is ticked "tidak punya nomor part" (150, item 49)
+    if (type === 'part' && !f.code.trim() && !f.no_part_number) e.code = t('u150.errNumber')
     const cost = readAmount(f.cost)
     if (Number.isNaN(cost)) e.cost = t('settings.badAmount')
     let price = readAmount(f.price)
@@ -279,6 +284,7 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
       alt_parts: type === 'part' ? f.alt_parts.map((r) => ({ brand: r.brand.trim() || null, number: r.number.trim() })).filter((r) => r.number) : [],
       fits: type === 'part' ? f.fits.trim() || null : null,
       unit: type === 'part' ? f.unit.trim() || null : null,
+      no_part_number: type === 'part' && !f.code.trim() && f.no_part_number,
     }
     setBusy(true)
     setMsg(null)
@@ -327,8 +333,17 @@ function ItemEditor({ type, item, data, canEdit, showCost, canAdjust, onAdjusted
       canEdit={canEdit} busy={busy} error={msg} onSave={save} onClose={onClose} onDelete={remove} isNew={isNew}>
       <div className="grid2">
         <Input fieldClass="span2" label={t('cat.name')} value={f.name} onChange={set('name')} error={errors.name} disabled={dis} autoFocus={isNew} />
-        <Input label={type === 'part' ? t('cat.partNo') : t('cat.code')} value={f.code} onChange={set('code')} disabled={dis}
-          hint={dupCode ? t('cat.dupCode', { name: dupCode.name }) : codeOwners.length ? <OwnerHint owners={codeOwners} /> : null} />
+        {type === 'part' && !dis && (
+          <div className="span2">
+            <PartNameCheck name={f.name} brand={f.brand} items={data.items} selfId={item?.id} words={words}
+              onName={(v) => setF((x) => ({ ...x, name: v }))} />
+          </div>
+        )}
+        <div>
+          <Input label={type === 'part' ? t('cat.partNo') : t('cat.code')} value={f.code} onChange={set('code')} disabled={dis || (type === 'part' && f.no_part_number)} error={errors.code}
+            hint={dupCode ? t('cat.dupCode', { name: dupCode.name }) : codeOwners.length ? <OwnerHint owners={codeOwners} /> : null} />
+          {type === 'part' && !f.code.trim() && <NoNumberTick checked={f.no_part_number} disabled={dis} name={f.name.trim()} onChange={(v) => setF((x) => ({ ...x, no_part_number: v }))} />}
+        </div>
         <Select label={t('cat.category')} value={f.category_id} onChange={set('category_id')} disabled={dis}
           options={[{ value: '', label: '—' }, ...cats.map((c) => ({ value: c.id, label: categoryPath(c, data.categoryById) }))]} />
         {type === 'part' && <>
