@@ -63,8 +63,10 @@ export default function Dashboard() {
           <div className="dashgrid">
             <Tile to="/calendar?v=day" icon="calendar" label={t('dash.bookings')} value={num(d.bookings_today)}
               note={Number(d.requests) ? t('dash.requests', { n: d.requests }) : t('dash.noRequests')} warn={Number(d.requests) > 0} />
-            <Tile to="/board" icon="layout-kanban" label={t('dash.inShop')} value={num(shopCount)}
-              note={HERE.filter((k) => Number(inShop[k])).map((k) => `${t(`job.wf.${k}`)} ${inShop[k]}`).join(' · ') || t('dash.nothingInShop')} />
+            {/* trucks, as on Customers; the jobs per status in the note (one truck can have two open jobs) (151, review 108) */}
+            <Tile to="/board" icon="layout-kanban" label={t('dash.inShop')} value={num(d.in_shop_trucks ?? shopCount)}
+              note={[Number(d.in_shop_trucks ?? shopCount) !== shopCount ? t('u151.jobsN', { n: shopCount }) : null,
+                HERE.filter((k) => Number(inShop[k])).map((k) => `${t(`job.wf.${k}`)} ${inShop[k]}`).join(' · ')].filter(Boolean).join(' · ') || t('dash.nothingInShop')} />
             <Tile to="/board" icon="packages" label={t('dash.waitingParts')} value={num(d.waiting_parts)} note={t('dash.waitingPartsNote')} warn={Number(d.waiting_parts) > 0} />
             <Tile to="/board" icon="check" label={t('dash.readyInv')} value={num(inShop.completed || 0)} note={t('dash.readyNote')} />
           </div>

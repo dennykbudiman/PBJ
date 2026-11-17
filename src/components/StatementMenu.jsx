@@ -25,9 +25,14 @@ export default function StatementMenu({ back = '/' }) {
   const [pick, setPick] = useState('')
   const [error, setError] = useState(null)
   const { from, to } = periodRange(preset, today, custom)
+  // a custom period needs both dates, in order (151, review 72)
+  const ready = preset !== 'custom' || (custom.from && custom.to && custom.from <= custom.to)
+  const keyOf = (b) => `${b.payer}|${b.book ?? ''}`
+  // a PT's stock POs and drums with no book: the whole PT (151, review 2)
+  const label = (b) => (b.book ? payerBookLabel(b.payer, b.book) : `${b.payer} · ${t('u151.wholePt')}`)
   useEffect(() => { if (open) setMode(settings?.statement_drum_mode || 'month') }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!open) return undefined
+    if (!open || !ready) return undefined
     let live = true
     setBooks(null); setError(null)
     supabase.rpc('statement_books', { p_from: from, p_to: to }).then(({ data, error: err }) => {
@@ -35,15 +40,19 @@ export default function StatementMenu({ back = '/' }) {
       setError(err || null)
       const list = data || []
       setBooks(list)
-      setPick((p) => (list.some((b) => `${b.payer}|${b.book}` === p) ? p : list.length === 1 ? `${list[0].payer}|${list[0].book}` : ''))
+      setPick((p) => (list.some((b) => keyOf(b) === p) ? p : list.length === 1 ? keyOf(list[0]) : ''))
     })
     return () => { live = false }
-  }, [open, from, to])
+  }, [open, from, to, ready]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function go(all) {
     const p = new URLSearchParams({ from, to, mode, back })
     if (all) p.set('all', '1')
-    else { const [payer, book] = pick.split('|'); p.set('payer', payer); p.set('book', book) }
+    else {
+      const i = pick.lastIndexOf('|')
+      p.set('payer', pick.slice(0, i))
+      if (pick.slice(i + 1)) p.set('book', pick.slice(i + 1))
+    }
     navigate(`/print/statement?${p.toString()}`)
   }
   const presets = ['last_month', 'this_month', 'custom']
@@ -53,8 +62,8 @@ export default function StatementMenu({ back = '/' }) {
       <Modal open={open} title={t('u150.st.menuTitle')} onClose={() => setOpen(false)}
         footer={<>
           <Button onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
-          {(books || []).length > 1 && <Button onClick={() => go(true)}>{t('u150.st.printAll')}</Button>}
-          <Button variant="primary" onClick={() => go(false)} disabled={!pick}>{t('u150.st.print')}</Button>
+          {ready && (books || []).length > 1 && <Button onClick={() => go(true)}>{t('u150.st.printAll')}</Button>}
+          <Button variant="primary" onClick={() => go(false)} disabled={!pick || !ready}>{t('u150.st.print')}</Button>
         </>}>
         <div className="field">
           <label>{t('u150.st.period')}</label>
@@ -66,15 +75,17 @@ export default function StatementMenu({ back = '/' }) {
               <label className="mini">{t('u145.from')} <input type="date" className="input" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} /></label>
               <label className="mini">{t('u145.to')} <input type="date" className="input" value={custom.to} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} /></label>
             </div>
-          ) : <div className="small muted" style={{ marginTop: 4 }}>{fmtDate(from, lang)} – {fmtDate(to, lang)}</div>}
+          ) : null}
+          {ready ? <div className="small muted" style={{ marginTop: 4 }}>{fmtDate(from, lang)} – {fmtDate(to, lang)}</div>
+            : <div className="small" style={{ marginTop: 4, color: 'var(--amber)' }}>{t('u151.st.pickBoth')}</div>}
         </div>
-        {error ? <Notice kind="err">{errorText(error, t)}</Notice>
+        {!ready ? null : error ? <Notice kind="err">{errorText(error, t)}</Notice>
           : !books ? <div className="muted small">{t('common.loading')}</div>
           : books.length === 0 ? <Notice kind="info">{t('u150.st.noBooks')}</Notice>
           : (
             <Select label={t('u143.book')} value={pick} onChange={(e) => setPick(e.target.value)}
-              options={[{ value: '', label: t('u150.st.pickBook') }, ...books.map((b) => ({ value: `${b.payer}|${b.book}`,
-                label: `${payerBookLabel(b.payer, b.book)}${Number(b.invoices) ? ` · ${t('dash.nInvoices', { n: b.invoices })}` : ''}` }))]} />
+              options={[{ value: '', label: t('u150.st.pickBook') }, ...books.map((b) => ({ value: keyOf(b),
+                label: `${label(b)}${Number(b.invoices) ? ` · ${t('dash.nInvoices', { n: b.invoices })}` : ''}` }))]} />
           )}
         <div className="field">
           <label>{t('u150.st.drumMode')}</label>

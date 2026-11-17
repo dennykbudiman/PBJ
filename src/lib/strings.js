@@ -24,6 +24,7 @@ import { u147En, u147Id } from './strings-update147.js'
 import { u148En, u148Id } from './strings-update148.js'
 import { u149En, u149Id } from './strings-update149.js'
 import { u150En, u150Id } from './strings-update150.js'
+import { u151En, u151Id } from './strings-update151.js'
 
 const base = {
   en: {
@@ -89,7 +90,7 @@ const base = {
     'settings.required': 'Required', 'settings.badNumber': 'Enter a number of 0 or more', 'settings.max100': 'Can\'t be more than 100',
     'settings.minMax': 'The maximum must be at least the minimum', 'settings.badEmail': 'That email address does not look right.',
     'settings.nav.shop': 'Shop profile', 'settings.nav.language': 'Language & printing', 'settings.nav.numbering': 'Invoices & numbering',
-    'settings.nav.fees': 'Fees & tax', 'settings.nav.labor': 'Labor rates', 'settings.nav.users': 'Users & access',
+    'settings.nav.fees': 'Fees & tax', 'settings.nav.labor': 'Labour rates', 'settings.nav.users': 'Users & access',
     'settings.uploadLogo': 'Upload logo', 'settings.replaceLogo': 'Replace logo', 'settings.logoHint': 'PNG, JPG or WebP up to 2 MB · shown in the app header and on printed documents',
     'settings.logoType': 'Use a PNG, JPG or WebP image.', 'settings.logoSize': 'The logo must be 2 MB or smaller.', 'settings.logoSaved': 'Logo updated',
     'settings.shopName': 'Shop name (app & documents)', 'settings.legalName': 'Legal name', 'settings.phone': 'Phone', 'settings.address': 'Address',
@@ -105,22 +106,22 @@ const base = {
     'settings.defaultsHint': 'Each company can have its own payment terms; this is used when it has none.',
     'settings.shopSupplies': 'Shop supplies fee', 'settings.ssEnabled': 'Add a shop supplies fee to every new job', 'settings.ssType': 'Type',
     'settings.ssPercent': 'Percentage', 'settings.ssFixed': 'Fixed amount', 'settings.ssRate': 'Rate', 'settings.ssAmount': 'Amount',
-    'settings.ssBase': 'Calculated on', 'settings.base.parts_labor': 'Parts + labor, after line discounts', 'settings.base.parts': 'Parts only', 'settings.base.labor': 'Labor only',
+    'settings.ssBase': 'Calculated on', 'settings.base.parts_labor': 'Parts + labour, after line discounts', 'settings.base.parts': 'Parts only', 'settings.base.labor': 'Labour only',
     'settings.ssMin': 'Minimum', 'settings.ssMax': 'Maximum', 'settings.ssTaxable': 'Shop supplies fee is taxable',
     'settings.ssHint': 'New jobs copy this rate; it can be changed on each job. Open estimates still on the old default follow a change here.',
-    'settings.ssExample': 'Example: on {base} of parts and labor, {rate}% gives {fee}.',
+    'settings.ssExample': 'Example: on {base} of parts and labour, {rate}% gives {fee}.',
     'settings.tax': 'Tax', 'settings.taxName': 'Tax name', 'settings.taxRate': 'Rate', 'settings.newItems': 'New catalog items and typed-in job lines',
     'settings.notTaxable': 'Not taxable', 'settings.taxable': 'Taxable',
     'settings.nonPkpNote': 'The shop is set to Non-PKP, so no PPN is charged on any job, whatever the rate above.',
     'tz.Asia/Jakarta': 'WIB · Asia/Jakarta', 'tz.Asia/Makassar': 'WITA · Asia/Makassar', 'tz.Asia/Jayapura': 'WIT · Asia/Jayapura',
 
-    'labor.add': 'Add rate', 'labor.edit': 'Edit labor rate', 'labor.none': 'No labor rates yet.', 'labor.default': 'Default', 'labor.inactive': 'Off',
+    'labor.add': 'Add rate', 'labor.edit': 'Edit labour rate', 'labor.none': 'No labour rates yet.', 'labor.default': 'Default', 'labor.inactive': 'Off',
     'labor.perHour': '{amount} / hour', 'labor.name': 'Name', 'labor.namePh': 'e.g. Standard', 'labor.rate': 'Rate per hour', 'labor.hour': '/ hour',
-    'labor.makeDefault': 'Default rate for new labor items', 'labor.activeLabel': 'Available on new items',
+    'labor.makeDefault': 'Default rate for new labour items', 'labor.activeLabel': 'Available on new items',
     'labor.nameRequired': 'Enter a name.', 'labor.rateRequired': 'Enter a rate of 0 or more.', 'labor.defaultActive': 'The default rate must be available.',
-    'labor.saved': 'Labor rate saved', 'labor.deleted': 'Labor rate deleted',
+    'labor.saved': 'Labour rate saved', 'labor.deleted': 'Labour rate deleted',
     'labor.inUse': 'This rate is used by catalog items, so it can\'t be deleted. Switch off "Available on new items" instead.',
-    'labor.hint': 'Labor items in the catalog use one of these rates. Changing a rate affects new lines only.',
+    'labor.hint': 'Labour items in the catalog use one of these rates. Changing a rate affects new lines only.',
 
     'users.invite': 'Invite user', 'users.sendInvite': 'Send invite', 'users.person': 'Person', 'users.username': 'Username', 'users.role': 'Role', 'users.status': 'Status',
     'users.status.active': 'Active', 'users.status.invited': 'Waiting', 'users.status.disabled': 'Disabled',
@@ -279,6 +280,6 @@ const base = {
 }
 
 export const dict = {
-  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn, ...historyEn, ...fleetEn, ...loginsEn, ...u136En, ...u138En, ...u139En, ...tanyaEn, ...u141En, ...u142En, ...u143En, ...u144En, ...u145En, ...u146En, ...u147En, ...u148En, ...u149En, ...u150En },
-  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId, ...historyId, ...fleetId, ...loginsId, ...u136Id, ...u138Id, ...u139Id, ...tanyaId, ...u141Id, ...u142Id, ...u143Id, ...u144Id, ...u145Id, ...u146Id, ...u147Id, ...u148Id, ...u149Id, ...u150Id },
+  en: { ...base.en, ...customersEn, ...catalogEn, ...jobsEn, ...boardEn, ...schedulesEn, ...inventoryEn, ...reportsEn, ...goliveEn, ...historyEn, ...fleetEn, ...loginsEn, ...u136En, ...u138En, ...u139En, ...tanyaEn, ...u141En, ...u142En, ...u143En, ...u144En, ...u145En, ...u146En, ...u147En, ...u148En, ...u149En, ...u150En, ...u151En },
+  id: { ...base.id, ...customersId, ...catalogId, ...jobsId, ...boardId, ...schedulesId, ...inventoryId, ...reportsId, ...goliveId, ...historyId, ...fleetId, ...loginsId, ...u136Id, ...u138Id, ...u139Id, ...tanyaId, ...u141Id, ...u142Id, ...u143Id, ...u144Id, ...u145Id, ...u146Id, ...u147Id, ...u148Id, ...u149Id, ...u150Id, ...u151Id },
 }

@@ -106,7 +106,7 @@ export const boardId = {
   // Papan kerja
   'board.sub': 'Semua pekerjaan yang masih di bengkel. Seret kartu untuk memindahkannya; invoice dan pembayaran memindahkannya ke Invoice dan Lunas.',
   'board.view': 'Tampilan papan', 'board.kanban': 'Kanban', 'board.list': 'Daftar',
-  'board.search': 'Cari pekerjaan, perusahaan, plat, supir atau kontak', 'board.technician': 'Mekanik',
+  'board.search': 'Cari pekerjaan, perusahaan, plat, sopir atau kontak', 'board.technician': 'Mekanik',
   'board.allTechs': 'Semua mekanik', 'board.noTech': 'Belum ada mekanik', 'board.allAdvisors': 'Semua service advisor', 'board.allPriorities': 'Semua prioritas',
   'board.clearFilters': 'Hapus filter',
   'board.empty': 'Tidak ada pekerjaan di bengkel', 'board.emptyText': 'Estimasi terbuka dan pekerjaan ber-invoice yang belum diambil tampil di sini. Buat pekerjaan untuk melihatnya di papan.',
@@ -160,7 +160,7 @@ export const boardId = {
   'cal.sub': 'Janji servis menurut jam bengkel. Klik slot kosong untuk membuat janji; seret janji untuk memindahkannya.',
   'cal.newAppt': 'Janji', 'cal.prev': 'Sebelumnya', 'cal.next': 'Berikutnya', 'cal.today': 'Hari ini', 'cal.view': 'Tampilan kalender',
   'cal.day': 'Hari', 'cal.week': 'Minggu', 'cal.month': 'Bulan',
-  'cal.search': 'Cari perusahaan, plat, supir atau pekerjaan', 'cal.showCancelled': 'Tampilkan yang batal', 'cal.allHours': 'Semua jam',
+  'cal.search': 'Cari perusahaan, plat, sopir atau pekerjaan', 'cal.showCancelled': 'Tampilkan yang batal', 'cal.allHours': 'Semua jam',
   'cal.requests': 'Permintaan', 'cal.hideRequests': 'Sembunyikan permintaan', 'cal.showRequests': 'Tampilkan permintaan',
   'cal.noRequests': 'Tidak ada permintaan janji. Janji berstatus “Diminta” tampil di sini sampai dikonfirmasi.',
   'cal.emptyRange': 'Tidak ada janji di periode ini.',

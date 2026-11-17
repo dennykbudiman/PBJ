@@ -38,7 +38,7 @@ export default function FleetDashboard() {
     Promise.all([
       supabase.from('customers').select('id, display_name').order('display_name'),
       supabase.from('vehicles').select('id, customer_id, plate, make, model, year'),
-      supabase.from('repair_orders').select('id, job_number, invoice_number, customer_id, vehicle_id, order_status, workflow_status, closed_at, archived_at, created_at, invoiced_at, due_date, total, balance')
+      supabase.from('repair_orders').select('id, job_number, invoice_number, customer_id, vehicle_id, order_status, workflow_status, closed_at, archived_at, created_at, invoiced_at, due_date, total, balance, bill_to_snapshot')
         .or('order_status.eq.estimate,balance.gt.0').order('job_number', { ascending: false }),
       supabase.from('ro_services').select('id, ro_id, name, approval_status, service_net').eq('approval_status', 'pending'),
       supabase.from('service_due').select('id, vehicle_id, name, next_due_km, next_due_date, due_status, km_left, days_left').in('due_status', ['overdue', 'due_soon']),
@@ -67,6 +67,9 @@ export default function FleetDashboard() {
   }
 
   const open = (d?.jobs || []).filter((j) => j.order_status === 'estimate' && !j.closed_at)
+  // "in the shop" as on the staff dashboard: arrived to finished; booked and quote-only jobs are counted apart (151, review 105)
+  const here = open.filter((j) => ['arrived', 'in_progress', 'waiting_parts', 'completed'].includes(j.workflow_status))
+  const bookedJobs = open.filter((j) => j.workflow_status === 'scheduled').length
   const pendingBy = {}
   for (const s of d?.pending || []) (pendingBy[s.ro_id] ||= []).push(s)
   const waiting = open.filter((j) => pendingBy[j.id]?.length)
@@ -87,8 +90,8 @@ export default function FleetDashboard() {
           <div className="dashgrid">
             {showWaiting && <Tile href="#fleet-waiting" icon="check" label={t('fleet.waitingTile')} value={num(waiting.length)}
               note={waiting.length ? t('fleet.waitingNote', { n: d.pending.length }) : t('fleet.nothingWaiting')} warn={waiting.length > 0} />}
-            <Tile to="/customers/repair-orders" icon="wrench" label={t('fleet.inShop')} value={num(open.length)} note={t('fleet.inShopNote')} />
-            <Tile to="/customers/invoices" icon="receipt" label={t('fleet.owed')} value={rp(owed)}
+            <Tile to="/customers/repair-orders" icon="wrench" label={t('fleet.inShop')} value={num(here.length)} note={bookedJobs ? t('u151.fleetBooked', { n: bookedJobs }) : t('fleet.inShopNote')} />
+            <Tile to="/customers/invoices?status=open" icon="receipt" label={t('fleet.owed')} value={rp(owed)}
               note={overdue.length ? t('fleet.overdueNote', { n: overdue.length }) : t('fleet.unpaidNote', { n: unpaid.length })} danger={overdue.length > 0} />
             <Tile to="/customers/service-due" icon="calendar" label={t('fleet.due')} value={num(d.due.length)}
               note={t('fleet.dueNote', { n: d.due.filter((x) => x.due_status === 'overdue').length })} warn={d.due.some((x) => x.due_status === 'overdue')} />
@@ -156,7 +159,7 @@ export default function FleetDashboard() {
                       return (
                         <tr key={j.id} className="click" onClick={() => go(j)}>
                           <td><Link className="rowlink" to={`/jobs/${j.id}`} onClick={(e) => e.stopPropagation()}>{invoiceNo(j.invoice_number)}</Link></td>
-                          <td><b>{v?.plate}</b></td>
+                          <td><b>{v?.plate || j.bill_to_snapshot?.vehicle?.plate}</b></td>
                           <td>{company(j.customer_id)}</td>
                           <td>{fmtDate(j.due_date, lang)} {late && <Badge color="red">{t('fleet.overdue')}</Badge>}</td>
                           <td className="num"><b>{rp(j.balance)}</b></td>

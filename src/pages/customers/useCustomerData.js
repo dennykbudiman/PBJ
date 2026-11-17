@@ -78,7 +78,7 @@ export function useCustomerData(timezone) {
       s.openInvoices = Number(b.open_invoices) || 0
       s.credit = Number(b.available_credit) || 0
     }
-    if (!money) for (const s of Object.values(byCustomer)) { s.sales = null; s.balance = null; s.overdue = null; s.credit = null }
+    if (!money) for (const s of Object.values(byCustomer)) { s.sales = null; s.balance = null; s.overdue = null; s.credit = null; s.openInvoices = null }
     for (const ct of contacts.data ?? []) byCustomer[ct.customer_id]?.contacts.push(ct)
 
     const openJobByVehicle = {}

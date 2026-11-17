@@ -51,9 +51,9 @@ export default function InventoryReport() {
 
   function csv() {
     const head = [t('rep.col.item'), t('rep.col.code'), t('rep.col.brand'), t('rep.inv.category'), t('rep.col.supplier'), t('rep.col.onHand'), t('rep.col.reorderAt'), t('rep.col.unitCost'), t('rep.col.value'),
-      t('rep.col.usedQty'), t('rep.col.usedValue'), t('rep.col.received'), t('rep.col.lastUsed')]
+      t('rep.col.usedQty'), t('rep.col.usedValue'), t('rep.col.received'), t('u151.inv.adjusted'), t('rep.col.lastUsed')]
     downloadCsv(`inventory-${view}-${today}.csv`, head, list.map((r) => [r.name, r.code, r.brand, r.category, r.supplier, n(r.qty_on_hand), r.reorder_point == null ? null : n(r.reorder_point),
-      n(r.cost), n(r.value), n(r.used_qty), n(r.used_value), n(r.received_qty), r.last_used]))
+      n(r.cost), n(r.value), n(r.used_qty), n(r.used_value), n(r.received_qty), n(r.adjusted_qty), r.last_used]))
   }
 
   return (
@@ -94,7 +94,7 @@ export default function InventoryReport() {
               {view === 'reorder' && <th className="num">{t('rep.col.reorderAt')}</th>}
               <th className="num wide-only">{t('rep.col.unitCost')}</th><th className="num">{t('rep.col.value')}</th>
               <th className="num">{t('rep.col.usedQty')}</th>{view === 'used' && <th className="num">{t('rep.col.usedValue')}</th>}
-              <th className="num wide-only">{t('rep.col.received')}</th><th>{t('rep.col.lastUsed')}</th>
+              <th className="num wide-only">{t('rep.col.received')}</th><th className="num wide-only">{t('u151.inv.adjusted')}</th><th>{t('rep.col.lastUsed')}</th>
             </tr></thead>
             <tbody>
               {list.map((r) => (
@@ -110,6 +110,8 @@ export default function InventoryReport() {
                   <td className="num">{n(r.used_qty) ? num(r.used_qty, 2) : <span className="muted">–</span>}</td>
                   {view === 'used' && <td className="num">{rp(r.used_value)}</td>}
                   <td className="num wide-only">{n(r.received_qty) ? num(r.received_qty, 2) : <span className="muted">–</span>}</td>
+                  {/* stock counted up or down by hand in the period (151, review 86) */}
+                  <td className="num wide-only">{n(r.adjusted_qty) ? `${n(r.adjusted_qty) > 0 ? '+' : ''}${num(r.adjusted_qty, 2)}` : <span className="muted">–</span>}</td>
                   <td className="nowrap">{lastUsed(r)}</td>
                 </tr>
               ))}
@@ -119,7 +121,7 @@ export default function InventoryReport() {
               {view === 'reorder' && <td />}
               <td className="wide-only" /><td className="num"><b>{rp(listValue)}</b></td><td />
               {view === 'used' && <td className="num"><b>{rp(listUsed)}</b></td>}
-              <td className="wide-only" /><td />
+              <td className="wide-only" /><td className="wide-only" /><td />
             </tr></tfoot>
           </table>
         </div>

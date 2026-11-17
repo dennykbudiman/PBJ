@@ -10,7 +10,9 @@ import { downloadCsv, groupBy } from '../../lib/reports'
 import { Kpi, ReportBar, ReportError, companiesOf, pct, useCompany, useOpenRows, usePeriod, useReport } from './ReportsArea'
 
 const VIEWS = ['company', 'attention', 'done', 'none']
-const STATUS_COLOR = { overdue: 'red', due_soon: 'amber', ok: 'green' }
+const STATUS_COLOR = { overdue: 'red', due_soon: 'amber', ok: 'green', never: 'gray' }
+// 151 (review 44): a schedule never done yet has no due point: "Belum pernah", not counted as on schedule
+const statusKey = (s) => (s === 'overdue' ? 'rep.svc.overdue' : s === 'never' ? 'u151.never' : s === 'ok' ? 'rep.svc.ok' : 'rep.svc.dueSoon')
 
 // Reports → Service compliance: are service schedules kept up, today and in the period.
 export default function ServiceReport() {
@@ -66,7 +68,7 @@ export default function ServiceReport() {
     }
     downloadCsv(`service-status-${today}.csv`,
       [t('rep.col.company'), t('rep.col.plate'), t('rep.g.vehicle'), t('rep.svc.schedule'), t('rep.svc.status'), `${t('rep.svc.dueAt')} km`, t('rep.svc.dueAt'), t('rep.col.km'), `${t('rep.svc.over')} km`, `${t('rep.svc.over')} (${t('common.days')})`],
-      all.map((r) => [r.company, r.plate, vehicleName(r), r.name || t('rep.svc.noSchedule'), r.schedule_id ? t({ ok: 'rep.svc.ok', due_soon: 'rep.svc.dueSoon', overdue: 'rep.svc.overdue' }[r.status]) : '—',
+      all.map((r) => [r.company, r.plate, vehicleName(r), r.name || t('rep.svc.noSchedule'), r.schedule_id ? t(statusKey(r.status)) : '—',
         r.next_due_km, r.next_due_date, r.mileage_km, r.km_over, r.days_over]))
   }
 
@@ -88,7 +90,7 @@ export default function ServiceReport() {
       {view !== 'done' && <div className="hint" style={{ marginTop: -6, marginBottom: 10 }}>{t('rep.svc.periodNote')}</div>}
       <ReportError error={status.error || done.error} />
       <div className={`kpis four ${loading ? 'stale' : ''}`} style={{ marginTop: 0, marginBottom: 14 }}>
-        <Kpi label={t('rep.svc.compliance')} value={pct(schedules.length - k.overdue, schedules.length)} tone={k.overdue ? 'red' : undefined}
+        <Kpi label={t('rep.svc.compliance')} value={pct(schedules.length - k.overdue - count('never'), schedules.length)} tone={k.overdue ? 'red' : undefined}
           note={t('rep.svc.complianceNote', { n: schedules.length })} />
         <Kpi label={t('rep.svc.overdue')} value={num(k.overdue)} tone={k.overdue ? 'red' : undefined} note={`${t('rep.svc.dueSoon')}: ${num(k.soon)}`} />
         <Kpi label={t('rep.svc.noSchedule')} value={num(unscheduled.length)} note={t('rep.svc.noScheduleNote')} />
@@ -121,7 +123,7 @@ export default function ServiceReport() {
                         <td className="num">{num(c.ok)}</td>
                         <td className="num" style={c.soon ? { color: 'var(--amber-ink, #9a6700)', fontWeight: 700 } : undefined}>{num(c.soon)}</td>
                         <td className="num" style={c.overdue ? { color: 'var(--red)', fontWeight: 700 } : undefined}>{num(c.overdue)}</td>
-                        <td className="num"><b>{pct(c.rows.length - c.overdue, c.rows.length)}</b></td>
+                        <td className="num"><b>{pct(c.rows.length - c.overdue - c.rows.filter((r) => r.status === 'never').length, c.rows.length)}</b></td>
                         <td className="num wide-only">{c.none ? num(c.none) : <span className="muted">–</span>}</td>
                       </tr>
                       {open.has(c.id) && (c.rows.filter((r) => r.status !== 'ok').length === 0
@@ -129,7 +131,7 @@ export default function ServiceReport() {
                         : c.rows.filter((r) => r.status !== 'ok').map((r) => (
                           <tr key={r.schedule_id} className="subrow">
                             <td className="ind"><Link to={`/customers/vehicles/${r.vehicle_id}`}>{r.plate}</Link><span className="muted"> · {r.name}</span></td>
-                            <td colSpan={5}><Badge color={STATUS_COLOR[r.status]}>{t(r.status === 'overdue' ? 'rep.svc.overdue' : 'rep.svc.dueSoon')}</Badge> <span className="muted">{t('rep.svc.dueAt')} {dueText(r)} · {overText(r)}</span></td>
+                            <td colSpan={5}><Badge color={STATUS_COLOR[r.status]}>{t(statusKey(r.status))}</Badge> <span className="muted">{t('rep.svc.dueAt')} {dueText(r)} · {overText(r)}</span></td>
                             <td /><td className="wide-only" />
                           </tr>
                         )))}
@@ -139,7 +141,7 @@ export default function ServiceReport() {
                 <tfoot><tr>
                   <td><b>{t('rep.total')}</b></td><td className="num"><b>{num(new Set(all.map((r) => r.vehicle_id)).size)}</b></td><td className="num"><b>{num(schedules.length)}</b></td>
                   <td className="num"><b>{num(count('ok'))}</b></td><td className="num"><b>{num(k.soon)}</b></td><td className="num"><b>{num(k.overdue)}</b></td>
-                  <td className="num"><b>{pct(schedules.length - k.overdue, schedules.length)}</b></td><td className="num wide-only"><b>{num(unscheduled.length)}</b></td>
+                  <td className="num"><b>{pct(schedules.length - k.overdue - count('never'), schedules.length)}</b></td><td className="num wide-only"><b>{num(unscheduled.length)}</b></td>
                 </tr></tfoot>
               </>
             )}
@@ -151,7 +153,7 @@ export default function ServiceReport() {
                     <tr key={r.schedule_id}>
                       {vehicleCell(r)}
                       <td>{r.name}</td>
-                      <td><Badge color={STATUS_COLOR[r.status]}>{t(r.status === 'overdue' ? 'rep.svc.overdue' : 'rep.svc.dueSoon')}</Badge></td>
+                      <td><Badge color={STATUS_COLOR[r.status]}>{t(statusKey(r.status))}</Badge></td>
                       <td className="nowrap">{dueText(r)}</td><td className="nowrap">{km(r.mileage_km)}</td><td>{overText(r)}</td>
                     </tr>
                   ))}

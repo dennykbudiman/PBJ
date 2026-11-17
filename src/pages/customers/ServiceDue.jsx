@@ -40,16 +40,21 @@ export default function ServiceDueList() {
       selectAll(() => supabase.from('customer_contacts').select('id, customer_id, name, phone, is_primary').order('is_primary', { ascending: false }).order('id')),
       // A schedule already booked shows the booking instead of a "Book" button.
       selectAll(() => supabase.from('appointments').select('id, vehicle_id, start_time, status').gt('end_time', new Date().toISOString()).order('start_time').order('id')),
-    ]).then(([s, v, c, ct, a]) => {
+      // a truck already in the shop (an open job that has arrived) shows its job instead of "Book" (151, review 106)
+      selectAll(() => supabase.from('repair_orders').select('id, vehicle_id, job_number, workflow_status').eq('order_status', 'estimate').is('closed_at', null)
+        .in('workflow_status', ['arrived', 'in_progress', 'waiting_parts', 'completed']).order('id')),
+    ]).then(([s, v, c, ct, a, j]) => {
       const contact = {}
       for (const x of ct.data || []) if (!contact[x.customer_id]) contact[x.customer_id] = x
       const booked = {}
       for (const x of a.data || []) if (!booked[x.vehicle_id] && ['requested', 'scheduled', 'confirmed'].includes(x.status)) booked[x.vehicle_id] = x
+      const inShop = {}
+      for (const x of j.data || []) if (!inShop[x.vehicle_id]) inShop[x.vehicle_id] = x
       setData({
         schedules: s.data || [],
         vehicle: Object.fromEntries((v.data || []).map((x) => [x.id, x])),
         customer: Object.fromEntries((c.data || []).map((x) => [x.id, x])),
-        contact, booked,
+        contact, booked, inShop,
       })
       setError(s.error || v.error || c.error || ct.error || a.error || null)
     })
@@ -118,6 +123,7 @@ export default function ServiceDueList() {
               {rows.map(({ s, v, c, st }) => {
                 const ct = data.contact[v.customer_id]
                 const booked = data.booked[v.id]
+                const here = data.inShop?.[v.id]
                 return (
                   <tr key={s.id}>
                     <td><Badge color={SCHEDULE_COLOR[st.status]}>{t(`sch.st.${st.status}`)}</Badge><div className={`small ${st.status === 'overdue' ? 'text-red' : 'muted'}`}>{leftText(st, t, num)}</div></td>
@@ -129,9 +135,10 @@ export default function ServiceDueList() {
                     <td className="wide-only small">{ct ? <>{ct.name}{ct.phone && <div className="muted">{ct.phone}</div>}</> : c?.phone || <span className="muted">—</span>}</td>
                     <td className="num">
                       <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                        {booked ? <Link className="small" to={`/calendar?v=day&d=${shopParts(booked.start_time, timezone).date}`}>{t('sch.booked', { when: fmtDate(booked.start_time, lang, timezone) })}</Link>
+                        {here ? <Link className="small" to={`/jobs/${here.id}`}>{t('u151.inShop', { n: here.job_number })}</Link>
+                          : booked ? <Link className="small" to={`/calendar?v=day&d=${shopParts(booked.start_time, timezone).date}`}>{t('sch.booked', { when: fmtDate(booked.start_time, lang, timezone) })}</Link>
                           : canJob && <Button size="sm" onClick={() => setBooking({ s, v })}>{t('board.book')}</Button>}
-                        {canJob && <Button size="sm" variant="primary" onClick={() => navigate(`/jobs/new?vehicle=${v.id}&schedule=${s.id}`)}>{t('sch.startJob')}</Button>}
+                        {canJob && !here && <Button size="sm" variant="primary" onClick={() => navigate(`/jobs/new?vehicle=${v.id}&schedule=${s.id}`)}>{t('sch.startJob')}</Button>}
                       </div>
                     </td>
                   </tr>

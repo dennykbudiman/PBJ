@@ -136,7 +136,7 @@ function VehicleTable({ data, t, lang }) {
         {data.vehicles.map(({ v, next }) => (
           <tr key={v.id} className="svc-row">
             <td><b>{v.plate}</b></td>
-            <td>{[vehicleName(v), v.year].filter(Boolean).join(' · ') || '—'}</td>
+            <td>{vehicleName(v) || '—'}</td>
             <td>{v.vin || '—'}</td>
             <td className="num">{v.mileage_km != null ? km(v.mileage_km) : '—'}</td>
             <td>{t(`veh.st.${v.status}`)}</td>
@@ -157,7 +157,7 @@ function VehicleHistory({ x, t, lang, tz, prices, single }) {
       <div className={single ? 'doc-parties' : ''} style={single ? undefined : { borderTop: '2px solid #111', paddingTop: 8 }}>
         <div>
           <div className="doc-label">{t('fh.vehicle')}</div>
-          <b style={{ fontSize: 13 }}>{v.plate}</b> · {[vehicleName(v), v.year].filter(Boolean).join(' · ') || '—'}
+          <b style={{ fontSize: 13 }}>{v.plate}</b> · {vehicleName(v) || '—'}
           {v.vin && <div>VIN {v.vin}</div>}
           <div>{t('fh.col.km')}: {lastKm >= 0 ? km(lastKm) : '—'}</div>
         </div>
@@ -207,7 +207,7 @@ function VehicleHistory({ x, t, lang, tz, prices, single }) {
                 {prices && <td className="num"><b>{ro.total != null ? rp(ro.total) : '—'}</b></td>}
               </tr>
               {services.map(({ s, tech, items }) => {
-                const m = serviceMoney(s, items)
+                const m = serviceMoney(s, items, Number(ro.labor_waived) > 0)
                 return (
                   <React.Fragment key={s.id}>
                     <tr>

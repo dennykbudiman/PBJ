@@ -37,15 +37,18 @@ export default function JobActivity({ job, cat, staff, showCost }) {
         .eq('changes->>ro_id', id).order('created_at', { ascending: false }).limit(100),
       svcIds.length ? supabase.from('activity_log').select('*').eq('action', 'delete').eq('entity_type', 'ro_service_items')
         .in('changes->>service_id', svcIds).order('created_at', { ascending: false }).limit(100) : { data: [] },
+      // a payment moved to another job of the company: it left this job (151, review 85)
+      supabase.from('activity_log').select('*').eq('entity_type', 'payments').eq('action', 'update')
+        .filter('changes->ro_id', 'cs', JSON.stringify([id])).order('created_at', { ascending: false }).limit(50),
       // Parts taken from stock at invoicing (and put back by a void).
       itemIds.length ? supabase.from('stock_movements').select('*').in('ro_service_item_id', itemIds).order('created_at', { ascending: false }).limit(200) : { data: [] },
-    ]).then(([a, b, c, d]) => {
+    ]).then(([a, b, c, mv, d]) => {
       if (!live) return
-      const err = a.error || b.error || c.error || d.error
+      const err = a.error || b.error || c.error || d.error || mv.error
       if (err) setError(errorText(err, t))
       const seen = new Set()
       const stock = (d.data || []).map((m) => ({ id: `sm-${m.id}`, entity_type: 'stock', action: 'stock', created_at: m.created_at, user_id: m.created_by, changes: m }))
-      const all = [...(a.data || []), ...(b.data || []), ...(c.data || []), ...stock].filter((r) => (seen.has(r.id) ? false : seen.add(r.id)))
+      const all = [...(a.data || []), ...(b.data || []), ...(c.data || []), ...(mv.data || []), ...stock].filter((r) => (seen.has(r.id) ? false : seen.add(r.id)))
       all.sort((x, y) => (x.created_at < y.created_at ? 1 : x.created_at > y.created_at ? -1 : String(y.id).localeCompare(String(x.id))))
       // Starting an inspection adds every checklist point at once: show that as one entry.
       const grouped = []
@@ -136,6 +139,8 @@ export default function JobActivity({ job, cat, staff, showCost }) {
           ? <div>{t('job.act.deferredDismissed')}: <b>{row.name}</b>{row.note && <span className="muted"> · {row.note}</span>}</div>
           : <div>{t('job.act.deferredRestored')}: <b>{row.name}</b></div>
       case 'credit_memos':
+        // part of an applied credit given back to the company (a void and a lower reissue) (151, review 64)
+        if (r.action === 'line_update') return <div>{t('u151.creditChanged')}: {rp(r.changes?.amount?.[0])} → <b>{rp(r.changes?.amount?.[1])}</b></div>
         return add
           ? <div>{t('job.act.creditApplied')}: <b>{rp(row.amount)}</b>{row.reason && <span className="muted"> · {sysText(row.reason, t)}</span>}</div>
           : <div>{t('job.act.creditUnapplied')}: <b>{rp(row.amount)}</b></div>
@@ -206,8 +211,10 @@ export default function JobActivity({ job, cat, staff, showCost }) {
       }
       case 'payments': {
         const p = old || job.payments.find((x) => x.id === r.entity_id)
+        if (!p && r.action === 'update' && Array.isArray(r.changes?.ro_id) && r.changes.ro_id[0] === id) return <div className="muted">{t('u151.paymentMoved')}</div>
         if (!p) return null
         if (r.action === 'delete') return <div className="muted">{t('job.act.paymentDeleted')}: {rp(p.amount)}</div>
+        if (r.action === 'update' && Array.isArray(r.changes?.ro_id) && r.changes.ro_id[1] === id) return <div className="muted">{t('u151.paymentMovedIn')}: {rp(p.amount)}</div>
         if (r.action === 'update') return changes(r.changes)
         return <div>{p.kind === 'refund' ? t('job.act.refund') : t('job.act.payment')}: <b>{rp(p.amount)}</b> <span className="muted">· {t(`job.pay.${p.method}`)}{p.reference ? ` · ${sysText(p.reference, t)}` : ''}</span></div>
       }

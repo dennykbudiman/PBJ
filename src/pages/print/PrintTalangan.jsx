@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { usePageTitle } from '../../lib/branding'
 import PrintedBy from '../../components/PrintedBy'
+import { shopToday } from '../../lib/customers'
 import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
 import { useT, translate } from '../../lib/i18n'
@@ -59,7 +60,9 @@ export default function PrintTalangan() {
   const amounts = poAmounts(lines.map((l) => ({ l, po })), 'delivered')
   const total = amountsTotal(amounts)
   const tax = [...amounts.values()].reduce((a, x) => a + x.tax, 0)
-  const payer = po.paid_by_pt ? payerBookLabel(co?.payer_name || co?.display_name, co?.book_name?.trim() || co?.display_name) : (settings.shop_name || settings.legal_name)
+  // who pays the driver back: the PT named on a stock PO, the job's PT, else the shop (151, review 30)
+  const payer = po.paid_by_name ? payerBookLabel(po.paid_by_name, po.paid_by_book)
+    : po.paid_by_pt ? payerBookLabel(co?.payer_name || co?.display_name, co?.book_name?.trim() || co?.display_name) : (settings.shop_name || settings.legal_name)
   const shop = settings
   const day = lines.map((l) => l.delivered_at).filter(Boolean).sort().pop()
 
@@ -88,7 +91,7 @@ export default function PrintTalangan() {
             <h1>{t('u145.slipTitle')}</h1>
             <table className="doc-meta"><tbody>
               <tr><th>{t('u145.slipNo')}</th><td><b>PG/{po.po_number}</b></td></tr>
-              <tr><th>{t('pr.date')}</th><td>{fmtDate(po.reimbursed_on || new Date().toISOString().slice(0, 10), lang, timezone)}</td></tr>
+              <tr><th>{t('pr.date')}</th><td>{fmtDate(po.reimbursed_on || shopToday(timezone), lang)}</td></tr>
               {job && <tr><th>{t('pr.jobNo')}</th><td>{jobNo(job.job_number)}{job.invoice_number ? ` · ${invoiceNo(job.invoice_number)}` : ''}</td></tr>}
               <tr><th>PO</th><td>{po.po_number}</td></tr>
             </tbody></table>

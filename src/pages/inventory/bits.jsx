@@ -21,8 +21,10 @@ export function PoBadge({ status }) {
   return <Badge color={PO_COLOR[status]}>{t(`inv.po.st.${status}`)}</Badge>
 }
 
-export function PayBadge({ status, payer }) {
+export function PayBadge({ status, payer, talangan }) {
   const { t } = useT()
+  // the driver paid the supplier first: the shop never pays this supplier (151, review 56)
+  if (talangan) return <Badge color="gray" title={t('u151.po.talanganTitle')}>{t('u151.po.talangan')}</Badge>
   // a PO the PT pays its supplier for directly (142)
   if (payer) return <Badge color="gray" title={t('u142.paidByPtTitle', { payer })}>{t('u142.paidByPt')}</Badge>
   return <Badge color={PAY_COLOR[status]}>{t(`inv.pay.st.${status}`)}</Badge>

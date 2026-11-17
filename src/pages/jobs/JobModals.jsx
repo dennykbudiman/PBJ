@@ -5,7 +5,7 @@ import { Button, Input, Modal, Notice, Select, Textarea } from '../../components
 import { useT } from '../../lib/i18n'
 import { useShop } from '../../context/ShopContext'
 import { supabase, errorText } from '../../lib/supabase'
-import { fmtDate, num, parseDecimal, readAmount, rp } from '../../lib/format'
+import { fmtDate, isDuplicate, newId, num, parseDecimal, readAmount, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { APPROVAL_METHODS, PAY_METHODS, shopDateToTimestamp, sysText } from '../../lib/jobs'
 import { discountState } from '../catalog/DiscountsTab'
@@ -315,7 +315,8 @@ export function PaymentModal({ open, onClose, job, canRefund, run, busy }) {
     if (!open) return
     // Nothing left to pay on an issued invoice: the only thing to record is a refund.
     const refundOnly = canRefund && ro.order_status === 'invoice' && Number(ro.balance) <= 0 && cash > 0
-    setF({ kind: refundOnly ? 'refund' : 'payment', amount: Number(ro.balance) > 0 ? num(ro.balance) : '', method: 'transfer', date: shopToday(timezone), reference: '', receipt: '' })
+    // the payment's id is made when the window opens: saving again after a lost reply is refused as a duplicate (151)
+    setF({ id: newId(), kind: refundOnly ? 'refund' : 'payment', amount: Number(ro.balance) > 0 ? num(ro.balance) : '', method: 'transfer', date: shopToday(timezone), reference: '', receipt: '' })
     setErrors({})
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
@@ -329,10 +330,13 @@ export function PaymentModal({ open, onClose, job, canRefund, run, busy }) {
     if (!f.date) e.date = t('settings.required')
     setErrors(e)
     if (Object.keys(e).length) return
-    const ok = await run(() => supabase.from('payments').insert({
+    const ok = await run(async () => {
+      const r = await supabase.from('payments').insert({ id: f.id,
       ro_id: ro.id, kind: f.kind, method: f.method, amount, paid_at: f.date === shopToday(timezone) ? new Date().toISOString() : shopDateToTimestamp(f.date, timezone),
       reference: f.reference.trim() || null, receipt_number: f.receipt.trim() || null,
-    }), f.kind === 'refund' ? t('job.refundSaved', { amount: rp(amount) }) : t('job.paymentSaved', { amount: rp(amount) }))
+      })
+      return isDuplicate(r.error) ? { ...r, error: null } : r
+    }, f.kind === 'refund' ? t('job.refundSaved', { amount: rp(amount) }) : t('job.paymentSaved', { amount: rp(amount) }))
     if (ok) onClose()
   }
   return (
@@ -599,7 +603,7 @@ export function PayBackCreditModal({ open, customer, onClose, onDone }) {
   useEffect(() => {
     if (!open || !customer?.id) return
     live.current = true
-    setCredits(null); setErr({}); setF({ credit: '', amount: '', method: 'transfer', reference: '' })
+    setCredits(null); setErr({}); setF({ credit: '', amount: '', method: 'transfer', reference: '', date: shopToday(timezone) })
     load(false)
     return () => { live.current = false }
   }, [open, customer?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -615,10 +619,12 @@ export function PayBackCreditModal({ open, customer, onClose, onDone }) {
     if (!picked) e.credit = t('settings.required')
     else if (!amount || Number.isNaN(amount)) e.amount = t('job.amountRule')
     else if (amount > Number(picked.amount)) e.amount = t('credit.overCredit', { amount: rp(picked.amount) })
+    if (!f.date || f.date > shopToday(timezone)) e.date = t('inv.err.future')
     setErr(e)
     if (Object.keys(e).length) return
     setBusy(true)
-    const { error } = await supabase.rpc('refund_credit', { p_credit: picked.id, p_amount: amount, p_method: f.method, p_reference: f.reference.trim() || null })
+    // dated like a payment (151, review 65): a pay-back made yesterday counts yesterday
+    const { error } = await supabase.rpc('refund_credit_on', { p_credit: picked.id, p_amount: amount, p_method: f.method, p_reference: f.reference.trim() || null, p_paid_on: f.date })
     setBusy(false)
     if (error) { setErr({ amount: errorText(error, t) }); return load(true) }
     onDone(amount)
@@ -637,6 +643,7 @@ export function PayBackCreditModal({ open, customer, onClose, onDone }) {
             options={credits.map((c) => ({ value: c.id, label: `${c.reason || t('job.credit')} · ${fmtDate(c.created_at, lang, timezone)} · ${rp(c.amount)}` }))} />
           <Input label={t('cat.amount')} value={f.amount} onChange={set('amount')} inputMode="numeric" prefix="Rp" error={err.amount} />
           <Select label={t('job.payMethod')} value={f.method} onChange={set('method')} options={PAY_METHODS.map((m) => ({ value: m, label: t(`job.pay.${m}`) }))} />
+          <Input label={t('job.payDate')} type="date" value={f.date || ''} onChange={set('date')} error={err.date} />
           <Input fieldClass="span2" label={t('job.reference')} value={f.reference} onChange={set('reference')} placeholder={t('job.referenceExample')} />
         </div>
       )}

@@ -48,8 +48,14 @@ export function useJobData(id) {
       supabase.rpc('leftover_info', { p_ro: id }),
     ])
     // typed-in PO lines that were added to the catalog afterwards (migration 138)
-    const lineIds = (poLines.data || []).filter((l) => !l.catalog_item_id).map((l) => l.id)
-    const links = lineIds.length ? await supabase.from('typed_part_links').select('line_id, catalog_item_id').in('line_id', lineIds) : { data: [] }
+    // and typed-in job lines added to the catalog, so a PO line and its job line still match (151, review 136)
+    const lineIds = [...(poLines.data || []).filter((l) => !l.catalog_item_id).map((l) => l.id),
+      ...(items.data || []).filter((l) => l.item_type === 'part' && !l.catalog_item_id).map((l) => l.id)]
+    const [links, apprAmounts] = await Promise.all([
+      lineIds.length ? supabase.from('typed_part_links').select('line_id, catalog_item_id').in('line_id', lineIds) : { data: [] },
+      // what each approval approved (151, review 75); empty for logins that can't see this job's money
+      (approvals.data || []).length ? supabase.rpc('job_approval_amounts', { p_ro: id }) : { data: [] },
+    ])
     // part numbers of the catalog parts on the job, for the invoice print (150, item 49); staff only
     const partIds = [...new Set((items.data || []).filter((l) => l.item_type === 'part' && l.catalog_item_id).map((l) => l.catalog_item_id))]
     const codes = partIds.length ? await supabase.from('catalog_items').select('id, code, no_part_number').in('id', partIds) : { data: [] }
@@ -71,6 +77,7 @@ export function useJobData(id) {
       fees: fees.data || [],
       discounts: discounts.data || [],
       approvals: approvals.data || [],
+      approvalAmounts: Object.fromEntries((apprAmounts.data || []).map((x) => [x.approval_id, Number(x.amount)])),
       payments: payments.data || [],
       appliedCredits: allCredits.filter((c) => c.applied_ro_id === id),
       availableCredits: allCredits.filter((c) => !c.applied_ro_id && !c.refunded_at),

@@ -91,7 +91,8 @@ export function poTotals(po, lines) {
     core += lineAmount(0, l.core_cost, q, false, 0)
     tax += want.get(l.id)?.tax || 0
   }
-  return { parts, core, tax, total: parts + core + tax, delivered: amountsTotal(poAmounts(rows, 'received')),
+  // kept: delivered less returns (what a talangan driver is paid back, as on the slip and Tagihan PT; 151 review 31)
+  return { parts, core, tax, total: parts + core + tax, delivered: amountsTotal(poAmounts(rows, 'received')), kept: amountsTotal(poAmounts(rows, 'delivered')),
     paid: amountsTotal(poAmounts(rows, 'paid')), owed: amountsTotal(poAmounts(rows, 'owed')) }
 }
 

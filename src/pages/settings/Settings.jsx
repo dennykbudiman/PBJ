@@ -14,7 +14,7 @@ import { applyTheme, DEFAULT_THEME, normTheme } from '../../lib/theme'
 import { useScrollSpy } from '../../lib/useScrollSpy'
 import { supabase, errorText, LOGO_BUCKET } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { useShop } from '../../context/ShopContext'
+import { useShop, SHOP_COLS } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { initials, invoiceNo, jobNo, stockPoNo, readAmount, parseDecimal, rp, num } from '../../lib/format'
 
@@ -126,7 +126,7 @@ function LogoPicker({ disabled }) {
       return toast(errorText(upErr, t), 'err')
     }
     const old = settings?.logo_path
-    const { data, error } = await supabase.from('shop_settings').update({ logo_path: path }).eq('id', true).select().single()
+    const { data, error } = await supabase.from('shop_settings').update({ logo_path: path }).eq('id', true).select(SHOP_COLS).single()
     if (error) {
       await supabase.storage.from(LOGO_BUCKET).remove([path])
       setBusy(false)
@@ -141,7 +141,7 @@ function LogoPicker({ disabled }) {
   async function removeLogo() {
     const old = settings?.logo_path
     setBusy(true)
-    const { data, error } = await supabase.from('shop_settings').update({ logo_path: null }).eq('id', true).select().single()
+    const { data, error } = await supabase.from('shop_settings').update({ logo_path: null }).eq('id', true).select(SHOP_COLS).single()
     if (!error && old) await supabase.storage.from(LOGO_BUCKET).remove([old])
     setBusy(false)
     if (error) return toast(errorText(error, t), 'err')
@@ -229,11 +229,12 @@ export default function Settings() {
     if (Object.keys(errs).length) return toast(t('settings.fixErrors'), 'err')
     if (!Object.keys(patch).length) { setForm(toForm(settings)); return } // same values, typed differently
     setBusy(true)
-    const { data, error } = await supabase.from('shop_settings').update(patch).eq('id', true).select().single()
+    const { data, error } = await supabase.from('shop_settings').update(patch).eq('id', true).select(SHOP_COLS).single()
     setBusy(false)
     if (error) return toast(errorText(error, t), 'err')
-    setSettings(data)
-    setForm(toForm(data))
+    const saved = 'default_markup_pct' in patch ? { ...data, default_markup_pct: patch.default_markup_pct } : data
+    setSettings(saved)
+    setForm(toForm({ ...settings, ...saved }))
     toast(t('settings.saved'))
   }
 

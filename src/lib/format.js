@@ -117,3 +117,17 @@ export function sumOf(list, f) {
   }
   return s
 }
+
+// A new random id made in the browser (151, review 131): a row saved twice after a lost reply has the same id, so the
+// second save is refused as a duplicate instead of recording it twice. crypto.randomUUID needs a secure page.
+export const newId = () => (globalThis.crypto?.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16) }))
+// "already saved": a duplicate id (Postgres 23505 on the primary key)
+export const isDuplicate = (error) => error?.code === '23505'
+
+// A "back=" link from the address: only a page of this app (151, review 115), else the fallback.
+export function safeBack(v, fallback = '/') {
+  // a path of this app: starts with one "/", no backslash, space or control character (browsers drop tabs and
+  // newlines, so "/\t/evil.com" would become "//evil.com")
+  return typeof v === 'string' && /^\/(?![/\\])/.test(v) && !/[\\\s\u0000-\u001f\u007f]/.test(v) ? v : fallback
+}

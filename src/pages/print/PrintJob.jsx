@@ -46,6 +46,8 @@ export default function PrintJob() {
   if (!job || !settings) return <div className="print-msg">{error ? errorText(error, tUi) : tUi('common.loading')}</div>
 
   const ro = job.ro
+  // a login that can't see money gets no invoice or estimate with every line Rp 0 (151, review 114)
+  if (ro.total == null) return <div className="print-msg">{tUi('u151.noMoneyPrint')} · <Link to={`/jobs/${ro.id}`}>{tUi('common.back')}</Link></div>
   const invoiced = ro.order_status === 'invoice'
   // The vehicle's next services (from its service schedules), printed on the invoice for the fleet.
   const nextServices = (job.schedules || []).filter((x) => x.active).map((x) => ({ x, due: nextDue(x) })).filter(({ due }) => due.km != null || due.date)
@@ -80,12 +82,20 @@ export default function PrintJob() {
     return pl ? talanganPos.find((p) => p.id === pl.po_id) : null
   }
   // what the driver paid: what came in (with PPN once per PO, 145), else what was ordered
-  const talanganAmount = (p) => { const x = poTotals(p, (job.poLines || []).filter((l) => l.po_id === p.id)); return x.delivered || x.total }
+  const talanganAmount = (p) => { const x = poTotals(p, (job.poLines || []).filter((l) => l.po_id === p.id)); return x.delivered > 0 ? x.kept : x.total }
   const taxRate = shop.pkp_status === 'non_pkp' ? 0 : Number(shop.tax_rate ?? 11)
   const taxName = shop.tax_name || 'PPN'
   const billed = job.services.filter((s) => (doc === 'invoice' ? s.approval_status === 'approved' : s.approval_status === 'approved' || s.approval_status === 'pending'))
   const notIncluded = job.services.filter((s) => s.approval_status === 'declined' || s.approval_status === 'deferred')
-  const terms = lang === 'en' ? shop.terms_en : shop.terms_id
+  // what a declined or deferred service would cost: its labour isn't charged for "Jasa tidak ditagih" companies (151, review 32)
+  const noLabour = Number(ro.labor_waived) > 0 || !!job.customer?.labour_not_charged
+  const wouldCost = (s) => {
+    if (!noLabour || s.flat_price != null) return s.service_total
+    const labour = job.items.filter((i) => i.service_id === s.id && i.item_type === 'labor').reduce((a, i) => a + Number(lineNet(i) || 0), 0)
+    return Number(s.service_total || 0) - labour
+  }
+  // the shop's payment terms are for invoices; on an estimate they read as "pay now" (151, review 89)
+  const terms = doc === 'invoice' ? (lang === 'en' ? shop.terms_en : shop.terms_id) : null
   const advisor = staff.find((p) => p.id === ro.service_advisor_id)?.name
   // Everyone who worked on the billed services, in order.
   const mechanics = [...new Set(billed.map((s) => s.technician_id).filter(Boolean))].map((id) => staff.find((p) => p.id === id)?.name).filter(Boolean).join(', ')
@@ -227,7 +237,7 @@ export default function PrintJob() {
             <div className="doc-label">{doc === 'invoice' ? t('pr.recommendations') : t('pr.notIncluded')}</div>
             {notIncluded.length > 0 && (
               <ul className="doc-list">
-                {notIncluded.map((s) => <li key={s.id}>{s.name} — {rp(s.service_total)} <span className="muted">({t(`pr.st.${s.approval_status}`)})</span></li>)}
+                {notIncluded.map((s) => <li key={s.id}>{s.name} — {rp(wouldCost(s))} <span className="muted">({t(`pr.st.${s.approval_status}`)})</span></li>)}
               </ul>
             )}
             {ro.recommendations && <div className="pre">{ro.recommendations}</div>}

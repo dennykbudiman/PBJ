@@ -35,8 +35,9 @@ export default function FleetReport() {
   const pre = useReport('report_preapp', { p_from: period.from, p_to: period.to }, [period.from, period.to], period.valid)
   const preList = useMemo(() => (pre.rows || []).filter((r) => !company || r.customer_id === company), [pre.rows, company])
 
-  const vehicles = useMemo(() => [...groupBy(list, (r) => r.vehicle_id).entries()].map(([id, rs]) => ({
-    id, rows: rs, plate: rs[0].plate || '—', name: vehicleName(rs[0]), company: rs[0].company || '—', customer_id: rs[0].customer_id,
+  // a truck moved to another company is a row per company (151, review 48)
+  const vehicles = useMemo(() => [...groupBy(list, (r) => `${r.customer_id || ''}|${r.vehicle_id}`).entries()].map(([id, rs]) => ({
+    id, vehicle_id: rs[0].vehicle_id, rows: rs, plate: rs[0].plate || '—', name: vehicleName(rs[0]), company: rs[0].company || '—', customer_id: rs[0].customer_id,
     ...sumBy(rs, MONEY), ...kmStats(rs),
   })).sort((a, b) => b.total - a.total), [list])
   const companies = useMemo(() => [...groupBy(list, (r) => r.customer_id || '').entries()].map(([id, rs]) => ({
@@ -57,9 +58,11 @@ export default function FleetReport() {
         <select className="select chipselect" value={view} onChange={(e) => setView(e.target.value)} aria-label={t('rep.groupBy')}>
           <option value="vehicle">{t('rep.g.vehicle')}</option>
           <option value="company">{t('rep.g.company')}</option>
+          <option value="month">{t('u151.km.byMonth')}</option>
         </select>
       </ReportBar>
       <ReportError error={error} />
+      {view === 'month' ? <FleetMonth period={period} company={company} /> : <>
       <div className={`kpis four ${loading ? 'stale' : ''}`} style={{ marginTop: 0, marginBottom: 14 }}>
         <Kpi label={t('rep.fleet.spent')} value={rp(tot.total)} note={t('rep.fleet.spentNote', { n: list.length })} />
         <Kpi label={t('rep.m.subtotal')} value={rp(tot.subtotal)} />
@@ -106,7 +109,7 @@ export default function FleetReport() {
                               <td className="num">{r.km != null ? km(r.km) : <span className="muted">–</span>}</td><td />
                             </tr>
                           ))}
-                          <tr className="subrow"><td className="ind" colSpan={9}><Link to={`/customers/vehicles/${v.id}`}>{t('rep.fleet.openVehicle', { plate: v.plate })}</Link></td></tr>
+                          <tr className="subrow"><td className="ind" colSpan={9}><Link to={`/customers/vehicles/${v.vehicle_id}`}>{t('rep.fleet.openVehicle', { plate: v.plate })}</Link></td></tr>
                         </>
                       )}
                     </React.Fragment>
@@ -167,7 +170,78 @@ export default function FleetReport() {
           </div>
         </div>
       )}
-      <div className="hint">{t('rep.fleet.hint')}</div>
+      </>}
+      <div className="hint">{view === 'month' ? t('u151.km.hint') : t('rep.fleet.hint')}</div>
+    </>
+  )
+}
+
+// Per month (151, review 22): km counted from the last reading before each month, so Rp/km works month by month;
+// PT and Pembukuan filter; the 10 highest Rp/km.
+function FleetMonth({ period, company }) {
+  const { t, lang } = useT()
+  const { rows, error, loading } = useReport('report_km_month', { p_from: period.from, p_to: period.to }, [period.from, period.to], period.valid)
+  const [payer, setPayer] = useState('')
+  const [book, setBook] = useState('')
+  const all = (rows || []).filter((r) => !company || r.customer_id === company)
+  const payers = [...new Set(all.map((r) => r.payer).filter(Boolean))].sort()
+  const books = [...new Set(all.filter((r) => !payer || r.payer === payer).map((r) => r.book).filter(Boolean))].sort()
+  const list = all.filter((r) => (!payer || r.payer === payer) && (!book || r.book === book)).map((r) => {
+    const driven = r.km_end != null && r.km_start != null ? r.km_end - r.km_start : null
+    return { ...r, driven: driven > 0 ? driven : null, perKm: driven > 0 ? Number(r.subtotal) / driven : null }
+  })
+  const months = [...new Set(list.map((r) => r.month))].sort()
+  const top = [...list].filter((r) => r.perKm != null).sort((a, b) => b.perKm - a.perKm).slice(0, 10)
+  const monthName = (m) => new Date(`${m}T00:00:00Z`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'id-ID', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+  function csv() {
+    downloadCsv(`rp-per-km-${period.from}-${period.to}.csv`, [t('rep.col.company'), t('u146.rk.col.payer'), t('u143.book'), t('rep.col.plate'), t('u151.km.month'), t('rep.fleet.visits'),
+      t('rep.m.subtotal'), t('u151.km.start'), t('u151.km.end'), t('rep.fleet.kmDriven'), t('rep.fleet.perKm')],
+    list.map((r) => [r.company, r.payer, r.book, r.plate, r.month.slice(0, 7), r.invoices, Number(r.subtotal), r.km_start ?? '', r.km_end ?? '', r.driven ?? '', r.perKm != null ? Math.round(r.perKm) : '']))
+  }
+  return (
+    <>
+      <div className="filterbar repbar">
+        <select className="select chipselect" value={payer} onChange={(e) => { setPayer(e.target.value); setBook('') }} aria-label={t('u146.rk.payer')}>
+          <option value="">{t('u146.rk.allPayers')}</option>{payers.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select className="select chipselect" value={book} onChange={(e) => setBook(e.target.value)} aria-label={t('u143.book')}>
+          <option value="">{t('u146.rk.allBooks')}</option>{books.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <div className="spacer" />
+        <button type="button" className="btn" onClick={csv} disabled={!list.length}>{t('rep.csv')}</button>
+      </div>
+      <ReportError error={error} />
+      {error ? null : rows === null ? <div className="muted">{t('common.loading')}</div> : list.length === 0 ? (
+        <div className="card"><Empty icon="truck" title={t('rep.empty')}>{t('rep.fleet.emptyText')}</Empty></div>
+      ) : (
+        <div className={loading ? 'stale' : ''}>
+          {top.length > 0 && (
+            <section className="card" style={{ marginBottom: 12 }}>
+              <b>{t('u151.km.top')}</b>
+              <ol className="small" style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+                {top.map((r) => <li key={`${r.vehicle_id}|${r.customer_id}|${r.month}`}><b>{r.plate}</b> · {monthName(r.month)} · {rp(r.perKm)}/km <span className="muted">({km(r.driven)} · {rp(r.subtotal)} · {r.company})</span></li>)}
+              </ol>
+            </section>
+          )}
+          <div className="table">
+            <table>
+              <thead><tr><th>{t('rep.col.plate')}</th>{months.map((m) => <th key={m} className="num">{monthName(m)}</th>)}</tr></thead>
+              <tbody>
+                {[...groupBy(list, (r) => `${r.customer_id}|${r.vehicle_id}`).values()].map((rs) => (
+                  <tr key={`${rs[0].customer_id}|${rs[0].vehicle_id}`}>
+                    <td><b>{rs[0].plate}</b><div className="small muted">{rs[0].company}</div></td>
+                    {months.map((m) => {
+                      const r = rs.find((x) => x.month === m)
+                      return <td key={m} className="num small">{!r ? <span className="muted">–</span> : <>{r.perKm != null ? <b>{rp(r.perKm)}</b> : <span className="muted">{t('u151.km.noKm')}</span>}
+                        <div className="muted">{rp(r.subtotal)}{r.driven ? ` · ${km(r.driven)}` : ''}</div></>}</td>
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </>
   )
 }

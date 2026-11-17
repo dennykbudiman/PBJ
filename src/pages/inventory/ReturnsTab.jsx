@@ -59,7 +59,17 @@ export default function ReturnsTab({ data, reload, canEdit, showCost }) {
     })
   }, [data, q, show, kind])
 
-  const openValue = data.returns.filter((r) => r.status !== 'refunded').reduce((a, r) => a + returnValue(r), 0)
+  // a part sent back before the shop paid for it only takes it off the supplier's bill: no money comes back for it
+  // (151, review 57). Per PO line: what was paid beyond what is kept is what comes back.
+  const backShare = (r) => {
+    const l = r.po_item_id && data.lineById[r.po_item_id]
+    if (!l) return 1
+    const extra = Math.max(Number(l.qty_paid || 0) - (Number(l.qty_delivered || 0) - Number(l.qty_returned || 0)), 0)
+    return Number(r.qty) > 0 ? Math.min(extra / Number(r.qty), 1) : 0
+  }
+  const openList = data.returns.filter((r) => r.status !== 'refunded')
+  const openValue = openList.reduce((a, r) => a + returnValue(r) * backShare(r), 0)
+  const offBill = openList.reduce((a, r) => a + returnValue(r) * (1 - backShare(r)), 0)
   const labelOf = (g) => (g.rows.length === 1 ? g.first.item_name : t('inv.ret.nParts', { n: g.rows.length }))
   const stepFor = (g, to) => setStep({ to, r: { ...g.first, item_name: labelOf(g), ids: g.ids, value: g.value, rows: g.rows } })
 
@@ -72,7 +82,12 @@ export default function ReturnsTab({ data, reload, canEdit, showCost }) {
     <>
       <PageHead title={t('inv.ret.title')} sub={t('inv.ret.sub')}
         actions={canEdit && <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>{t('inv.ret.new')}</Button>} />
-      {showCost && openValue > 0 && <div className="row wrap" style={{ gap: 8, marginBottom: 12 }}><Badge color="amber">{t('inv.ret.openValue', { amount: rp(openValue) })}</Badge></div>}
+      {showCost && (openValue > 0 || offBill > 0) && (
+        <div className="row wrap" style={{ gap: 8, marginBottom: 12 }}>
+          {openValue > 0 && <Badge color="amber">{t('inv.ret.openValue', { amount: rp(Math.round(openValue)) })}</Badge>}
+          {offBill > 0 && <Badge color="gray" title={t('u151.ret.offBillHint')}>{t('u151.ret.offBill', { amount: rp(Math.round(offBill)) })}</Badge>}
+        </div>
+      )}
       <div className="filterbar">
         <SearchBox value={q} onChange={setQ} placeholder={t('inv.ret.search')} />
         <select className="select chipselect" value={show} onChange={(e) => setShow(e.target.value)} aria-label={t('inv.show')}>

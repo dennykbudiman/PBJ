@@ -31,9 +31,14 @@ export function ApprovalsCard({ job, editable, onRecord, fleetCanDecide, onFleet
         <div className="appr-recent">
           {recent.map((a) => {
             const svc = job.services.find((s) => s.id === a.service_id)
+            // what was approved, and whether the service costs more now (151, review 75)
+            const was = job.approvalAmounts?.[a.id]
+            const latest = job.approvals.find((x) => x.service_id === a.service_id) === a
+            const rose = a.decision === 'approved' && latest && was != null && svc?.service_net != null && Number(svc.service_net) > was + 0.5
             return (
               <div key={a.id} className="small">
-                <Badge color={APPROVAL_COLOR[a.decision]}>{t(`job.appr.${a.decision}`)}</Badge> {svc?.name || '—'}
+                <Badge color={APPROVAL_COLOR[a.decision]}>{t(`job.appr.${a.decision}`)}</Badge> {svc?.name || '—'}{was != null && <span className="muted"> · {rp(was)}</span>}
+                {rose && <div style={{ color: 'var(--amber)' }}>{t('u151.priceRose', { now: rp(svc.service_net) })}</div>}
                 <div className="muted">{[a.approved_by_name, t(`job.via.${a.method}`), fmtDateTime(a.decided_at, lang, timezone)].filter(Boolean).join(' · ')}</div>
                 {a.note && <div className="small" style={{ fontStyle: 'italic' }}>“{a.note}”</div>}
               </div>
@@ -52,7 +57,9 @@ export function StatusCard({ job, staff, settings, canEdit, canFaktur, editable,
   const ro = job.ro
   const invoiced = ro.order_status === 'invoice'
   const upd = (patch) => run(() => supabase.from('repair_orders').update(patch).eq('id', ro.id))
-  const terms = job.customer?.payment_terms_days ?? settings?.default_payment_terms_days
+  // an invoice keeps the terms it was made with (151, review 78)
+  const snapTerms = invoiced ? ro.bill_to_snapshot?.terms_days : undefined
+  const terms = snapTerms ?? job.customer?.payment_terms_days ?? settings?.default_payment_terms_days
   const state = jobState(ro, shopToday(timezone))
   // Moving to Done finishes the approved work too when the status moves by itself (migration 139): ask first.
   const [confirm, confirmEl] = useConfirm()
@@ -190,7 +197,7 @@ export function TotalsCard({ job, settings, editable, canPay, canRefund, canFixP
       <div className="trule" />
       <TotalRow label={t('job.subtotal')} value={ro.subtotal} strong />
       {/* No PPN on this job: the line is left out (Denny, Nov 5). */}
-      {Number(ro.tax_total) !== 0 && <TotalRow label={job.customer?.tax_exempt ? t('job.taxExempt', { tax: settingsForTax?.tax_name || 'PPN' }) : t('job.taxLine', { tax: settingsForTax?.tax_name || 'PPN', rate: num(taxRate, 2), base: rp(ro.taxable_base) })} value={ro.tax_total} />}
+      {Number(ro.tax_total) !== 0 && <TotalRow label={(ro.order_status === 'invoice' && ro.bill_to_snapshot?.tax_exempt != null ? ro.bill_to_snapshot.tax_exempt : job.customer?.tax_exempt) ? t('job.taxExempt', { tax: settingsForTax?.tax_name || 'PPN' }) : t('job.taxLine', { tax: settingsForTax?.tax_name || 'PPN', rate: num(taxRate, 2), base: rp(ro.taxable_base) })} value={ro.tax_total} />}
       <div className="trule" />
       <TotalRow label={t('job.total')} value={ro.total} strong />
       {/* parts and outside work the PT pays its suppliers for directly (142) */}

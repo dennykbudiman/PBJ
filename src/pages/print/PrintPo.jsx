@@ -36,12 +36,16 @@ export default function PrintPo() {
         // item 40 (147): parts left over once the job is invoiced, whose they are and which jobs took them since
         po.data.ro_id ? supabase.rpc('leftover_info', { p_po: id }) : { data: null },
       ])
-      const [veh, svcs, owner] = await Promise.all([
+      // the catalog part's number when the PO line has none (151, review 29)
+      const catIds = [...new Set((lines.data || []).filter((l) => !l.part_number && l.catalog_item_id).map((l) => l.catalog_item_id))]
+      const [veh, svcs, owner, cats] = await Promise.all([
         job.data ? supabase.from('vehicles').select('plate, year, make, model, driver_name').eq('id', job.data.vehicle_id).maybeSingle() : { data: null },
         job.data ? supabase.from('ro_services').select('technician_id, position').eq('ro_id', job.data.id).order('position') : { data: [] },
         // The company the job is for: it stamps and pays for this PO (Denny, item 16, Nov 5).
         job.data?.customer_id ? supabase.from('customers').select('display_name, payer_name, book_name').eq('id', job.data.customer_id).maybeSingle() : { data: null },
+        catIds.length ? supabase.from('catalog_items').select('id, code').in('id', catIds) : { data: [] },
       ])
+      const codeOf = Object.fromEntries((cats.data || []).map((c) => [c.id, c.code]))
       // Names for the signature boxes: the job's advisor (a stock PO: whoever made it) and the job's mechanics.
       const advisorId = job.data ? job.data.service_advisor_id : po.data.created_by
       const techIds = [...new Set((svcs.data || []).map((s) => s.technician_id).filter(Boolean))]
@@ -50,7 +54,10 @@ export default function PrintPo() {
       if (!live) return
       const nameOf = (pid) => (people.data || []).find((x) => x.id === pid)?.name || ''
       setError(lines.error || sup.error || job.error || null)
-      setD({ po: po.data, lines: (lines.data || []).filter((l) => Number(l.qty_ordered) > Number(l.qty_cancelled)), sup: sup.data, job: job.data, veh: veh.data, owner: owner.data?.display_name || '',
+      // a cancelled PO prints what was on it, stamped (151, review 28)
+      const kept = (lines.data || []).filter((l) => po.data.status === 'cancelled' || Number(l.qty_ordered) > Number(l.qty_cancelled))
+        .map((l) => ({ ...l, part_number: l.part_number || codeOf[l.catalog_item_id] || '', ...(po.data.status === 'cancelled' ? { qty_cancelled: 0 } : {}) }))
+      setD({ po: po.data, lines: kept, sup: sup.data, job: job.data, veh: veh.data, owner: owner.data?.display_name || '',
         // who the supplier bills (142): the paying PT of the job's company, or the PT named on a stock PO
         billTo: po.data.paid_by_name || (po.data.paid_by_pt ? owner.data?.payer_name || owner.data?.display_name || '' : ''),
         // the book inside that PT (143): the job's company's, or the one named on a stock PO
@@ -100,6 +107,7 @@ export default function PrintPo() {
           </div>
           <div className="doc-title">
             <h1>{t('pr.po.title')}</h1>
+            {(po.status === 'cancelled' || po.status === 'draft') && <div className={`doc-stamp ${po.status}`}>{t(`u151.po.stamp.${po.status}`)}</div>}
             <table className="doc-meta">
               <tbody>
                 <tr><th>{t('pr.po.no')}</th><td><b>{po.po_number}</b></td></tr>
@@ -147,7 +155,7 @@ export default function PrintPo() {
           </thead>
           <tbody>
             {lines.map((l) => {
-              const q = Number(l.qty_ordered) - Number(l.qty_cancelled)
+              const q = Number(l.qty_ordered) - Number(l.qty_cancelled)   // a cancelled PO: as ordered (qty_cancelled set to 0 above)
               return (
                 <React.Fragment key={l.id}>
                   <tr>
@@ -175,7 +183,7 @@ export default function PrintPo() {
             {po.talangan_name && (
               <div className="doc-block doc-talangan">
                 <div className="doc-label">{t('u146.talanganTitle')}</div>
-                <div><b>{po.talangan_name}</b>{po.talangan_phone ? ` · ${po.talangan_phone}` : ''}{po.talangan_nota ? ` · ${t('u146.notaShort', { no: po.talangan_nota })}` : ''}{money && <> · <span className="nowrap">{rp(tot.delivered || tot.total)}</span></>}</div>
+                <div><b>{po.talangan_name}</b>{po.talangan_phone ? ` · ${po.talangan_phone}` : ''}{po.talangan_nota ? ` · ${t('u146.notaShort', { no: po.talangan_nota })}` : ''}{money && <> · <span className="nowrap">{rp(tot.delivered > 0 ? tot.kept : tot.total)}</span></>}</div>
                 {/* the payback is approved in person (Denny, Nov 12): no Belum/Sudah diganti on paper */}
                 <div>{t('u145.reimbursedBy', { who: billTo ? [billTo, book].filter(Boolean).join(' · ') : t('u145.theShopPays') })}</div>
               </div>

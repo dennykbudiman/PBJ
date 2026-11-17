@@ -107,7 +107,7 @@ export const u138Id = {
   'set138.nothingToChange': 'Semua part sudah dengan harga ini.',
   'set138.applied': '{n} harga part diubah.',
   'db:Only the Owner can reprice all parts.': 'Hanya Owner yang bisa mengubah harga semua part.',
-  'drv138.keepOnVehicle': 'Jadikan supir tetap {plate}',
+  'drv138.keepOnVehicle': 'Jadikan sopir tetap {plate}',
   'po138.spare': '{n} tidak dipakai di job {job} · ada di stok',
   'po138.spareTyped': '{n} tidak dipakai di job {job} · part di luar katalog, belum tercatat di stok sampai ditambahkan ke katalog',
   'po138.spareOnJob': '{n} sudah datang tapi tidak dipakai di job ini · ada di stok',

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Card, Empty, Input, Modal, Select, Toggle, useToast } from '../../components/ui'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
-import { useShop } from '../../context/ShopContext'
+import { useShop, SHOP_COLS } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
 import { fmtDateTime } from '../../lib/format'
 import { DAYS, normHours } from '../../lib/hours'
@@ -59,7 +59,7 @@ export default function StaffHours({ id }) {
   const on = Boolean(settings?.staff_hours_limit)
 
   async function toggle(v) {
-    const { data, error } = await supabase.from('shop_settings').update({ staff_hours_limit: v }).eq('id', true).select().single()
+    const { data, error } = await supabase.from('shop_settings').update({ staff_hours_limit: v }).eq('id', true).select(SHOP_COLS).single()
     if (error) return toast(errorText(error, t), 'err')
     setSettings(data)
   }

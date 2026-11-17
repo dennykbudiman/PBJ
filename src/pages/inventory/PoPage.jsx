@@ -178,7 +178,7 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
               <h1 className="jobtitle">{t('inv.po.titleNo', { no: po.po_number })} <span className="muted">— {sup?.name || '—'}</span></h1>
               <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
                 <PoBadge status={po.status} />
-                {showCost && (anyDelivered || ptPaid) && <PayBadge status={po.payment_status} payer={payer} />}
+                {showCost && (anyDelivered || ptPaid) && <PayBadge status={po.payment_status} payer={payer} talangan={!!po.talangan_name} />}
                 <span className="small muted"><JobRef data={data} roId={po.ro_id} /></span>
               </div>
             </div>
@@ -440,8 +440,13 @@ export default function PoPage({ id, data, reload, go, canEdit, canPay, showCost
             {anyDelivered && <>
               <div className="sep" />
               <TotalRow label={t('inv.po.receivedValue')} value={tot.delivered} muted />
-              <TotalRow label={t('inv.po.paid')} value={tot.paid} muted />
-              <TotalRow label={t('inv.po.owed')} value={tot.owed} strong />
+              {/* nothing for the shop to pay the supplier: the PT pays it, or a driver already did (151, review 56) */}
+              {ptPaid || po.talangan_name
+                ? <div className="small muted">{po.talangan_name ? t('u151.po.talanganTitle') : t('u142.paidByPtTitle', { payer: payer || 'PT' })}</div>
+                : <>
+                  <TotalRow label={t('inv.po.paid')} value={tot.paid} muted />
+                  <TotalRow label={t('inv.po.owed')} value={tot.owed} strong />
+                </>}
             </>}
             {payments.length > 0 && <>
               <div className="sectionlabel">{t('inv.po.payments')}</div>

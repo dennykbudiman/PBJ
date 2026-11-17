@@ -22,7 +22,7 @@ function useNames() {
   useEffect(() => {
     Promise.all([
       selectAll(() => supabase.from('customers').select('id, display_name').order('id')),
-      selectAll(() => supabase.from('vehicles').select('id, plate, make, model, year, customer_id').order('id')),
+      selectAll(() => supabase.from('vehicles').select('id, plate, make, model, year, customer_id, status').order('id')),
     ]).then(([c, v]) => setNames({
       customer: Object.fromEntries((c.data || []).map((x) => [x.id, x])),
       vehicle: Object.fromEntries((v.data || []).map((x) => [x.id, x])),
@@ -131,7 +131,7 @@ function InvoicesList() {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
-  const [status, setStatus] = useState(params.get('berkas') ? 'all' : 'open')
+  const [status, setStatus] = useState(() => (['open', 'overdue', 'paid', 'all'].includes(params.get('status')) ? params.get('status') : 'all'))
   const [berkas, setBerkas] = useState(['no', 'yes'].includes(params.get('berkas')) ? params.get('berkas') : 'all')
   const [advisor, setAdvisor] = useState('')
   const [papers, setPapers] = useState(null)
@@ -145,9 +145,12 @@ function InvoicesList() {
     .then((r) => setPapers(Object.fromEntries((r.data || []).map((x) => [x.ro_id, x]))))
   useEffect(() => { if (ownerAdmin) loadPapers() }, [ownerAdmin])
   const needle = q.trim().toLowerCase()
+  // a login that doesn't see money has no payment status: the money filters and totals don't apply (151, review 77)
+  const noMoney = (rows || []).length > 0 && (rows || []).every((j) => j.payment_status == null)
   const shown = useMemo(() => {
     const list = (rows || []).filter((j) => {
       const st = jobState(j, today)
+      if (noMoney) return matches(needle, invoiceNo(j.invoice_number), jobNo(j.job_number), names?.customer[j.customer_id]?.display_name, names?.vehicle[j.vehicle_id]?.plate)
       if (status === 'open' && st === 'paid') return false
       if (status === 'overdue' && st !== 'overdue') return false
       if (status === 'paid' && st !== 'paid') return false
@@ -160,7 +163,7 @@ function InvoicesList() {
     })
     // papers still to come: oldest first, so the missing bundles stand out
     return ownerAdmin && berkas === 'no' ? [...list].sort((a, b) => String(a.invoiced_at).localeCompare(String(b.invoiced_at))) : list
-  }, [rows, names, status, needle, today, ownerAdmin, papers, berkas, advisor])
+  }, [rows, names, status, needle, today, ownerAdmin, papers, berkas, advisor, noMoney])
   const pickable = ownerAdmin && papers ? shown.filter((j) => !papers[j.id]) : []
   const pickedShown = pickable.filter((j) => picked.has(j.id))
   const toggle = (id) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -173,12 +176,12 @@ function InvoicesList() {
       <PageHead title={t('cust.area.invoices')} sub={t('jobs.invSub')} />
       <div className="filterbar">
         <SearchBox value={q} onChange={setQ} placeholder={t('jobs.searchInv')} />
-        <select className="select chipselect" value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t('cat.status')}>
+        {!noMoney && <select className="select chipselect" value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t('cat.status')}>
           <option value="open">{t('jobs.f.unpaid')}</option>
           <option value="overdue">{t('job.state.overdue')}</option>
           <option value="paid">{t('job.state.paid')}</option>
           <option value="all">{t('cat.statusAll')}</option>
-        </select>
+        </select>}
         {ownerAdmin && (
           <>
             <select className="select chipselect" value={berkas} onChange={(e) => setBerkas(e.target.value)} aria-label={t('u148.col')}>
@@ -238,7 +241,7 @@ function InvoicesList() {
           </table>
         </div>
       )}
-      {rows && shown.length > 0 && <div className="hint">{t('jobs.invTotal', { n: shown.length, amount: rp(outstanding), overdue: rp(overdue) })}</div>}
+      {rows && shown.length > 0 && !noMoney && <div className="hint">{t('jobs.invTotal', { n: shown.length, amount: rp(outstanding), overdue: rp(overdue) })}</div>}
       {ownerAdmin && (
         <MarkPaperworkModal open={marking} ids={pickedShown.map((j) => j.id)} label={pickedShown.slice(0, 8).map((j) => invoiceNo(j.invoice_number)).join(', ') + (pickedShown.length > 8 ? ' …' : '')}
           onClose={() => setMarking(false)}
@@ -263,7 +266,14 @@ function PaymentsList() {
       selectAll(() => supabase.from('repair_orders').select('id, job_number, invoice_number, vehicle_id').order('id')),
       // Company credit paid back as money is money out too, so it is listed with the refunds.
       selectAll(() => supabase.from('credit_memos').select('id, customer_id, amount, refunded_at, refund_method, refund_reference').not('refunded_at', 'is', null).order('id')),
-    ]).then(([p, j, cm]) => {
+      // a payment on an invoice that was later voided shows the number it was paid against (151, review 62)
+      selectAll(() => supabase.from('invoice_voids').select('id, ro_id, invoice_number, voided_at').order('voided_at').order('id')),
+    ]).then(([p, j, cm, vd]) => {
+      const voids = vd.data || []
+      for (const x of p.data || []) {
+        const v = voids.find((w) => w.ro_id === x.ro_id && w.voided_at > x.created_at)
+        if (v) x.paid_against = v.invoice_number
+      }
       const paidBack = (cm.data || []).map((c) => ({ id: `cm-${c.id}`, payback: true, ro_id: null, customer_id: c.customer_id, kind: 'refund', source: 'manual',
         method: c.refund_method, amount: c.amount, paid_at: c.refunded_at, reference: c.refund_reference, receipt_number: null }))
       setRows([...(p.data || []), ...paidBack].sort((a, b) => (a.paid_at < b.paid_at ? 1 : a.paid_at > b.paid_at ? -1 : 0)))
@@ -297,7 +307,7 @@ function PaymentsList() {
                   <tr key={p.id} className="click" onClick={() => navigate(to)}>
                     <td className="muted">{fmtDate(p.paid_at, lang, timezone)}</td>
                     <td>{names.customer[p.customer_id]?.display_name || '—'}</td>
-                    <td>{p.payback ? <Badge color="gray">{t('jobs.creditPaidBack')}</Badge> : <Link className="rowlink" to={to} onClick={(e) => e.stopPropagation()}>{j?.invoice_number ? invoiceNo(j.invoice_number) : j ? `#${jobNo(j.job_number)}` : '—'}</Link>}</td>
+                    <td>{p.payback ? <Badge color="gray">{t('jobs.creditPaidBack')}</Badge> : <Link className="rowlink" to={to} onClick={(e) => e.stopPropagation()}>{p.paid_against ? invoiceNo(p.paid_against) : j?.invoice_number ? invoiceNo(j.invoice_number) : j ? `#${jobNo(j.job_number)}` : '—'}</Link>}</td>
                     <td>{p.method ? t(`job.pay.${p.method}`) : '—'}{p.payback ? null : p.source === 'void_credit' ? <> <Badge color="gray">{t('jobs.movedToCredit')}</Badge></> : p.kind === 'refund' && <> <Badge color="red">{t('job.kind.refund')}</Badge></>}</td>
                     <td className="wide-only muted">{[sysText(p.reference, t), p.receipt_number].filter(Boolean).join(' · ') || '—'}</td>
                     <td className="num" style={{ color: p.kind === 'refund' ? 'var(--red)' : undefined }}><b>{p.kind === 'refund' ? '-' : ''}{rp(p.amount)}</b></td>
@@ -364,6 +374,8 @@ function DeferredList({ customerId, embedded }) {
     if (!j || (customerId && j.customer_id !== customerId)) return false
     // "Waiting" also lists work deferred on estimates still open (shown with a note, without actions).
     const st = stateOf(s)
+    // a sold or inactive truck's deferred work no longer waits (151, review 110)
+    if (show === 'open' && ['sold', 'inactive'].includes(names?.vehicle[j.vehicle_id]?.status)) return false
     if (show !== 'all' && st !== show && !(show === 'open' && st === 'onjob')) return false
     return matches(needle, s.name, names?.customer[j.customer_id]?.display_name, names?.vehicle[j.vehicle_id]?.plate, jobNo(j.job_number))
   })

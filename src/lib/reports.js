@@ -51,10 +51,13 @@ export function groupBy(rows, keyOf) {
 // Spreadsheet export. Tab-separated UTF-16 with a byte-order mark is what Excel opens straight into columns,
 // with accents and dashes intact, whatever the computer's regional settings (Google Sheets and LibreOffice read it too).
 // Numbers stay plain numbers (no thousands dots). Text that starts like a formula gets a ' so Excel shows it as text.
-export function toCsv(header, rows) {
+// In Indonesian a decimal number gets a comma (2,5), as Indonesian Excel reads it (151, review 36); whole numbers
+// (rupiah) are the same either way.
+const csvComma = () => { try { return document.documentElement.lang === 'id' } catch { return false } }
+export function toCsv(header, rows, comma = csvComma()) {
   const cell = (v) => {
     if (v === null || v === undefined) return ''
-    if (typeof v === 'number') return String(v)
+    if (typeof v === 'number') return comma && !Number.isInteger(v) ? String(v).replace('.', ',') : String(v)
     let s = String(v)
     if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
     return /[\t"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s

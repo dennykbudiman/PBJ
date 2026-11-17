@@ -11,7 +11,7 @@ export const historyEn = {
   'fh.col.date': 'Date', 'fh.col.invoice': 'Invoice', 'fh.col.job': 'Job', 'fh.col.billedTo': 'Billed to', 'fh.col.service': 'Service',
   'fh.col.tech': 'Technician', 'fh.col.itemType': 'Line type', 'fh.col.item': 'Part / work', 'fh.col.qty': 'Qty', 'fh.col.amount': 'Amount',
   'fh.col.invoiceTotal': 'Invoice total', 'fh.col.work': 'Work done',
-  'fh.type.part': 'part', 'fh.type.labor': 'labor', 'fh.type.sublet': 'sublet', 'fh.type.fee': 'fee', 'fh.type.discount': 'discount', 'fh.serviceDiscount': 'Service discount',
+  'fh.type.part': 'part', 'fh.type.labor': 'labour', 'fh.type.sublet': 'sublet', 'fh.type.fee': 'fee', 'fh.type.discount': 'discount', 'fh.serviceDiscount': 'Service discount',
   'fh.ui.list': 'Vehicle list', 'fh.ui.fleet': 'Vehicles + service history', 'fh.ui.prices': 'Include prices', 'fh.ui.download': 'Download (Excel CSV)',
   'fh.ui.history': 'Service history', 'fh.ui.back': 'Back', 'fh.nothing': 'Pick a vehicle or a company first.', 'fh.noVehicle': 'Vehicle not found.',
 }

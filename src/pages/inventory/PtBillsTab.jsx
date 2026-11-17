@@ -8,6 +8,8 @@ import { fmtDate, jobNo, num, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { nameKey, payerBookLabel } from '../../lib/books'
 import { SHOW_TALANGAN_PAYBACK } from '../../lib/inventory'
+import { downloadCsv } from '../../lib/reports'
+import PrintedBy from '../../components/PrintedBy'
 
 // Inventory → Tagihan PT (142, Denny Nov 9): what each PT owes for a month. From the POs it pays directly (delivered
 // that month, less returns), per supplier, to check against the supplier's month-end bill; a PO the driver paid first
@@ -18,8 +20,12 @@ const bkey = (payer, book) => `${nameKey(payer)}|${nameKey(book)}`
 
 export default function PtBillsTab() {
   const { t, lang } = useT()
-  const { timezone } = useShop()
-  const [month, setMonth] = useState(() => shopToday(timezone).slice(0, 7))
+  const { timezone, settings } = useShop()
+  // opens on last month: the month whose bills are being checked (151, review 14)
+  const [month, setMonth] = useState(() => {
+    const [y, m] = shopToday(timezone).split('-').map(Number)
+    return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7)
+  })
   const [res, setRes] = useState(null)
   const [book, setBook] = useState('') // one book only (143): '' = all; "payer|book"
   useEffect(() => {
@@ -96,6 +102,21 @@ export default function PtBillsTab() {
   }
   const monthLabel = new Date(`${month}-01T00:00:00Z`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' })
   const bookLabel = book ? bookOptions.find(([k]) => k === book)?.[1] : t('u143.allBooks')
+  // a month not over yet: the list can still grow (151, review 14)
+  const today = shopToday(timezone)
+  const unfinished = month >= today.slice(0, 7)
+  const anyEstimated = oil.some((o) => o.estimated)
+  function csv() {
+    const head = [t('u142.company'), t('u143.book'), t('u151.csv.kind'), t('u151.csv.toWhom'), t('u142.received'), t('u151.csv.doc'), t('inv.col.part'),
+      t('u145.col.truck'), t('u151.csv.forCompany'), t('inv.col.qty'), t('inv.col.amount')]
+    const rows = []
+    for (const p of groups) {
+      for (const s of p.sups) for (const l of s.lines) rows.push([p.payer, l.book || '', t('u151.csv.supplier'), s.name || '', l.delivered_at, [l.po_number, l.supplier_invoice_no].filter(Boolean).join(' · '), l.name, l.plate || '', l.company || '', Number(l.qty), Number(l.amount)])
+      for (const s of p.drivers) for (const l of s.lines) rows.push([p.payer, l.book || '', t('u151.csv.talangan'), s.name || '', l.delivered_at, l.po_number, l.name, l.plate || '', l.company || '', Number(l.qty), Number(l.amount)])
+      for (const s of p.oil) for (const o of s.lines) rows.push([p.payer, o.book || '', t('u151.csv.drumOil'), payerBookLabel(s.payer, s.book), o.day, o.invoice_no, o.oil + (o.estimated ? ' *' : ''), o.plate || '', o.company || '', Number(o.litres), Number(o.amount)])
+    }
+    downloadCsv(`tagihan-pt-${month}${book ? '-' + nameKey(bookLabel).replace(/[^a-z0-9]+/g, '-') : ''}.csv`, head, rows)
+  }
 
   // on paper the table head repeats on every page, with the PT and group above it (item 30)
   const capRow = (caption, cols) => <tr className="print-only print-cap"><th colSpan={cols}>{caption}</th></tr>
@@ -138,14 +159,17 @@ export default function PtBillsTab() {
                 {bookOptions.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
               </select>
             )}
+            <Button size="sm" onClick={csv} disabled={!groups.length}>{t('u145.csv')}</Button>
             <Button size="sm" icon="print" onClick={() => window.print()}>{t('u142.print')}</Button>
           </div>
         } />
       </div>
       {/* on paper: a title line instead of the controls (item 30) */}
+      {unfinished && <div className="no-print" style={{ marginBottom: 12 }}><Notice kind="warn">{t('u151.ptNotClosed', { date: fmtDate(today, lang) })}</Notice></div>}
       <div className="print-only print-title">
-        <h1>{t('u142.ptBillsTitle')}</h1>
-        <div>{monthLabel} · {bookLabel}</div>
+        <div className="small">{settings?.shop_name || settings?.legal_name}</div>
+        <h1>{t('u142.ptBillsTitle')}{unfinished && ` · ${t('u151.provisional')}`}</h1>
+        <div>{unfinished ? t('u151.monthSoFar', { month: monthLabel, date: fmtDate(today, lang) }) : monthLabel} · {bookLabel}</div>
       </div>
       {res?.error && <Notice kind="err">{errorText(res.error, t)}</Notice>}
       {!res ? <div className="muted">{t('common.loading')}</div> : groups.length === 0 ? (
@@ -190,7 +214,7 @@ export default function PtBillsTab() {
               </div>
               <div className="table compact flush print-table">
                 <table>
-                  <thead>{capRow(`${p.payer} · ${t('u145.drumOilTo', { owner: payerBookLabel(s.payer, s.book) })}`, 8)}<tr><th>{t('u145.col.date')}</th><th>{t('inv.col.invoice')}</th><th>{t('u145.col.oil')}</th><th className="wide-only">{t('u145.col.truck')}</th><th>{t('u143.book')}</th>
+                  <thead>{capRow(`${p.payer} · ${t('u145.drumOilTo', { owner: payerBookLabel(s.payer, s.book) })}`, 8)}<tr><th>{t('u145.col.date')}</th><th>{t('u151.shopInvoice')}</th><th>{t('u145.col.oil')}</th><th className="wide-only">{t('u145.col.truck')}</th><th>{t('u143.book')}</th>
                     <th className="num">{t('u142.litres')}</th><th className="num">{t('u145.col.perL')}</th><th className="num">{t('inv.col.amount')}</th></tr></thead>
                   <tbody>
                     {s.lines.map((o, i) => (
@@ -223,6 +247,9 @@ export default function PtBillsTab() {
         </section>
       ))}
       <div className="hint no-print">{t('u142.ptBillsHint')} {t('u145.ptBillsHint')}</div>
+      {/* on paper: what "*" means, and who printed it (151, reviews 19 and 91) */}
+      {anyEstimated && <div className="print-only small">{t('u151.estimatedNote')}</div>}
+      <div className="print-only"><PrintedBy lang={lang} timezone={timezone} /></div>
     </>
   )
 }

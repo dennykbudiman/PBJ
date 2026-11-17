@@ -17,7 +17,7 @@ export const u144Id = {
   'u144.summary': 'Ringkasan (rincian lengkap di halaman {page})',
   'u144.contHead': 'Lanjutan · halaman {page} dari {pages}',
   'u144.pageOf': 'Halaman {page} dari {pages}',
-  'u144.parafAdvisor': 'Paraf service advisor', 'u144.parafDriver': 'Paraf supir',
+  'u144.parafAdvisor': 'Paraf service advisor', 'u144.parafDriver': 'Paraf sopir',
   'u144.parafCustomer': 'Paraf pelanggan', 'u144.parafShop': 'Paraf bengkel',
   'u144.signOnPage1': 'Tanda tangan ada di halaman 1.',
   'u144.preparing': 'Menyiapkan halaman…',

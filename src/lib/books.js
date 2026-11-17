@@ -1,6 +1,7 @@
 // Books (pembukuan) inside a paying PT (143). A company's book is its "Pembukuan", else its own name; its PT is its
 // "PT pembayar", else its own name. Spelling and spaces don't matter (as payer_key in the database).
-export const nameKey = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+// any kind of space (also pasted from WhatsApp: non-breaking, zero-width), as payer_key does (151, review 71)
+export const nameKey = (s) => String(s ?? '').replace(/[\s\u200B]+/g, ' ').trim().toLowerCase()
 export const payerOf = (c) => (c?.payer_name?.trim() || c?.display_name || '').trim()
 export const bookOf = (c) => (c?.book_name?.trim() || c?.display_name || '').trim().replace(/\s+/g, ' ')
 

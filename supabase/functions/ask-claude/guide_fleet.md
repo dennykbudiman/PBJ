@@ -5,7 +5,7 @@ Latar belakang untuk "Tanya Claude" (per 16 November 2026) bagi login Fleet mana
 ## Yang bisa dan tidak bisa
 
 Bisa:
-- melihat data perusahaan, kontak, kendaraan (termasuk supir), jadwal servis dan servis jatuh tempo;
+- melihat data perusahaan, kontak, kendaraan (termasuk sopir), jadwal servis dan servis jatuh tempo;
 - melihat repair order dan invoice lengkap dengan harga jual, total, PPN, pembayaran dan sisa tagihan;
 - menyetujui, menunda atau menolak servis yang menunggu, satu kali (bila bengkel memberi login Anda "Setujui servis" dan persetujuan otomatis bengkel dimatikan);
 - mencetak estimasi, invoice, riwayat servis dan daftar kendaraan;

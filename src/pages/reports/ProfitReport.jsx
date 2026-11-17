@@ -16,9 +16,27 @@ export default function ProfitReport() {
   const period = usePeriod('this_month')
   const [view, setView] = useState('auto')
   const [onlyNoCost, setOnlyNoCost] = useState(false)
-  const { rows, error, loading } = useReport('report_profit', { p_from: period.from, p_to: period.to }, [period.from, period.to], period.valid)
+  const { rows: raw, error, loading } = useReport('report_profit', { p_from: period.from, p_to: period.to }, [period.from, period.to], period.valid)
+  // parts and outside work a PT paid its supplier for directly aren't the shop's sale or cost (151, review 3)
+  const { rows: ptRows, error: ptError } = useReport('report_profit_pt', { p_from: period.from, p_to: period.to }, [period.from, period.to], period.valid)
+  const rows = useMemo(() => {
+    // the PT's share must be in before the numbers are shown (else they'd be too high)
+    if (!raw || (!ptRows && !ptError)) return null
+    const pt = new Map((ptRows || []).map((x) => [x.ro_id, x]))
+    return raw.map((r) => {
+      const x = pt.get(r.ro_id)
+      if (!x) return { ...r, pt_sales: 0 }
+      const s = Number(x.pt_sales) || 0
+      const n = (k) => Number(x[k]) || 0
+      return { ...r, parts: Number(r.parts) - n('pt_parts'), parts_cost: Number(r.parts_cost) - n('pt_parts_cost'),
+        sublet: Number(r.sublet) - n('pt_sublet'), sublet_cost: Number(r.sublet_cost) - n('pt_sublet_cost'), subtotal: Number(r.subtotal) - s, pt_sales: s,
+        // a discount bigger than the shop's own share was carried by the PT's share: the columns still add up
+        discounts: Number(r.discounts) - Math.max(n('pt_parts') + n('pt_sublet') - s, 0) }
+    })
+  }, [raw, ptRows, ptError])
   const [company, setCompany] = useCompany(rows)
   const list = useMemo(() => (rows || []).filter((r) => !company || r.customer_id === company).map((r) => withProfit({ ...r, ...sumBy([r], MONEY) })), [rows, company])
+  const ptTotal = list.reduce((a, r) => a + (Number(r.pt_sales) || 0), 0)
   const tot = withProfit(sumBy(list, MONEY))
   const missingInv = list.filter((r) => r.no_cost_lines > 0).length
   const by = view === 'auto' ? (daysBetween(period.from, period.to) > 62 ? 'month' : 'day') : view
@@ -40,7 +58,7 @@ export default function ProfitReport() {
       t('rep.col.parts'), t('rep.col.partsCost'), t('rep.col.sublet'), t('rep.col.subletCost'), t('rep.m.labor'), t('rep.m.fees'), t('rep.m.discounts'),
       t('rep.m.sales'), t('rep.col.cost'), t('rep.m.gross'), `${t('rep.m.margin')} %`, t('rep.col.noCost')]
     downloadCsv(`profit-${period.from}-${period.to}.csv`, head, list.map((r) => [invoiceNo(r.invoice_number), r.invoiced_on, jobNo(r.job_number), r.company, r.plate,
-      r.parts, r.parts_cost, r.sublet, r.sublet_cost, r.labor, r.fees, -r.discounts, r.subtotal, r.cost, r.gross,
+      r.parts, r.parts_cost, r.sublet, r.sublet_cost, r.labor, r.fees, r.discounts, r.subtotal, r.cost, r.gross,   // discounts positive, as in the other CSVs (151)
       r.subtotal ? Math.round((r.gross / r.subtotal) * 1000) / 10 : null, r.no_cost_lines]))
   }
 
@@ -58,7 +76,7 @@ export default function ProfitReport() {
           <option value="invoices">{t('rep.g.invoices')}</option>
         </select>
       </ReportBar>
-      <ReportError error={error} />
+      <ReportError error={error || ptError} />
       {tot.no_cost_lines > 0 && (
         <Notice kind="warn" style={{ marginBottom: 12 }}>
           {t('rep.profit.noCost', { n: num(tot.no_cost_lines), inv: num(missingInv) })}{' '}
@@ -66,7 +84,7 @@ export default function ProfitReport() {
         </Notice>
       )}
       <div className={`kpis four ${loading ? 'stale' : ''}`} style={{ marginTop: 0, marginBottom: 8 }}>
-        <Kpi label={t('rep.m.sales')} value={rp(tot.subtotal)} note={t('rep.profit.salesNote', { n: list.length })} />
+        <Kpi label={t('rep.m.sales')} value={rp(tot.subtotal)} note={ptTotal > 0 ? t('u151.profitPtNote', { n: list.length, amount: rp(ptTotal) }) : t('rep.profit.salesNote', { n: list.length })} />
         <Kpi label={t('rep.m.cost')} value={rp(tot.cost)} note={t('rep.profit.costNote')} />
         <Kpi label={t('rep.m.gross')} value={rp(tot.gross)} tone={tot.gross < 0 ? 'red' : undefined} note={t('rep.profit.grossNote')} />
         <Kpi label={t('rep.m.margin')} value={pct(tot.gross, tot.subtotal, 1)} />

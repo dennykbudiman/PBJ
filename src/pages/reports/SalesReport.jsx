@@ -83,6 +83,8 @@ export default function SalesReport() {
         <Kpi label={t('rep.sales.total')} value={rp(tot.total)} note={t('rep.sales.nInvoices', { n: list.length })} />
         <Kpi label={t('rep.m.subtotal')} value={rp(tot.subtotal)} note={t('rep.sales.beforeTax')} />
         <Kpi label={t('rep.m.tax')} value={rp(tot.tax)} />
+        {/* the shop's own share, as the Dasbor counts it (151, review 16) */}
+        {tot.settled_direct > 0 && <Kpi label={t('u151.rep.shopShare')} value={rp(tot.total - tot.settled_direct)} note={t('u151.rep.shopShareNote')} />}
       </div>
       <div className="posum muted" style={{ marginBottom: 14 }}>
         {['parts', 'labor', 'sublet', 'fees'].map((m) => <span key={m}>{t(`rep.m.${m}`)} <b className="ink">{rp(tot[m])}</b></span>)}

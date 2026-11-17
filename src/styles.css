@@ -524,6 +524,10 @@ span.seg-btn { cursor: default; }
 @page report { size: A4 landscape; margin: 10mm 10mm 12mm;
   @bottom-right { content: counter(page) " / " counter(pages); font-size: 8pt; color: #777; font-family: system-ui, sans-serif; } }
 .doc.sheet { page: sheet; }
+/* 151 (review 19): "Cetak semua" statements: page numbers can't restart per book, so no running "3 / 12";
+   each book's own footer names the book and "Buku n dari m" */
+@page stall { size: A4; margin: 12mm 12mm 13mm; @bottom-right { content: none; } }
+.st-all .st-doc { page: stall; }
 @media print {
   .no-print { display: none !important; }
   html, body, #root { background: #fff !important; height: auto; }
@@ -537,6 +541,11 @@ span.seg-btn { cursor: default; }
   .doc { width: auto; margin: 12px; padding: 16px; min-height: 0; }
   .doc.sheet { height: auto; }
   .sheet-in, .sheet-in.compact { height: auto; zoom: 1; }
+  /* phones: a wide table scrolls inside the paper, the page itself doesn't scroll sideways (151, review 20) */
+  .doc { overflow-x: auto; max-width: calc(100vw - 24px); box-sizing: border-box; }
+  .doc-head { flex-wrap: wrap; gap: 12px; }
+  .print-wrap { overflow-x: hidden; }
+  .st-boxes.two { flex-direction: column; }
 }
 
 /* ---------- Stage 6: work board & calendar ---------- */
@@ -932,6 +941,10 @@ tr.totalrow td { border-top: 2px solid var(--line); }
   /* app pages (Tagihan PT, Tagihan supplier, Hari ini, Laporan, Drum…): no controls, full tables, smaller text */
   .app .content input, .app .content select, .app .content textarea, .app .content button, .app .content .seg,
   .app .content .chipselect, .app .content .filterbar .spacer { display: none !important; }
+  /* a name or plate shown as a button in a table row (Umur piutang, Biaya armada, Teknisi) stays on paper as text,
+     without its arrow (151, review 17) */
+  .app .content table button.linkbtn { display: inline !important; border: 0; background: none; padding: 0; color: inherit; font: inherit; }
+  .app .content table button.linkbtn svg { display: none !important; }
   .app .content a { color: inherit; text-decoration: none; }
   .app .card { break-inside: auto; border: none; padding: 0 0 6px; }
   .app h2, .app .pt-grouphead { break-after: avoid; }
@@ -1036,3 +1049,9 @@ tr.totalrow td { border-top: 2px solid var(--line); }
 .old-bottom .old-total { width: 100%; margin-left: 0; }
 .old-bottom .old-total th { text-align: left; }
 .old-bottom .old-note { margin-top: 6px; max-width: none; width: auto; }
+
+/* 151 (review 28): a cancelled or draft PO says so on paper */
+.doc-stamp { display: inline-block; margin: 4px 0 6px; padding: 3px 10px; border: 2px solid #b91c1c; color: #b91c1c; font-weight: 800; letter-spacing: .08em; font-size: 14px; border-radius: 4px; }
+.doc-stamp.draft { border-color: #92400e; color: #92400e; }
+/* 151 (review 21): Tutup bulan lists */
+.close-list { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.7; }

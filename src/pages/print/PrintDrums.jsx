@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { usePageTitle } from '../../lib/branding'
 import PrintedBy from '../../components/PrintedBy'
+import { shopToday } from '../../lib/customers'
 import { useShop } from '../../context/ShopContext'
 import { useAuth } from '../../context/AuthContext'
 import { useT, translate } from '../../lib/i18n'
@@ -24,7 +25,9 @@ const preappOnly = (x) => {
   if (!lines.length) return null
   const litres = lines.reduce((a, l) => a + (Number(l.litres) || 0), 0)
   const amount = lines.reduce((a, l) => a + (Number(l.amount) || 0), 0)
-  return { ...x, lines, litres, amount, owed_all: amount, paid: 0, open: x.owes ? amount : 0, payments: [] }
+  // payments ("Tandai lunas") cover a drum's oldest oil first: what of the old oil is paid comes off (151, review 134)
+  const paid = Math.min(Number(x.old_paid ?? 0), amount)
+  return { ...x, lines, litres, amount, owed_all: amount, paid, open: x.owes ? Math.max(amount - paid, 0) : 0, payments: [] }
 }
 
 // A bill for a period (150c, Denny 17 Nov): only the oil on invoices in the period, and the total is that oil.
@@ -99,11 +102,11 @@ export default function PrintDrums() {
   if (!res || !settings) return <div className="print-msg">{tUi('common.loading')}</div>
   if (res.error) return <div className="print-msg">{errorText(res.error, tUi)}</div>
 
-  const period = old ? t('u150.oldPeriod', { date: fmtDate('2026-11-02', lang) }) : from || to ? `${from ? fmtDate(from, lang) : '…'} – ${to ? fmtDate(to, lang) : fmtDate(new Date().toISOString().slice(0, 10), lang)}` : t('u145.sinceOpened')
+  const period = old ? t('u150.oldPeriod', { date: fmtDate('2026-11-02', lang) }) : from || to ? `${from ? fmtDate(from, lang) : '…'} – ${to ? fmtDate(to, lang) : fmtDate(shopToday(timezone), lang)}` : t('u145.sinceOpened')
   function csv() {
-    const rows = [[t('u145.csv.from'), t('u145.csv.to'), t('u145.col.oil'), t('u145.col.date'), t('inv.col.invoice'), t('u145.col.truck'), t('u142.company'), t('u142.litres'), t('u145.col.perL'), t('inv.col.amount'), t('u145.csv.toPay')]]
+    const rows = [[t('u145.csv.from'), t('u145.csv.to'), t('u145.col.oil'), t('u145.col.date'), t('u151.shopInvoice'), t('u145.col.truck'), t('u142.company'), t('u142.litres'), t('u145.col.perL'), t('inv.col.amount'), t('u145.csv.toPay')]]
     for (const st of statements) for (const { drum: d, debtor: x } of st.drums) for (const l of x.lines || []) {
-      rows.push([st.from, st.to, d.oil, l.day, l.preapp ? t('u149.preappCsv', { km: l.km ?? '' }) : l.invoice_no, l.plate || '', l.company || '', String(l.litres).replace('.', ','), d.cost_per_l, l.amount, st.owes ? 'ya' : 'tidak'])
+      rows.push([st.from, st.to, d.oil, l.day, l.preapp ? t('u149.preappCsv', { km: l.km ?? '' }) : l.invoice_no, l.plate || '', l.company || '', String(l.litres).replace('.', ','), d.cost_per_l, l.amount, st.owes ? t('u151.yes') : t('u151.no')])
     }
     const text = rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n')
     const a = document.createElement('a')
@@ -153,7 +156,7 @@ export default function PrintDrums() {
               </div>
             </div>
             <div className="doc-title">
-              <h1>{old ? (st.owes ? t('u150.oldTitle') : t('u150.oldOwnTitle')) : st.owes ? t('u145.drumDocTitle') : t('u145.drumOwnTitle')}</h1>
+              <h1>{old ? (st.owes ? t('u150.oldTitle') : t('u150.oldOwnTitle')) : !byPeriod && st.owes ? t('u151.accountTitle') : st.owes ? t('u145.drumDocTitle') : t('u145.drumOwnTitle')}</h1>
               <table className="doc-meta"><tbody>
                 <tr><th>{t('u145.period')}</th><td>{period}</td></tr>
                               </tbody></table>
@@ -170,7 +173,7 @@ export default function PrintDrums() {
                 <span className="small muted">{t('u145.drumInfo', { litres: num(d.litres, 2), date: fmtDate(d.opened_on, lang), price: rp(d.cost_per_l), unit: d.unit || 'L', left: num(d.left, 2) })}{d.estimated && ` · ${t('u143.estimate')}`}{d.emptied_on && ` · ${t('u149.emptied', { date: fmtDate(d.emptied_on, lang) })}`}</span>
               </div>
               <table className="doc-lines">
-                <thead><tr><th>{t('u145.col.date')}</th><th>{t('inv.col.invoice')}</th><th>{t('u145.col.truck')}</th><th>{t('u142.company')}</th>
+                <thead><tr><th>{t('u145.col.date')}</th><th>{t('u151.shopInvoice')}</th><th>{t('u145.col.truck')}</th><th>{t('u142.company')}</th>
                   <th className="num">{t('u142.litres')}</th><th className="num">{t('u145.col.perL')}</th><th className="num">{t('inv.col.amount')}</th></tr></thead>
                 <tbody>
                   {(x.lines || []).map((l, k) => (
@@ -192,11 +195,13 @@ export default function PrintDrums() {
             <div className="old-bottom">
               {/* the total on its own full-width line, the note and the amount in words under it */}
               <table className="doc-totals old-total"><tbody>
-                <tr className="grand"><th>{t('u150.oldPays', { from: st.from, to: st.to, litres: num(st.litres, 2) })}</th><td>{rp(st.amount)}</td></tr>
+                <tr className={st.paid > 0 ? '' : 'grand'}><th>{t('u150.oldPays', { from: st.from, to: st.to, litres: num(st.litres, 2) })}</th><td>{rp(st.amount)}</td></tr>
+                {st.paid > 0 && <tr><th>{t('u151.oldPaid')}</th><td>-{rp(st.paid)}</td></tr>}
+                {st.paid > 0 && <tr className="grand"><th>{st.open > 0 ? t('u151.oldOpen') : t('u151.oldPaidUp')}</th><td>{rp(st.open)}</td></tr>}
               </tbody></table>
               <div className="doc-notes small old-note">
                 <div>{t('u150.oldNote')}</div>
-                {st.amount > 0 && <div style={{ marginTop: 2 }}><i>{t('u145.terbilang', { words: terbilang(st.amount) })}</i></div>}
+                {st.open > 0 && <div style={{ marginTop: 2 }}><i>{t('u145.terbilang', { words: terbilang(st.open) })}</i></div>}
               </div>
             </div>
           ) : st.owes && byPeriod ? (
@@ -207,6 +212,7 @@ export default function PrintDrums() {
               </tbody></table>
               <div className="doc-notes small old-note">
                 <div>{t('u150.perNote')}</div>
+                <div style={{ marginTop: 2 }}>{t('u151.payOnce', { book: st.from })}</div>
                 {st.amount > 0 && <div style={{ marginTop: 2 }}><i>{t('u145.terbilang', { words: terbilang(st.amount) })}</i></div>}
                 <div className="muted per-info" style={{ marginTop: 4 }}>{t(st.drums.length > 1 ? 'u150.perInfoN' : 'u150.perInfo1', { owed: rp(st.owed), paid: rp(st.paid), open: rp(st.open) })}</div>
               </div>
@@ -214,26 +220,25 @@ export default function PrintDrums() {
           ) : st.owes ? (
             <div className="doc-bottom">
               <div className="doc-notes small">
-                <div>{t('u145.drumNote')}</div>
-                {st.open > 0 && <div style={{ marginTop: 4 }}><i>{t('u145.terbilang', { words: terbilang(st.open) })}</i></div>}
+                <div><b>{t('u151.accountNote')}</b></div>
               </div>
               <table className="doc-totals"><tbody>
-                <tr><th>{t('u145.periodTotal', { litres: num(st.litres, 2) })}</th><td>{rp(st.amount)}</td></tr>
+                <tr><th>{t('u151.allSinceOpened', { litres: num(st.litres, 2) })}</th><td>{rp(st.amount)}</td></tr>
                 <tr className="rule"><th>{t('u145.owedAll')}</th><td>{rp(st.owed)}</td></tr>
                 <tr><th>{t('u145.paidAll')}</th><td>-{rp(st.paid)}</td></tr>
-                <tr className="grand"><th>{st.open > 0 ? t('u145.pays', { from: st.from, to: st.to }) : t('u145.paidUp')}</th><td>{rp(st.open)}</td></tr>
+                <tr className="grand"><th>{st.open > 0 ? t('u151.stillOpen', { from: st.from, to: st.to }) : t('u145.paidUp')}</th><td>{rp(st.open)}</td></tr>
               </tbody></table>
             </div>
           ) : (
             <div className="doc-bottom"><div className="doc-notes small">{t('u145.ownNote', { litres: num(st.litres, 2), value: rp(st.amount) })}</div></div>
           )}
-          {st.owes && (
+          {st.owes && (old || byPeriod) && (
             <div className="doc-sign">
               <div><div>{t('u145.handedBy')}</div><div className="sign-line" /><div className="sign-name">{st.to}</div></div>
               <div><div>{t('u145.receivedBy')}</div><div className="sign-line" /><div className="sign-name">{st.from}</div></div>
             </div>
           )}
-          <div className="doc-pagefoot"><span className="doc-foot">{settings.shop_name}</span><span className="doc-pageno">{t('u145.statementN', { n: i + 1, of: statements.length })}</span></div>
+          <div className="doc-pagefoot"><span className="doc-foot">{settings.shop_name}</span><span className="doc-pageno">{st.owes && (old || byPeriod) ? t('u145.statementN', { n: statements.filter((x, j) => x.owes && j <= i).length, of: statements.filter((x) => x.owes).length }) : t('u151.pageN', { n: i + 1, of: statements.length })}</span></div>
           <PrintedBy lang={lang} timezone={timezone} />
         </div>
       ))}

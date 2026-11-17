@@ -47,7 +47,7 @@ export function timestampToShopDate(ts, tz) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ts))
 }
 
-// Builds job lines from a catalog item: labor becomes hours × hourly rate, parts keep cost, price and core charge.
+// Builds job lines from a catalog item: labor becomes hours × hourly rate, parts keep cost and price (no core charge to customers, 151).
 // Percent fees can't be a line (they depend on the whole job), so they are returned as a job fee instead.
 export function linesFromCatalogItem(item, { qty, priceOverride } = {}) {
   if (!item) return { lines: [], jobFees: [] }
@@ -75,7 +75,7 @@ export function linesFromCatalogItem(item, { qty, priceOverride } = {}) {
   }
   const price = priceOverride != null ? Number(priceOverride) : Number(item.price) || 0
   return {
-    lines: [{ ...base, qty: qty != null ? Number(qty) : Number(item.default_qty) || 1, price, core_charge: item.has_core ? Number(item.core_cost) || 0 : 0 }],
+    lines: [{ ...base, qty: qty != null ? Number(qty) : Number(item.default_qty) || 1, price, core_charge: 0 }],
     jobFees: [],
   }
 }

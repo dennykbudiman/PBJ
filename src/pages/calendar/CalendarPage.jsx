@@ -119,7 +119,8 @@ export default function CalendarPage() {
     return { who: c?.display_name || a.title || '—', title: c ? a.title : null, plate: v?.plate, driver, head: v ? plateDriver(v, driver) : null, vehicle: v ? vehicleName(v) : '', job }
   }
   const shown = useMemo(() => (appts || []).filter((a) => {
-    if (!showCancelled && a.status === 'cancelled') return false
+    // no-shows hide with the cancelled ones, as the Dasbor's bookings count leaves them out (151, review 109)
+    if (!showCancelled && (a.status === 'cancelled' || a.status === 'no_show')) return false
     if (tech === 'none' ? a.technician_id : tech && a.technician_id !== tech) return false
     if (!needle) return true
     const l = label(a)

@@ -6,10 +6,11 @@ import { nameKey } from '../../lib/books'
 import { Badge, Button, Empty, Input, Modal, Notice, PageHead, Select, Textarea, Toggle, useConfirm, useToast } from '../../components/ui'
 import { booksOfPayer, payerBookLabel } from '../../lib/books'
 import { useShop } from '../../context/ShopContext'
+import { periodRange } from '../../lib/reports'
+import { shopToday } from '../../lib/customers'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
 import { fmtDate, invoiceNo, num, parseDecimal, readAmount, rp } from '../../lib/format'
-import { shopToday } from '../../lib/customers'
 
 // Inventory → Drum (142, Denny Nov 9): bulk oil is bought one drum at a time, each paid by one PT. Oil used on invoiced
 // jobs fills the drums in the order they were opened (oldest first); when a drum is empty, the PT that bought it
@@ -26,6 +27,7 @@ export default function DrumsTab({ data, canEdit }) {
   const { can, roleName } = useAuth()
   const money = can('view_costs') || can('pay_supplier_bills')
   const ownerAdmin = roleName === 'Owner' || roleName === 'Admin'
+  const { timezone: shopTz } = useShop()
   const [stmt, setStmt] = useState(null)
   const [payFor, setPayFor] = useState(null) // { drum, debtor }
   const [priceAsk, setPriceAsk] = useState(null) // a new drum price that differs from the catalog (item 31)
@@ -44,6 +46,7 @@ export default function DrumsTab({ data, canEdit }) {
     if (error) toast(errorText(error, t), 'err'); else { toast(t('u145.unpaid')); reload() }
   }
   const reload = () => setVersion((v) => v + 1)
+  const lastMonth = periodRange('last_month', shopToday(shopTz))
   const oils = data.items.filter((x) => x.item_type === 'part' && x.track_inventory && x.active)
   const payerNames = [...new Set(data.customers.map((c) => c.payer_name || c.display_name).filter(Boolean))].sort()
   async function remove(d, name) {
@@ -57,7 +60,8 @@ export default function DrumsTab({ data, canEdit }) {
     <>
       <PageHead title={t('u142.drumsTitle')} sub={t('u142.drumsSub')}
         actions={<div className="row" style={{ gap: 6 }}>
-          {money && <Link className="btn" to="/print/drums"><Icon name="print" size={15} /> {t('u145.printDrums')}</Link>}
+          {/* 151 (review 11): the drum bill opens on last month; without dates it is an account, not a bill */}
+          {money && <Link className="btn" to={`/print/drums?from=${lastMonth.from}&to=${lastMonth.to}`}><Icon name="print" size={15} /> {t('u145.printDrums')}</Link>}
           {/* 150: the one-time bill for the oil used before the app (up to 1 Nov 2026) */}
           {money && <Link className="btn" to="/print/drums?old=1" title={t('u150.oldOilHint')}><Icon name="print" size={15} /> {t('u150.oldOil')}</Link>}
           {canEdit && <Button variant="primary" icon="plus" onClick={() => setModal({})}>{t('u142.drumAdd')}</Button>}
@@ -144,7 +148,7 @@ export default function DrumsTab({ data, canEdit }) {
           setModal(null); reload(); toast(t('u142.drumSaved'))
           // a drum at a price other than the oil's catalog price: offer to change the catalog (item 31)
           const item = data.items.find((x) => x.id === row?.catalog_item_id)
-          if (item && row.cost_per_l > 0 && item.price != null && Number(item.price) !== Number(row.cost_per_l) && can('edit_catalog')) setPriceAsk({ item, price: Number(row.cost_per_l) })
+          if (row?.priceChanged && item && row.cost_per_l > 0 && item.price != null && Number(item.price) !== Number(row.cost_per_l) && can('edit_catalog')) setPriceAsk({ item, price: Number(row.cost_per_l) })
         }} />
       {payFor && <MarkPaidModal {...payFor} onClose={() => setPayFor(null)} onDone={() => { setPayFor(null); reload(); toast(t('u145.markedPaid')) }} />}
       {priceAsk && <CatalogPriceModal {...priceAsk} onClose={() => setPriceAsk(null)} onDone={(msg) => { setPriceAsk(null); toast(msg) }} />}
@@ -184,10 +188,19 @@ function DrumModal({ open, onClose, drum, itemId, oils, payers, customers, onSav
     if (Object.keys(e).length) return
     running.current = true; setBusy(true); setFail(null)
     const row = { catalog_item_id: f.item, litres, paid_by_name: f.payer.trim(), paid_by_book: f.book || null, opened_on: f.opened, emptied_on: f.emptied || null, note: f.note.trim() || null, ...(hideCost ? {} : { cost_per_l: cost, cost_estimated: !!f.estimated }) }
-    const r = drum ? await supabase.from('oil_drums').update(row).eq('id', drum.id) : await supabase.from('oil_drums').insert(row)
+    // an edit sends only what changed, so a page left open doesn't put back what someone else changed since (151, review 132)
+    let patch = row
+    if (drum) {
+      const was = { catalog_item_id: itemId, litres: Number(drum.litres), paid_by_name: drum.paid_by || '', paid_by_book: drum.paid_by_book || null,
+        opened_on: drum.opened_on, emptied_on: drum.emptied_on || null, note: drum.note || null, cost_per_l: drum.cost_per_l == null ? null : Number(drum.cost_per_l), cost_estimated: !!drum.cost_estimated }
+      patch = Object.fromEntries(Object.entries(row).filter(([k, v]) => (k === 'litres' || k === 'cost_per_l' ? Number(v) !== Number(was[k]) : (v ?? null) !== (was[k] ?? null))))
+      if (!Object.keys(patch).length) { running.current = false; setBusy(false); return onClose() }
+    }
+    const r = drum ? await supabase.from('oil_drums').update(patch).eq('id', drum.id) : await supabase.from('oil_drums').insert(row)
     running.current = false; setBusy(false)
     if (r.error) return setFail(errorText(r.error, t))
-    onSaved(row)
+    // the catalog price question only for a new drum, or one whose price was just changed and is still in use (review 119)
+    onSaved({ ...row, priceChanged: (!drum || 'cost_per_l' in patch) && !row.emptied_on })
   }
   return (
     <Modal open={open} title={drum ? t('u142.drumEditTitle') : t('u142.drumAddTitle')} onClose={onClose}
@@ -221,7 +234,10 @@ function DrumModal({ open, onClose, drum, itemId, oils, payers, customers, onSav
 function MarkPaidModal({ drum, debtor, oil, onClose, onDone }) {
   const { t } = useT()
   const { timezone } = useShop()
-  const [f, setF] = useState({ amount: num(debtor.open), date: shopToday(timezone), method: 'transfer', ref: '' })
+  // 151 (review 134): a drum with old (pre-app) oil still open: the old-oil bill is paid on its own, so that's the default
+  const oldOpen = Number(debtor.old_open) || 0
+  const both = oldOpen > 0 && oldOpen < Number(debtor.open)
+  const [f, setF] = useState({ amount: num(both ? oldOpen : debtor.open), date: shopToday(timezone), method: 'transfer', ref: '' })
   const [fail, setFail] = useState(null)
   const [busy, setBusy] = useState(false)
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e?.target ? e.target.value : e }))
@@ -246,6 +262,15 @@ function MarkPaidModal({ drum, debtor, oil, onClose, onDone }) {
         {Number(debtor.paid) > 0 && <div><span>{t('u145.paidAll')}</span><b>{rp(debtor.paid)}</b></div>}
         <div><span>{t('u145.stillOpen')}</span><b>{rp(debtor.open)}</b></div>
       </div>
+      {both && (
+        <div style={{ marginBottom: 10 }}>
+          <div className="hint" style={{ marginBottom: 6 }}>{t('u151.markHint')}</div>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <Button size="sm" onClick={() => setF((x) => ({ ...x, amount: num(oldOpen) }))}>{t('u151.markOld', { amount: rp(oldOpen) })}</Button>
+            <Button size="sm" onClick={() => setF((x) => ({ ...x, amount: num(debtor.open) }))}>{t('u151.markAll', { amount: rp(debtor.open) })}</Button>
+          </div>
+        </div>
+      )}
       <div className="formgrid">
         <Input label={t('u145.amountPaid')} value={f.amount} onChange={set('amount')} prefix="Rp" inputMode="numeric" />
         <Input label={t('u145.paidOn')} type="date" value={f.date} onChange={set('date')} />

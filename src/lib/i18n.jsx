@@ -23,8 +23,12 @@ export function translate(lang, key, vars) {
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v))
   // {shop}: texts that name the app use the shop's own name (Settings → Shop profile).
   if (s.includes('{shop}')) s = s.split('{shop}').join(brandName(lang))
+  // English: "1 invoices" → "1 invoice" (151, review 95)
+  if (lang !== 'id' && vars && Object.values(vars).some((v) => v === 1 || v === '1')) s = s.replace(ONE_PLURAL, (m, pre, w) => `${pre}1 ${SINGULAR[w] || w.slice(0, -1)}`)
   return s
 }
+const SINGULAR = { companies: 'company', batteries: 'battery', entries: 'entry', boxes: 'box', people: 'person' }
+const ONE_PLURAL = /(^|[^\d.,])1 (invoices|jobs|lines|vehicles|trucks|companies|parts|days|hours|services|POs|payments|drums|items|books|visits|bookings|credits|returns|batteries|entries|boxes|people|schedules|suppliers|litres)\b/g
 
 // Language order: what the person just picked → their profile → this browser's last
 // pick (e.g. on the sign-in screen) → the shop default → English.

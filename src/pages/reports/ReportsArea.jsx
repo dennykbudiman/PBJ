@@ -19,24 +19,37 @@ import FleetReport from './FleetReport'
 import InventoryReport from './InventoryReport'
 import ServiceReport from './ServiceReport'
 import PrintRekap from '../print/PrintRekap'
+import PrintedBy from '../../components/PrintedBy'
+import { useOwnerAdmin } from '../../components/Paperwork'
+import CloseReport from './CloseReport'
+import PurchasesReport from './PurchasesReport'
+import RepeatsReport from './RepeatsReport'
+import StockReport from './StockReport'
 
 // 'rekap' (item 43, Nov 12): the service summary per company; every role with view_reports (Kasir too)
-export const REPORT_TABS = ['sales', 'aging', 'payments', 'profit', 'technicians', 'fleet', 'rekap', 'inventory', 'service']
+export const REPORT_TABS = ['sales', 'aging', 'payments', 'profit', 'technicians', 'fleet', 'rekap', 'inventory', 'stock', 'purchases', 'service', 'repeats', 'close']
 // Reports that show cost prices also need the view_costs permission.
-const NEEDS_COSTS = ['profit', 'inventory']
+const NEEDS_COSTS = ['profit', 'inventory', 'stock']
 // The workshop's own reports need view_ops_reports (Owner, Admin, Service advisor); a Cashier doesn't see them.
-const NEEDS_OPS = ['technicians', 'fleet', 'service']
+const NEEDS_OPS = ['technicians', 'fleet', 'service', 'repeats']
+// 151: Tutup bulan is the owner's and admin's; Pembelian for those who see costs or pay supplier bills
+const OWNER_ONLY = ['close']
+const NEEDS_BUYING = ['purchases']
 
 // /reports → Sales, /reports/<tab>
 export default function ReportsArea() {
-  const { t } = useT()
+  const { t, lang } = useT()
+  const { timezone } = useShop()
   const navigate = useNavigate()
   const location = useLocation()
   const { can } = useAuth()
+  const ownerAdmin = useOwnerAdmin()
+  const buying = can('view_costs') || can('pay_supplier_bills')
   const part = location.pathname.split('/').filter(Boolean)[1]
   const tab = REPORT_TABS.includes(part) ? part : 'sales'
   // Tabs the role can't open are left out (a link straight to one still explains why).
-  const shown = REPORT_TABS.filter((x) => (!NEEDS_OPS.includes(x) || can('view_ops_reports')) && (!NEEDS_COSTS.includes(x) || can('view_costs')))
+  const shown = REPORT_TABS.filter((x) => (!NEEDS_OPS.includes(x) || can('view_ops_reports')) && (!NEEDS_COSTS.includes(x) || can('view_costs'))
+    && (!OWNER_ONLY.includes(x) || ownerAdmin) && (!NEEDS_BUYING.includes(x) || buying))
   const tabs = <SubTabs tabs={shown.map((x) => ({ value: x, label: t(`rep.tab.${x}`) }))} active={tab} onChange={(x) => navigate(`/reports/${x}`)} />
   if (!can('view_reports')) {
     return <Page><Card><Empty icon="chart-bar" title={t('rep.noAccessTitle')}>{t('rep.noAccessText')}</Empty></Card></Page>
@@ -45,15 +58,18 @@ export default function ReportsArea() {
     <Page tabs={tabs}>
       <div className="report-page">
       {/* on paper: the report's name (the tabs aren't printed), 145 item 30 */}
-      <div className="print-only print-title"><h1>{t('nav.reports')} · {t(`rep.tab.${tab}`)}</h1></div>
+      <div className="print-only print-title"><h1>{t('nav.reports')} · {t(`rep.tab.${tab}`)}</h1>
+        {/* reports of how things stand now say as of when (151, review 90) */}
+        {['aging', 'inventory', 'service'].includes(tab) && <div>{t('u151.st.perDate', { date: fmtDate(shopToday(timezone), lang) })}</div>}
+      </div>
       {tab === 'sales' && <SalesReport />}
       {tab === 'aging' && <AgingReport />}
       {tab === 'payments' && <PaymentsReport />}
       {tab === 'rekap' && <PrintRekap embedded />}
       {NEEDS_OPS.includes(tab) && !can('view_ops_reports') ? (
         <Card><Empty icon="lock" title={t('rep.opsTitle')}>{t('rep.opsText')}</Empty></Card>
-      ) : NEEDS_COSTS.includes(tab) && !can('view_costs') ? (
-        <Card><Empty icon="lock" title={t('rep.costsTitle')}>{t('rep.costsText')}</Empty></Card>
+      ) : (NEEDS_COSTS.includes(tab) && !can('view_costs')) || (NEEDS_BUYING.includes(tab) && !buying) || (OWNER_ONLY.includes(tab) && !ownerAdmin) ? (
+        <Card><Empty icon="lock" title={t('rep.costsTitle')}>{OWNER_ONLY.includes(tab) ? t('u151.close.ownerOnly') : t('rep.costsText')}</Empty></Card>
       ) : (
         <>
           {tab === 'profit' && <ProfitReport />}
@@ -61,8 +77,13 @@ export default function ReportsArea() {
           {tab === 'fleet' && <FleetReport />}
           {tab === 'inventory' && <InventoryReport />}
           {tab === 'service' && <ServiceReport />}
+          {tab === 'stock' && <StockReport />}
+          {tab === 'purchases' && <PurchasesReport />}
+          {tab === 'repeats' && <RepeatsReport />}
+          {tab === 'close' && <CloseReport />}
         </>
       )}
+      {tab !== 'rekap' && <div className="print-only"><PrintedBy lang={lang} timezone={timezone} /></div>}
       </div>
     </Page>
   )

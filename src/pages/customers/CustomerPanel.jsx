@@ -131,7 +131,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
 
             <div className="kpis">
               <Kpi label={t('cust.outstanding')} value={rpShort(s.balance, lang)}
-                note={s.overdue > 0 ? t('cust.overdueAmount', { amount: rpShort(s.overdue, lang) }) : t('cust.nothingOverdue')}
+                note={s.overdue == null ? null : s.overdue > 0 ? t('cust.overdueAmount', { amount: rpShort(s.overdue, lang) }) : t('cust.nothingOverdue')}
                 noteColor={s.overdue > 0 ? 'var(--red)' : 'var(--green)'} />
               <Kpi label={t('cust.vehicles')} value={s.vehicles ?? 0}
                 note={s.sold ? `${t('cust.inShop', { n: s.inShop ?? 0 })} · ${t('cust.soldCount', { n: s.sold })}` : t('cust.inShop', { n: s.inShop ?? 0 })} />
@@ -189,7 +189,7 @@ export default function CustomerPanel({ customer, stats, vehicles, canEdit, onEd
             <div className="pgrid">
               <Field label={t('cust.outstanding')}>{rp(s.balance)}</Field>
               <Field label={t('cust.overdue')}><span style={{ color: s.overdue > 0 ? 'var(--red)' : undefined }}>{rp(s.overdue)}</span></Field>
-              <Field label={t('cust.openInvoices')}>{s.openInvoices ?? 0}</Field>
+              <Field label={t('cust.openInvoices')}>{s.openInvoices ?? '—'}</Field>
               <Field label={t('cust.availableCreditLabel')}>{rp(s.credit)}</Field>
               {!isFleet && <Field label={t('cust.creditLimit')}>{customer.credit_limit == null ? t('cust.noLimit') : rp(customer.credit_limit)}</Field>}
               <Field label={t('cust.terms')}>{termsLabel}</Field>

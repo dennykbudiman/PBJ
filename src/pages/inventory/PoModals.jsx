@@ -3,7 +3,7 @@ import { Button, Input, Modal, Notice, Select, Textarea, Toggle } from '../../co
 import { useShop } from '../../context/ShopContext'
 import { useT } from '../../lib/i18n'
 import { supabase, errorText } from '../../lib/supabase'
-import { fmtDate, num, parseDecimal, readAmount, rp } from '../../lib/format'
+import { fmtDate, isDuplicate, newId, num, parseDecimal, readAmount, rp } from '../../lib/format'
 import { shopToday } from '../../lib/customers'
 import { PAY_METHODS, amountsTotal, isNonPkp, jobToPoCost, lineAmount, lineDue, openQty, owedQty, poAmounts, poToJobCost, stockState } from '../../lib/inventory'
 import { addDays } from '../../lib/calendar'
@@ -161,8 +161,9 @@ export function ReceiveModal({ open, onClose, po, supplier, lines, onDone }) {
     setBusy(true); setFail(null)
     let done = 0
     for (const [l, q] of take) {
-      const { error } = await supabase.rpc('deliver_po_item', {
-        p_item: l.id, p_qty: q, p_delivered: f.delivered, p_invoice_no: f.invoice_no.trim() || null,
+      // with the quantity this page showed as received: a second tap or an old page is refused, not counted twice (151)
+      const { error } = await supabase.rpc('po_receive', {
+        p_item: l.id, p_qty: q, p_expect: Number(l.qty_delivered) || 0, p_delivered: f.delivered, p_invoice_no: f.invoice_no.trim() || null,
         p_invoice_date: f.invoice_date || null, p_due: f.due || autoDue,
       })
       if (error) {
@@ -309,7 +310,10 @@ export function PoReturnModal({ open, onClose, data, po, lines, showCost, onDone
   const [busy, setBusy] = useState(false)
   // outside work (sublet, 141) can't be sent back
   const rows = lines.filter((l) => l.line_type !== 'sublet').map((l) => ({ l, left: Number(l.qty_delivered) - returnedOn(data, l) })).filter((x) => x.left > 0)
-  useEffect(() => { if (open) { setQty({}); setNote(''); setErr({}); setFail(null) } }, [open])
+  // ids made when the window opens: saving again after a lost reply is refused as a duplicate, not recorded twice (151)
+  const ids = useRef({ batch: null, lines: {} })
+  useEffect(() => { if (open) { setQty({}); setNote(''); setErr({}); setFail(null); ids.current = { batch: newId(), lines: {} } } }, [open])
+  const idOf = (lineId) => (ids.current.lines[lineId] ||= newId())
   const amountOf = (l, q) => lineAmount(l.cost, 0, q, l.taxable, po.tax_rate)
   const picked = rows.map(({ l, left }) => ({ l, left, q: String(qty[l.id] ?? '').trim() === '' ? 0 : parseDecimal(qty[l.id]) }))
   const total = picked.reduce((a, x) => a + (x.q > 0 ? amountOf(x.l, x.q) : 0), 0)
@@ -321,14 +325,13 @@ export function PoReturnModal({ open, onClose, data, po, lines, showCost, onDone
     setErr(e)
     if (Object.keys(e).length) return
     setBusy(true)
-    // crypto.randomUUID needs a secure page; fall back to a random v4 id elsewhere.
-    const batch = globalThis.crypto?.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16) })
+    const batch = ids.current.batch || newId()
     const { error } = await supabase.from('returns').insert(go.map(({ l, q }) => ({
-      kind: po.ro_id ? 'ro' : 'inventory', po_item_id: l.id, ro_id: po.ro_id, supplier_id: po.supplier_id, catalog_item_id: l.catalog_item_id,
+      id: idOf(l.id), kind: po.ro_id ? 'ro' : 'inventory', po_item_id: l.id, ro_id: po.ro_id, supplier_id: po.supplier_id, catalog_item_id: l.catalog_item_id,
       item_name: l.name, qty: q, return_cost: Number(l.cost) || 0, note: note.trim() || null, batch_id: batch,
     })))
     setBusy(false)
-    if (error) return setFail(errorText(error, t))
+    if (error && !isDuplicate(error)) return setFail(errorText(error, t))
     onDone(go.length)
   })
   return (
@@ -466,7 +469,7 @@ export function CorrectReceivedModal({ open, onClose, data, line, onDone }) {
     const n = parseDecimal(v)
     if (n == null || n < floor || n >= Number(line.qty_delivered)) return setErr(t('inv.correct.range', { min: num(floor, 2), max: num(line.qty_delivered, 2) }))
     setErr(null); setBusy(true)
-    const { error } = await supabase.rpc('unreceive_po_item', { p_item: line.id, p_qty: Math.round((Number(line.qty_delivered) - n) * 100) / 100 })
+    const { error } = await supabase.rpc('po_unreceive', { p_item: line.id, p_qty: Math.round((Number(line.qty_delivered) - n) * 100) / 100, p_expect: Number(line.qty_delivered) })
     setBusy(false)
     if (error) return setFail(errorText(error, t))
     onDone(n)

@@ -29,12 +29,23 @@ export async function loadHistory({ vehicleId, companyId, withHistory }) {
   const vehicles = vehicleId
     ? must(await supabase.from('vehicles').select('*').eq('id', vehicleId))
     : must(await selectAll(() => supabase.from('vehicles').select('*').eq('customer_id', companyId).order('plate').order('id')))
+  // a company's history keeps the trucks it had before they moved to another company (151, review 49), where this
+  // login can still see them
+  if (!vehicleId && companyId && withHistory) {
+    const had = [...new Set([
+      ...must(await selectAll(() => supabase.from('repair_orders').select('vehicle_id').eq('customer_id', companyId).eq('order_status', 'invoice').order('id'))),
+      ...must(await selectAll(() => supabase.from('oil_preapp').select('vehicle_id').eq('customer_id', companyId).order('id'))),
+    ].map((r) => r.vehicle_id))].filter((id) => id && !vehicles.some((v) => v.id === id))
+    if (had.length) vehicles.push(...(await byIds('vehicles', '*', 'id', had)).sort((a, b) => String(a.plate).localeCompare(String(b.plate))))
+  }
   const custId = companyId || vehicles[0]?.customer_id
   const customer = custId ? must(await supabase.from('customers').select('*').eq('id', custId).maybeSingle()) : null
   const vIds = vehicles.map((v) => v.id)
   const schedules = vIds.length ? await byIds('service_schedules', '*', 'vehicle_id', vIds, (q) => q.eq('active', true)) : []
   // item 48 (149): oil changes before the app (none of them were invoiced)
-  const pre = withHistory && vIds.length ? await byIds('oil_preapp', 'id, vehicle_id, oil_name, done_on, km, litres, note', 'vehicle_id', vIds) : []
+  // a company's history: only its own old oil, not the new owner's (151, review 49)
+  const pre = withHistory && vIds.length ? await byIds('oil_preapp', 'id, vehicle_id, customer_id, oil_name, done_on, km, litres, note', 'vehicle_id', vIds,
+    (q) => (companyId ? q.eq('customer_id', companyId) : q)) : []
 
   let jobs = []
   let services = []
@@ -42,7 +53,7 @@ export async function loadHistory({ vehicleId, companyId, withHistory }) {
   let names = {}
   let companies = {}
   if (withHistory && vIds.length) {
-    jobs = await byIds('repair_orders', 'id, job_number, invoice_number, invoiced_at, customer_id, vehicle_id, odometer_in, odometer_out, subtotal, tax_total, total',
+    jobs = await byIds('repair_orders', 'id, job_number, invoice_number, invoiced_at, customer_id, vehicle_id, odometer_in, odometer_out, subtotal, tax_total, total, labor_waived',
       'vehicle_id', vIds, (q) => (companyId ? q.eq('order_status', 'invoice').eq('customer_id', companyId) : q.eq('order_status', 'invoice')))
     jobs.sort((a, b) => String(a.invoiced_at).localeCompare(String(b.invoiced_at)))
     if (jobs.length) {
@@ -88,13 +99,14 @@ const nextText = (next, lang) => next.map((d) => `${d.name} (${[d.km != null ? k
 
 // The money rows of one service, as billed: a flat-price service's price, or each line; then the service's own
 // discount, if any. Blank (null) where money is kept back.
-export function serviceMoney(s, items) {
+// waived: the invoice's labour isn't charged ("Jasa tidak ditagih", 151 review 27): labour lines are Rp 0, as on the invoice.
+export function serviceMoney(s, items, waived = false) {
   const flat = s.is_flat ?? s.flat_price != null
   const disc = s.service_discount == null ? null : Number(s.service_discount)
   return {
     flat,
     head: flat && s.service_total != null ? Number(s.service_total) : null,
-    line: (i) => (flat ? null : itemAmount(i)),
+    line: (i) => (flat ? null : waived && i.item_type === 'labor' && i.net != null ? 0 : itemAmount(i)),
     discount: disc > 0 ? -disc : null,
   }
 }
@@ -126,7 +138,7 @@ export function historyCsv(data, doc, t, lang, prices, tz) {
       const takeTotal = () => { const x = total; total = ''; return x }
       if (!services.length) rows.push([...vehCells(v), ...jobCells, '', '', '', '', '', ...(prices ? ['', takeTotal()] : [])])
       for (const { s, tech, items } of services) {
-        const m = serviceMoney(s, items)
+        const m = serviceMoney(s, items, Number(ro.labor_waived) > 0)
         const list = items.length ? items : [null]
         list.forEach((i, n) => {
           const amount = !prices ? null : m.flat ? (n === 0 && m.head != null ? m.head : '') : i && m.line(i) != null ? m.line(i) : ''
