@@ -1030,3 +1030,9 @@ tr.totalrow td { border-top: 2px solid var(--line); }
   .st-details { break-before: page; margin-top: 0; }
   .st-lines tr.st-sub { break-after: avoid; }
 }
+
+/* 150b: the old-oil bill's total on one full-width line, the note under it */
+.old-bottom { margin-top: 10px; border-top: 1.5px solid #111; padding-top: 6px; break-inside: avoid; }
+.old-bottom .old-total { width: 100%; margin-left: 0; }
+.old-bottom .old-total th { text-align: left; }
+.old-bottom .old-note { margin-top: 6px; max-width: none; width: auto; }

@@ -27,12 +27,23 @@ const preappOnly = (x) => {
   return { ...x, lines, litres, amount, owed_all: amount, paid: 0, open: x.owes ? amount : 0, payments: [] }
 }
 
-export function drumStatements(drums, { drum, book, t, old = false }) {
+// A bill for a period (150c, Denny 17 Nov): only the oil on invoices in the period, and the total is that oil.
+// Books with nothing in the period get no page. Payments ("Tandai lunas") are kept per drum, not per month, so they
+// are never taken off here: what was paid and is still open on the drum since it was opened is shown for information.
+const periodOnly = (x) => {
+  const lines = (x.lines || []).filter((l) => !l.preapp)
+  if (!lines.length) return null
+  const litres = lines.reduce((a, l) => a + (Number(l.litres) || 0), 0)
+  const amount = lines.reduce((a, l) => a + (Number(l.amount) || 0), 0)
+  return { ...x, lines, litres, amount }
+}
+
+export function drumStatements(drums, { drum, book, t, old = false, period = false }) {
   const out = new Map()
   for (const d of drums || []) {
     if (drum && d.id !== drum) continue
     for (const x0 of d.debtors || []) {
-      const x = old ? preappOnly(x0) : x0
+      const x = old ? preappOnly(x0) : period ? periodOnly(x0) : x0
       if (!x) continue
       const from = x.payer ? payerBookLabel(x.payer, x.book) : t('u142.theShop')
       if (book && key(x.payer, x.book) !== book) continue
@@ -61,6 +72,7 @@ export default function PrintDrums() {
   const old = params.get('old') === '1'
   const from = old ? '' : params.get('from') || ''
   const to = old ? OLD_OIL_TO : params.get('to') || ''
+  const byPeriod = !old && !!(from || to)
   const [res, setRes] = useState(null)
   useEffect(() => {
     let live = true
@@ -75,7 +87,7 @@ export default function PrintDrums() {
   const drum = params.get('drum') || ''
   const book = params.get('book') || ''
   const own = params.get('own') !== '0'
-  const statements = useMemo(() => drumStatements(drums, { drum, book, t, old }).filter((s) => s.owes || own), [res, drum, book, own, lang, old]) // eslint-disable-line react-hooks/exhaustive-deps
+  const statements = useMemo(() => drumStatements(drums, { drum, book, t, old, period: byPeriod }).filter((s) => s.owes || own), [res, drum, book, own, lang, old, byPeriod]) // eslint-disable-line react-hooks/exhaustive-deps
   const bookChoices = useMemo(() => {
     const m = new Map()
     for (const d of drums) for (const x of d.debtors || []) m.set(key(x.payer, x.book), x.payer ? payerBookLabel(x.payer, x.book) : tUi('u142.theShop'))
@@ -169,7 +181,7 @@ export default function PrintDrums() {
                   <tr className="svc-total"><td colSpan={4}>{t('u145.subtotal')}</td><td className="num">{num(x.litres, 2)}</td><td /><td className="num">{rp(x.amount)}</td></tr>
                 </tbody>
               </table>
-              {st.owes && (x.payments || []).length > 0 && (
+              {st.owes && !byPeriod && (x.payments || []).length > 0 && (
                 <div className="small" style={{ marginTop: 4 }}>
                   {x.payments.map((p) => <div key={p.id}>{t('u145.paidLine', { date: fmtDate(p.paid_on, lang), amount: rp(p.amount), how: p.method ? t(`inv.pay.m.${p.method}`) : '', ref: p.reference || '' })}</div>)}
                 </div>
@@ -177,14 +189,27 @@ export default function PrintDrums() {
             </div>
           ))}
           {st.owes && old ? (
-            <div className="doc-bottom">
-              <div className="doc-notes small">
-                <div>{t('u150.oldNote')}</div>
-                {st.amount > 0 && <div style={{ marginTop: 4 }}><i>{t('u145.terbilang', { words: terbilang(st.amount) })}</i></div>}
-              </div>
-              <table className="doc-totals"><tbody>
+            <div className="old-bottom">
+              {/* the total on its own full-width line, the note and the amount in words under it */}
+              <table className="doc-totals old-total"><tbody>
                 <tr className="grand"><th>{t('u150.oldPays', { from: st.from, to: st.to, litres: num(st.litres, 2) })}</th><td>{rp(st.amount)}</td></tr>
               </tbody></table>
+              <div className="doc-notes small old-note">
+                <div>{t('u150.oldNote')}</div>
+                {st.amount > 0 && <div style={{ marginTop: 2 }}><i>{t('u145.terbilang', { words: terbilang(st.amount) })}</i></div>}
+              </div>
+            </div>
+          ) : st.owes && byPeriod ? (
+            <div className="old-bottom per-bottom">
+              {/* a period: the bill is the period's oil; the drum's whole account only for information */}
+              <table className="doc-totals old-total"><tbody>
+                <tr className="grand"><th>{t('u150.perPays', { from: st.from, to: st.to, litres: num(st.litres, 2) })}</th><td>{rp(st.amount)}</td></tr>
+              </tbody></table>
+              <div className="doc-notes small old-note">
+                <div>{t('u150.perNote')}</div>
+                {st.amount > 0 && <div style={{ marginTop: 2 }}><i>{t('u145.terbilang', { words: terbilang(st.amount) })}</i></div>}
+                <div className="muted per-info" style={{ marginTop: 4 }}>{t(st.drums.length > 1 ? 'u150.perInfoN' : 'u150.perInfo1', { owed: rp(st.owed), paid: rp(st.paid), open: rp(st.open) })}</div>
+              </div>
             </div>
           ) : st.owes ? (
             <div className="doc-bottom">

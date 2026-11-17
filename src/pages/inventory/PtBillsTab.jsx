@@ -72,8 +72,12 @@ export default function PtBillsTab() {
         const p = payerOf(o.payer)
         addBook(p, o.book, a)
         let s = p.oil.find((x) => bkey(x.payer, x.book) === bkey(o.drum_payer, o.drum_book))
-        if (!s) p.oil.push(s = { payer: o.drum_payer, book: o.drum_book, total: 0, lines: [] })
+        if (!s) p.oil.push(s = { payer: o.drum_payer, book: o.drum_book, total: 0, lines: [], open: 0, openKeys: new Set(), drumIds: new Set() })
         s.lines.push(o); s.total += a; p.total += a
+        // still open since the drum was opened (incl. old oil): once per drum and book, not just the first line's (150c)
+        const ok = `${o.drum_id}#${bkey(o.payer, o.book)}`
+        if (!s.openKeys.has(ok)) { s.openKeys.add(ok); s.open += Number(o.drum_open) || 0 }
+        s.drumIds.add(o.drum_id)
       }
       if (!book || bkey(o.drum_payer, o.drum_book || o.drum_payer) === book) {
         const p = payerOf(o.drum_payer)
@@ -181,7 +185,7 @@ export default function PtBillsTab() {
             <div key={bkey(s.payer, s.book)} className="pt-group" style={{ marginBottom: 12 }}>
               <div className="row wrap pt-grouphead" style={{ gap: 8 }}>
                 <b>{t('u145.drumOilTo', { owner: payerBookLabel(s.payer, s.book) })}</b>
-                {Number(s.lines[0]?.drum_open) <= 0 ? <Badge color="green">{t('u145.drumPaidUp')}</Badge> : <span className="small muted">{t('u145.drumOpenAll', { amount: rp(s.lines[0]?.drum_open) })}</span>}
+                {s.open <= 0 ? <Badge color="green">{t('u145.drumPaidUp')}</Badge> : <span className="small muted">{t('u150.drumOpenAll', { n: s.drumIds.size, amount: rp(s.open) })}</span>}
                 <div className="spacer" /><span className="small">{rp(s.total)}</span>
               </div>
               <div className="table compact flush print-table">
