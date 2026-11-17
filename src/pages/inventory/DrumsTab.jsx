@@ -59,7 +59,7 @@ export default function DrumsTab({ data, canEdit }) {
         actions={<div className="row" style={{ gap: 6 }}>
           {money && <Link className="btn" to="/print/drums"><Icon name="print" size={15} /> {t('u145.printDrums')}</Link>}
           {/* 150: the one-time bill for the oil used before the app (up to 1 Nov 2026) */}
-          {money && <Link className="btn" to="/print/drums?to=2026-11-01" title={t('u150.oldOilHint')}><Icon name="print" size={15} /> {t('u150.oldOil')}</Link>}
+          {money && <Link className="btn" to="/print/drums?old=1" title={t('u150.oldOilHint')}><Icon name="print" size={15} /> {t('u150.oldOil')}</Link>}
           {canEdit && <Button variant="primary" icon="plus" onClick={() => setModal({})}>{t('u142.drumAdd')}</Button>}
         </div>} />
       {rep?.error && <Notice kind="err">{errorText(rep.error, t)}</Notice>}

@@ -16,11 +16,24 @@ import { terbilang } from '../../lib/terbilang'
 // use is listed on its own page for information (nothing to pay). Also a CSV for Excel.
 const key = (payer, book) => `${nameKey(payer)}|${nameKey(book)}`
 
-export function drumStatements(drums, { drum, book, t }) {
+// The one-time old-oil bill (150, `old`): only the oil changes from before the app ("sebelum aplikasi") are billed,
+// up to 1 Nov 2026, and the total is just those lines. Oil on invoices (from 2 Nov) belongs on the monthly statement.
+export const OLD_OIL_TO = '2026-11-01'
+const preappOnly = (x) => {
+  const lines = (x.lines || []).filter((l) => l.preapp)
+  if (!lines.length) return null
+  const litres = lines.reduce((a, l) => a + (Number(l.litres) || 0), 0)
+  const amount = lines.reduce((a, l) => a + (Number(l.amount) || 0), 0)
+  return { ...x, lines, litres, amount, owed_all: amount, paid: 0, open: x.owes ? amount : 0, payments: [] }
+}
+
+export function drumStatements(drums, { drum, book, t, old = false }) {
   const out = new Map()
   for (const d of drums || []) {
     if (drum && d.id !== drum) continue
-    for (const x of d.debtors || []) {
+    for (const x0 of d.debtors || []) {
+      const x = old ? preappOnly(x0) : x0
+      if (!x) continue
       const from = x.payer ? payerBookLabel(x.payer, x.book) : t('u142.theShop')
       if (book && key(x.payer, x.book) !== book) continue
       const k = `${x.owes ? 'owe' : 'own'}#${key(x.payer, x.book)}#${key(d.payer, d.book)}`
@@ -45,8 +58,9 @@ export default function PrintDrums() {
   const { settings, logoUrl, timezone } = useShop()
   const { can } = useAuth()
   const money = can('view_costs') || can('pay_supplier_bills')
-  const from = params.get('from') || ''
-  const to = params.get('to') || ''
+  const old = params.get('old') === '1'
+  const from = old ? '' : params.get('from') || ''
+  const to = old ? OLD_OIL_TO : params.get('to') || ''
   const [res, setRes] = useState(null)
   useEffect(() => {
     let live = true
@@ -61,7 +75,7 @@ export default function PrintDrums() {
   const drum = params.get('drum') || ''
   const book = params.get('book') || ''
   const own = params.get('own') !== '0'
-  const statements = useMemo(() => drumStatements(drums, { drum, book, t }).filter((s) => s.owes || own), [res, drum, book, own, lang]) // eslint-disable-line react-hooks/exhaustive-deps
+  const statements = useMemo(() => drumStatements(drums, { drum, book, t, old }).filter((s) => s.owes || own), [res, drum, book, own, lang, old]) // eslint-disable-line react-hooks/exhaustive-deps
   const bookChoices = useMemo(() => {
     const m = new Map()
     for (const d of drums) for (const x of d.debtors || []) m.set(key(x.payer, x.book), x.payer ? payerBookLabel(x.payer, x.book) : tUi('u142.theShop'))
@@ -73,7 +87,7 @@ export default function PrintDrums() {
   if (!res || !settings) return <div className="print-msg">{tUi('common.loading')}</div>
   if (res.error) return <div className="print-msg">{errorText(res.error, tUi)}</div>
 
-  const period = from || to ? `${from ? fmtDate(from, lang) : '…'} – ${to ? fmtDate(to, lang) : fmtDate(new Date().toISOString().slice(0, 10), lang)}` : t('u145.sinceOpened')
+  const period = old ? t('u150.oldPeriod', { date: fmtDate('2026-11-02', lang) }) : from || to ? `${from ? fmtDate(from, lang) : '…'} – ${to ? fmtDate(to, lang) : fmtDate(new Date().toISOString().slice(0, 10), lang)}` : t('u145.sinceOpened')
   function csv() {
     const rows = [[t('u145.csv.from'), t('u145.csv.to'), t('u145.col.oil'), t('u145.col.date'), t('inv.col.invoice'), t('u145.col.truck'), t('u142.company'), t('u142.litres'), t('u145.col.perL'), t('inv.col.amount'), t('u145.csv.toPay')]]
     for (const st of statements) for (const { drum: d, debtor: x } of st.drums) for (const l of x.lines || []) {
@@ -82,7 +96,7 @@ export default function PrintDrums() {
     const text = rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }))
-    a.download = `oli-drum-${from || 'awal'}-${to || 'sekarang'}.csv`
+    a.download = old ? 'oli-drum-lama-sebelum-aplikasi.csv' : `oli-drum-${from || 'awal'}-${to || 'sekarang'}.csv`
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 2000)
   }
@@ -99,8 +113,12 @@ export default function PrintDrums() {
           <option value="">{tUi('u143.allBooks')}</option>
           {bookChoices.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
         </select>
-        <label className="mini">{tUi('u145.from')} <input type="date" className="input" value={from} onChange={(e) => setParam('from', e.target.value)} /></label>
-        <label className="mini">{tUi('u145.to')} <input type="date" className="input" value={to} onChange={(e) => setParam('to', e.target.value)} /></label>
+        {old ? (
+          <span className="small"><b>{tUi('u150.oldOil')}</b> · {tUi('u150.oldBar')} <button type="button" className="linkbtn small" onClick={() => setParam('old', '')}>{tUi('u150.oldToNormal')}</button></span>
+        ) : (<>
+          <label className="mini">{tUi('u145.from')} <input type="date" className="input" value={from} onChange={(e) => setParam('from', e.target.value)} /></label>
+          <label className="mini">{tUi('u145.to')} <input type="date" className="input" value={to} onChange={(e) => setParam('to', e.target.value)} /></label>
+        </>)}
         <label className="inlinecheck"><input type="checkbox" checked={own} onChange={(e) => setParam('own', e.target.checked ? '' : '0')} /> {tUi('u145.showOwn')}</label>
         <div className="seg">
           <button type="button" className={`seg-btn ${lang === 'id' ? 'on' : ''}`} onClick={() => setParam('lang', 'id')}>Bahasa Indonesia</button>
@@ -110,7 +128,7 @@ export default function PrintDrums() {
         <button type="button" className="btn" onClick={csv} disabled={!statements.length}>{tUi('u145.csv')}</button>
         <button type="button" className="btn primary" onClick={() => window.print()} disabled={!statements.length}>{tUi('job.print')}</button>
       </div>
-      {statements.length === 0 && <div className="print-msg">{tUi('u145.noDrumUse')}</div>}
+      {statements.length === 0 && <div className="print-msg">{tUi(old ? 'u150.oldNone' : 'u145.noDrumUse')}</div>}
       {statements.map((st, i) => (
         <div key={i} className="doc pdoc">
           <div className="doc-head">
@@ -123,7 +141,7 @@ export default function PrintDrums() {
               </div>
             </div>
             <div className="doc-title">
-              <h1>{st.owes ? t('u145.drumDocTitle') : t('u145.drumOwnTitle')}</h1>
+              <h1>{old ? (st.owes ? t('u150.oldTitle') : t('u150.oldOwnTitle')) : st.owes ? t('u145.drumDocTitle') : t('u145.drumOwnTitle')}</h1>
               <table className="doc-meta"><tbody>
                 <tr><th>{t('u145.period')}</th><td>{period}</td></tr>
                               </tbody></table>
@@ -158,7 +176,17 @@ export default function PrintDrums() {
               )}
             </div>
           ))}
-          {st.owes ? (
+          {st.owes && old ? (
+            <div className="doc-bottom">
+              <div className="doc-notes small">
+                <div>{t('u150.oldNote')}</div>
+                {st.amount > 0 && <div style={{ marginTop: 4 }}><i>{t('u145.terbilang', { words: terbilang(st.amount) })}</i></div>}
+              </div>
+              <table className="doc-totals"><tbody>
+                <tr className="grand"><th>{t('u150.oldPays', { from: st.from, to: st.to, litres: num(st.litres, 2) })}</th><td>{rp(st.amount)}</td></tr>
+              </tbody></table>
+            </div>
+          ) : st.owes ? (
             <div className="doc-bottom">
               <div className="doc-notes small">
                 <div>{t('u145.drumNote')}</div>
